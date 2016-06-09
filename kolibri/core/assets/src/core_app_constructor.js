@@ -4,6 +4,7 @@
  */
 
 const vue = require('vue');
+const vuex = require('vuex');
 const VueIntl = require('vue-intl');
 const Mediator = require('./core_app_mediator');
 
@@ -30,6 +31,7 @@ function Lib() {
   // libraries
   this.loglevel = require('loglevel');
   this.vue = vue;
+  this.vuex = vuex;
   // views
   this.coreBase = require('./core-base');
 }
@@ -47,6 +49,11 @@ module.exports = function CoreApp() {
    * Use the vue-intl plugin.
    **/
   vue.use(VueIntl);
+
+  /**
+   * Use vuex for state management.
+   */
+  vue.use(vuex);
 
   /**
    * If the browser doesn't support the Intl polyfill, we retrieve that and
