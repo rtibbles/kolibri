@@ -1,13 +1,13 @@
 <template>
 
-  <a href="linkhref">
+  <button v-on:click="fetchFullContent(pk)" href="linkhref">
     <div class="content-card-container">
       <img :src="thumbsrc" class="thumbnail">
       <div class="title">
         {{ title }}
       </div>
     </div>
-  </a>
+  </button>
 
 </template>
 
@@ -21,7 +21,11 @@
       'linkhref',
       'kind',
       'progress',
+      'pk',
     ],
+    vuex: {
+      actions: require('../actions'),
+    },
   };
 
 </script>
