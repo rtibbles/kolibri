@@ -1,14 +1,7 @@
 <template>
 
   <div>
-    <nav-bar :topLevelPageName="topLevelPageName"/>
-    <loading-spinner v-if="loading" class="loading-spinner-fixed"/>
-    <div class="main-wrapper" v-scroll="onScroll" v-if="!loading">
-      <error-box v-if="error"/>
-      <slot name="above"/>
-      <slot name="content"/>
-      <slot name="below"/>
-    </div>
+    <test />
   </div>
 
 </template>
@@ -43,6 +36,7 @@
       'nav-bar': require('./nav-bar'),
       'error-box': require('./error-box'),
       'loading-spinner': require('kolibri.coreVue.components.loadingSpinner'),
+      'test': require('kolibri.coreVue.components.test'),
     },
     vuex: {
       actions: {

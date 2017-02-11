@@ -107,6 +107,9 @@ module.exports = {
         sessionNavWidget: {
           module: require('../vue/session-nav-widget'),
         },
+        test: {
+          module: require('../vue/core-test'),
+        },
       },
       router: {
         module: require('../router'),

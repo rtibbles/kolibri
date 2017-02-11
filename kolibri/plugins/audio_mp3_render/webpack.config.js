@@ -4,6 +4,7 @@
  */
 
 module.exports = {
+  coreAPISpec: './assets/src/coreAPI.js',
   module: {
     loaders: [
       // Allows <video> and <audio> HTML5 tags work on all major browsers.
