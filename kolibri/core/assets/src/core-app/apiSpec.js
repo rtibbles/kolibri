@@ -107,6 +107,9 @@ module.exports = {
         sessionNavWidget: {
           module: require('../vue/session-nav-widget'),
         },
+        test: {
+          module: require('../vue/core-test'),
+        },
       },
       router: {
         module: require('../router'),
@@ -114,10 +117,10 @@ module.exports = {
     },
     styles: {
       navBarItem: {
-        module: require('../vue/nav-bar/nav-bar-item.styl'),
+        module: require('../vue/nav-bar/nav-bar-item'),
       },
       coreTheme: {
-        module: require('../styles/core-theme.styl'),
+        module: require('../styles/core-theme'),
       },
     },
   },
