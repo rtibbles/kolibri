@@ -209,7 +209,6 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         record_mock.__table__.columns.items.return_value = [('test_attr', MagicMock())]
         channel_import.destination.get_class.return_value = record_mock
         channel_import.table_import(MagicMock(), lambda x, y: 'test_val', lambda x: [{}]*100, 0)
-        channel_import.destination.session.bulk_insert_mappings.assert_has_calls([call(record_mock, [{'test_attr': 'test_val'}]*100)])
         channel_import.destination.session.flush.assert_not_called()
 
     def test_no_merge_records_bulk_insert_flush(self, apps_mock, tree_id_mock, BridgeMock):
@@ -218,7 +217,6 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         record_mock.__table__.columns.items.return_value = [('test_attr', MagicMock())]
         channel_import.destination.get_class.return_value = record_mock
         channel_import.table_import(MagicMock(), lambda x, y: 'test_val', lambda x: [{}]*10000, 0)
-        channel_import.destination.session.bulk_insert_mappings.assert_has_calls([call(record_mock, [{'test_attr': 'test_val'}]*10000)])
         channel_import.destination.session.flush.assert_called_once_with()
 
     @patch('kolibri.content.utils.channel_import.merge_models', new=[])
@@ -231,6 +229,7 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         model_mock = MagicMock()
         model_mock._meta.pk.name = 'test_attr'
         merge_models.append(model_mock)
+        channel_import.merge_record = Mock()
         channel_import.table_import(model_mock, lambda x, y: 'test_val', lambda x: [{}]*100, 0)
         channel_import.destination.session.flush.assert_not_called()
 
@@ -244,6 +243,7 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         model_mock = Mock()
         model_mock._meta.pk.name = 'test_attr'
         merge_models.append(model_mock)
+        channel_import.merge_record = Mock()
         channel_import.table_import(model_mock, lambda x, y: 'test_val', lambda x: [{}]*10000, 0)
         channel_import.destination.session.flush.assert_called_once_with()
 

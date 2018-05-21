@@ -185,8 +185,10 @@ def get_default_db_string():
             dbname=destination_db['NAME'],
         )
 
+
 class SchemaNotFoundError(Exception):
     pass
+
 
 class Bridge(object):
 
@@ -215,8 +217,6 @@ class Bridge(object):
         # in the same thread
         self.session, self.engine = make_session(self.connection_string)
 
-        self.connections = []
-
     def get_class(self, DjangoModel):
         return get_class(DjangoModel, self.Base)
 
@@ -224,12 +224,9 @@ class Bridge(object):
         return self.get_class(DjangoModel).__table__
 
     def get_connection(self):
-        connection = self.engine.connect()
-        self.connections.append(connection)
+        connection = self.session.connection()
         return connection
 
     def end(self):
         # Clean up session
         self.session.close()
-        for connection in self.connections:
-            connection.close()

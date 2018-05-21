@@ -1,6 +1,7 @@
 import logging as logger
 
 from django.apps import apps
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from .annotation import recurse_availability_up_tree
@@ -35,6 +36,7 @@ merge_models = [
     Language,
 ]
 
+CHUNKSIZE = 10000
 
 class ImportCancelError(Exception):
     pass
@@ -152,7 +154,9 @@ class ChannelImport(object):
     def generate_row_mapper(self, mappings=None):
         # If no mappings, just use an empty object
         if mappings is None:
-            mappings = {}
+            # If no mappings have been specified, we can just skip direct to
+            # the default return value without doing any other checks
+            return self.base_row_mapper
 
         def mapper(record, column):
             """
@@ -177,7 +181,7 @@ class ChannelImport(object):
                     raise AttributeError('Column mapping specified but no valid column name or method found')
             else:
                 # Otherwise, we can just get the value directly from the record
-                return getattr(record, column, None)
+                return self.base_row_mapper(record, column)
         # Return the mapper function for repeated use
         return mapper
 
@@ -186,6 +190,10 @@ class ChannelImport(object):
         if SourceRecord:
             return self.source.session.query(SourceRecord).all()
         return []
+
+    def base_row_mapper(self, record, column):
+        # By default just return value directly from the record
+        return getattr(record, column, None)
 
     def generate_table_mapper(self, table_map=None):
         if table_map is None:
@@ -198,9 +206,29 @@ class ChannelImport(object):
         # If we got here, there is an invalid table mapping
         raise AttributeError('Table mapping specified but no valid method found')
 
-    def table_import(self, model, row_mapper, table_mapper, unflushed_rows):
+    def core_table_import(self, model, row_mapper, table_mapper, unflushed_rows):
+        try:
+            source_table = self.source.get_table(model)
+        except ClassNotFoundError:
+            source_table = None
+        if source_table is not None:
+            source_query = select([source_table])
+            source_result_proxy = self.source.session.execute(source_query)
+            destination_table = self.destination.get_table(model)
+
+            results = source_result_proxy.fetchmany(CHUNKSIZE)
+            while results:
+                self.check_cancelled()
+                self.destination.session.execute(destination_table.insert(), results)
+                unflushed_rows += len(results)
+                if unflushed_rows >= CHUNKSIZE:
+                    self.destination.session.flush()
+                results = source_result_proxy.fetchmany(CHUNKSIZE)
+        return unflushed_rows
+
+    def orm_table_import(self, model, row_mapper, table_mapper, unflushed_rows):
         DestinationRecord = self.destination.get_class(model)
-        dest_table = DestinationRecord.__table__
+        dest_table = self.destination.get_table(model)
 
         # If the source class does not exist (i.e. this table is undefined in the source database)
         # this will raise an error so we set it to None. In this case, a custom table mapper must
@@ -219,8 +247,7 @@ class ChannelImport(object):
         data_to_insert = []
         merge = model in merge_models
         for record in table_mapper(SourceRecord):
-            if self.is_cancelled():
-                raise ImportCancelError('Channel import was cancelled')
+            self.check_cancelled()
             data = {
                 str(column): row_mapper(record, column) for column in columns if row_mapper(record, column) is not None
             }
@@ -229,7 +256,7 @@ class ChannelImport(object):
             else:
                 data_to_insert.append(data)
             unflushed_rows += 1
-            if unflushed_rows == 10000:
+            if unflushed_rows == CHUNKSIZE:
                 if not merge:
                     self.destination.session.bulk_insert_mappings(DestinationRecord, data_to_insert)
                     data_to_insert = []
@@ -238,6 +265,22 @@ class ChannelImport(object):
         if not merge and data_to_insert:
             self.destination.session.bulk_insert_mappings(DestinationRecord, data_to_insert)
         return unflushed_rows
+
+    def table_import(self, model, row_mapper, table_mapper, unflushed_rows):
+        # Start to build up a check for whether we can use the SQL Alchemy Core for more efficient transfer
+        # First check that we are not doing any mapping to construct the tables
+        can_use_core = table_mapper == self.base_table_mapper
+        # Now check that we are not doing any row level mapping to construct each record
+        can_use_core = can_use_core and row_mapper == self.base_row_mapper
+        # Check if this is a record that needs to be merged? If so, we need to load the data and merge it.
+        can_use_core = can_use_core and model not in merge_models
+        # Finally check that there are no auto-incrementing PKs in the destination, because they will need to be filtered and set.
+        dest_table = self.destination.get_table(model)
+        can_use_core = can_use_core and all(column_not_auto_integer_pk(column_obj) for column_name, column_obj in dest_table.columns.items())
+        if can_use_core:
+            return self.core_table_import(model, row_mapper, table_mapper, unflushed_rows)
+        else:
+            return self.orm_table_import(model, row_mapper, table_mapper, unflushed_rows)
 
     def merge_record(self, data, model, DestinationRecord):
         # Models that should be merged (see list above) need to be individually merged into the session
@@ -270,8 +313,7 @@ class ChannelImport(object):
                               'version {new_channel_version}').format(
                     channel_version=existing_channel.version, channel_id=self.channel_id, new_channel_version=self.channel_version))
                 return False
-            if self.is_cancelled():
-                raise ImportCancelError('Channel import was cancelled')
+            self.check_cancelled()
             root_id = ChannelMetadata.objects.get(pk=self.channel_id).root_id
             ContentNodeClass = self.destination.get_class(ContentNode)
             root_node = self.destination.session.query(ContentNodeClass).get(root_id)
@@ -285,10 +327,13 @@ class ChannelImport(object):
             self.destination.session.flush()
         return True
 
-    def is_cancelled(self):
+    def check_cancelled(self):
         if callable(self.cancel_check):
-            return self.cancel_check()
-        return bool(self.cancel_check)
+            check = self.cancel_check()
+        else:
+            check = bool(self.cancel_check)
+        if check:
+            raise ImportCancelError('Channel import was cancelled')
 
     def import_channel_data(self):
 
