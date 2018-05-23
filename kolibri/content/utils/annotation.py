@@ -141,29 +141,36 @@ def mark_local_files_as_available(checksums):
 
     bridge.end()
 
-def set_local_file_availability_from_disk(checksums=None):
+
+def set_local_file_availability_from_disk(checksums=None, channel_id=None):
+    if checksums is not None and channel_id is not None:
+        logging.warn("Arguments checksums and channel_id both passed, channel_id will be ignored.")
+
     bridge = Bridge(app_name=CONTENT_APP_NAME)
 
     LocalFileClass = bridge.get_class(LocalFile)
+    FileClass = bridge.get_class(File)
+    ContentNodeClass = bridge.get_class(ContentNode)
 
     if checksums is None:
         logging.info('Setting availability of LocalFile objects based on disk availability')
-        files = bridge.session.query(LocalFileClass.id, LocalFileClass.available, LocalFileClass.extension).all()
+        files = bridge.session.query(LocalFileClass.id, LocalFileClass.available, LocalFileClass.extension)
+        if channel_id is not None:
+            files = files.join(FileClass, LocalFileClass.id == FileClass.local_file_id).filter(ContentNodeClass.channel_id == channel_id).distinct()
     elif type(checksums) == list:
         logging.info('Setting availability of {number} LocalFile objects based on disk availability'.format(number=len(checksums)))
-        files = bridge.session.query(LocalFileClass.id, LocalFileClass.available, LocalFileClass.extension).filter(LocalFileClass.id.in_(checksums)).all()
+        files = bridge.session.query(LocalFileClass.id, LocalFileClass.available, LocalFileClass.extension).filter(LocalFileClass.id.in_(checksums))
     else:
         logging.info('Setting availability of LocalFile object with checksum {checksum} based on disk availability'.format(checksum=checksums))
-        files = [bridge.session.query(LocalFileClass).get(checksums)]
+        files = bridge.session.query(LocalFileClass).filter(LocalFileClass.id == checksums)
 
     checksums_to_update = [
         # Only update if the file exists, *and* the localfile is set as unavailable.
-        file.id for file in files if os.path.exists(get_content_storage_file_path(get_content_file_name(file))) and not file.available
+        file.id for file in files.all() if os.path.exists(get_content_storage_file_path(get_content_file_name(file))) and not file.available
     ]
 
-    bridge.end()
-
     mark_local_files_as_available(checksums_to_update)
+    bridge.end()
 
 def recurse_availability_up_tree(channel_id):
     bridge = Bridge(app_name=CONTENT_APP_NAME)
@@ -213,7 +220,7 @@ def recurse_availability_up_tree(channel_id):
 
 def set_availability(channel_id, checksums=None):
     if checksums is None:
-        set_local_file_availability_from_disk()
+        set_local_file_availability_from_disk(channel_id=channel_id)
     else:
         mark_local_files_as_available(checksums)
 
