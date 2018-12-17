@@ -11,6 +11,7 @@
     "test": "yarn run test-jest --watch",
     "test-jest": "kolibri-tools test --extraConfig ./jest.conf.js",
     "test-jest-cov": "yarn run test-jest --coverage",
+    "test-integration": "kolibri-tools test --extraConfig ./test/integration/jest.conf.js",
     "coverage": "yarn run test-jest-cov",
     "build": "kolibri-tools build prod --file ./build_tools/build_plugins.txt",
     "makemessages": "kolibri-tools build i18n --file ./build_tools/build_plugins.txt",
@@ -43,7 +44,9 @@
   "private": true,
   "dependencies": {},
   "devDependencies": {
+    "jest-puppeteer": "^3.7.0",
     "kolibri-tools": "0.12.0-dev.1",
+    "puppeteer": "^1.11.0",
     "yarn-run-all": "^3.1.1"
   },
   "optionalDependencies": {
