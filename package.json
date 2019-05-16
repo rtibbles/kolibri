@@ -35,7 +35,8 @@
     "build-kolibri-tools": "yarn workspace kolibri-tools run build-kolibri-tools",
     "publish-packages": "node ./packages/publish.js",
     "hashi-dev": "yarn workspace hashi run dev",
-    "hashi-build": "yarn workspace hashi run build"
+    "hashi-build": "yarn workspace hashi run build",
+    "integration": "JEST_PUPPETEER_CONFIG=./integration_testing/jest/jest.puppeteer.config.js jest --config=./integration_testing/jest/jest.conf.js"
   },
   "repository": {
     "type": "git",
