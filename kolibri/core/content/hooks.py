@@ -111,15 +111,34 @@ class ContentRendererHook(WebpackBundleHook):
         return mark_safe("\n".join(tags))
 
 
-class ContentNodeDisplayHook(KolibriHook):
+class PermalinkHook(KolibriHook):
     """
-    A hook that registers a capability of a plugin to provide a user interface
-    for a content node. When subclassed, this hook should expose a method that
-    accepts a ContentNode instance as an argument, and returns a URL where the
-    interface to interacting with that node for the user is exposed.
-    If this plugin cannot produce an interface for this particular content node
-    then it may return None.
+    A hook that registers a capability of a plugin to provide a redirect URL
+    for a permalink.
+
+    When subclassed, this hook should expose:
+
+    `url` - a method that accepts a params dict as an argument, and returns a URL where the
+    interface to interacting with that node for the user is exposed. If the hook cannot produce
+    a URL then it may return None.
+
+    `param_signature` - a set parameters that the `url` method expects in its params dict.
+    These params should be a subset of the param names defined in this PermalinkHook class.
     """
 
-    def node_url(self, content_node):
+    CHANNEL_NODE_ID = "node_id"
+    CHANNEL_ID = "channel_id"
+    CONTENT_ID = "content_id"
+
+    @property
+    def param_signature
+        """
+        Should return the exact set or list of parameters that it requires
+        """
+        raise NotImplementedError("This must be overridden by a subclass")
+
+    def url(self, params):
+        """
+        Should return a local URL corresponding to the params
+        """
         raise NotImplementedError("This must be overridden by a subclass")

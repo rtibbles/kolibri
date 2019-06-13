@@ -1,6 +1,6 @@
 from django.conf.urls import url
 
-from .views import ContentPermalinkRedirect
+from .views import PermalinkRedirect
 from .views import DownloadContentView
 from .views import ZipContentView
 
@@ -17,5 +17,5 @@ urlpatterns = [
         {},
         "downloadcontent",
     ),
-    url(r"^viewcontent$", ContentPermalinkRedirect.as_view(), name="contentpermalink"),
+    url(r"^view$", PermalinkRedirect.as_view(), name="permalink"),
 ]

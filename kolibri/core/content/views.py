@@ -35,7 +35,7 @@ from .models import ContentNode
 from .utils.paths import get_content_storage_file_path
 from kolibri import __version__ as kolibri_version
 from kolibri.core.content.errors import InvalidStorageFilenameError
-from kolibri.core.content.hooks import ContentNodeDisplayHook
+from kolibri.core.content.hooks import PermalinkHook
 
 # Do this to prevent import of broken Windows filetype registry that makes guesstype not work.
 # https://www.thecodingforums.com/threads/mimetypes-guess_type-broken-in-windows-on-py2-7-and-python-3-x.952693/
@@ -324,31 +324,16 @@ class DownloadContentView(View):
         return response
 
 
-class ContentPermalinkRedirect(View):
+class PermalinkRedirect(View):  # todo - move to core
+
     def get(self, request, *args, **kwargs):
+        params = request.GET.items()
+        sent_param_names = set(params.keys())
 
-        # extract the GET parameters
-        channel_id = request.GET.get("channel_id")
-        node_id = request.GET.get("node_id")
-        content_id = request.GET.get("content_id")
-
-        try:  # first, try to get the node by the unique node_id
-            node = ContentNode.objects.get(id=node_id)
-        except ContentNode.DoesNotExist:  # if it isn't found, fall back to looking for the content_id in the channel
-            node = ContentNode.objects.filter(
-                channel_id=channel_id, content_id=content_id
-            ).first()
-            if (
-                not node
-            ):  # if it's still not found, see if we can find anything with the content_id across any channel
-                node = ContentNode.objects.filter(content_id=content_id).first()
-
-        # build up the target topic/content page URL
-        if node:
-            url = None
-            for hook in ContentNodeDisplayHook().registered_hooks:
-                url = hook.node_url(node)
-            if url:
-                return HttpResponseRedirect(url)
+        for hook in PermalinkHook().registered_hooks:
+            if set(hook.param_signature) == sent_param_names:
+                url = hook.url(params)
+                if url is not None:
+                    return HttpResponseRedirect(url)
 
         raise Http404
