@@ -54,7 +54,11 @@ def expand_glob(build_item):
     )
     try:
         for file in resource_listdir(parent_module_path, "."):
-            if resource_isdir(parent_module_path, file):
+            if (
+                resource_isdir(parent_module_path, file)
+                and resource_listdir(parent_module_path, file)
+                and file != "__pycache__"
+            ):
                 try:
                     child_module_path = parent_module_path + "." + file
                     plugins.append(plugin_data(child_module_path))
