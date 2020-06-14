@@ -1,11 +1,14 @@
+import io
 import logging
 import os
 import sys
+import threading
 from subprocess import CalledProcessError
 from subprocess import check_output
 
 import cherrypy
 import requests
+from cherrypy.process.plugins import BackgroundTask
 from cherrypy.process.plugins import SimplePlugin
 from django.conf import settings
 from zeroconf import get_all_addresses
@@ -57,6 +60,9 @@ STARTUP_LOCK = os.path.join(conf.KOLIBRI_HOME, "server.lock")
 # File used to activate profiling middleware and get profiler PID
 PROFILE_LOCK = os.path.join(conf.KOLIBRI_HOME, "server_profile.lock")
 
+# File used to signal that the current Kolibri process should be restarted
+RESTART_CHECK = os.path.join(conf.KOLIBRI_HOME, "restart_check.lock")
+
 # This is a special file with daemon activity. It logs ALL stderr output, some
 # might not have made it to the log file!
 DAEMON_LOG = os.path.join(conf.LOG_ROOT, "daemon.txt")
@@ -74,6 +80,65 @@ class NotRunning(Exception):
     def __init__(self, status_code):
         self.status_code = status_code
         super(NotRunning, self).__init__()
+
+
+class RestartCheckPlugin(SimplePlugin):
+
+    """
+    Modified from https://github.com/cherrypy/cherrypy/blob/master/cherrypy/process/plugins.py#L526
+    """
+
+    thread = None
+
+    frequency = 10
+    """The time in seconds between checking for restart"""
+
+    def start(self):
+        """Start our restart check in its own background thread."""
+        if self.frequency > 0:
+            threadname = self.__class__.__name__
+            if self.thread is None:
+                self.thread = BackgroundTask(
+                    self.frequency, self.restart_check, bus=self.bus
+                )
+                self.thread.setName(threadname)
+                self.thread.start()
+                self.bus.log("Started monitor thread %r." % threadname)
+            else:
+                self.bus.log("Monitor thread %r already started." % threadname)
+
+    start.priority = 70
+
+    def stop(self):
+        """Stop our restart check's background task thread."""
+        if self.thread is None:
+            self.bus.log(
+                "No thread running for %s." % self.name or self.__class__.__name__
+            )
+        else:
+            if self.thread is not threading.currentThread():
+                name = self.thread.getName()
+                self.thread.cancel()
+                if not self.thread.daemon:
+                    self.bus.log("Joining %r" % name)
+                    self.thread.join()
+                self.bus.log("Stopped thread %r." % name)
+            self.thread = None
+
+    def graceful(self):
+        """Stop the restart check's background task thread and restart it."""
+        self.stop()
+        self.start()
+
+    def restart_check(self):
+        """Reload the process if a restart has been flagged."""
+        if os.path.exists(RESTART_CHECK):
+            # The file has been deleted or modified.
+            self.bus.log("Restart requested. Restarting.")
+            self.thread.cancel()
+            self.bus.log("Stopped thread %r." % self.thread.getName())
+            self.bus.restart()
+            return
 
 
 class ServicesPlugin(SimplePlugin):
@@ -126,19 +191,20 @@ class ServicesPlugin(SimplePlugin):
                 worker.shutdown(wait=True)
 
 
-def _rm_pid_file(pid_file):
+def _rm_status_file(status_file):
     try:
-        os.unlink(pid_file)
+        os.unlink(status_file)
     except OSError:
         pass
 
 
 class CleanUpPIDPlugin(SimplePlugin):
     def start(self):
-        _rm_pid_file(STARTUP_LOCK)
+        _rm_status_file(STARTUP_LOCK)
+        _rm_status_file(RESTART_CHECK)
 
     def exit(self):
-        _rm_pid_file(PID_FILE)
+        _rm_status_file(PID_FILE)
 
 
 def start(port=8080, serve_http=True):
@@ -154,6 +220,11 @@ def start(port=8080, serve_http=True):
     logger.info("Starting Kolibri {version}".format(version=kolibri.__version__))
 
     run_server(port=port, serve_http=serve_http)
+
+
+def signal_restart():
+    with io.open(RESTART_CHECK, mode="w", encoding="utf-8") as f:
+        f.write("")
 
 
 def stop(pid=None, force=False):
@@ -346,6 +417,9 @@ def run_server(port, serve_http=True):
     # Setup plugin for handling PID file cleanup
     pid_plugin = CleanUpPIDPlugin(cherrypy.engine)
     pid_plugin.subscribe()
+
+    restart_check_plugin = RestartCheckPlugin(cherrypy.engine)
+    restart_check_plugin.subscribe()
 
     process_pid = os.getpid()
 
