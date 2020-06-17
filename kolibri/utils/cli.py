@@ -15,6 +15,7 @@ import logging
 import os
 import signal
 import sys
+import time
 from sqlite3 import DatabaseError as SQLite3DatabaseError
 
 import click
@@ -547,6 +548,30 @@ def start(port, background):
     server.start(port=port, serve_http=serve_http)
 
 
+@main.command(cls=KolibriCommand, help="Restart the Kolibri process")
+def restart():
+    """
+    Restart the server unless it isn't running
+    """
+    if OPTIONS["Server"]["CHERRYPY_START"]:
+        logger.info("Attemping to restart Kolibri server.")
+    else:
+        logger.info("Attempting to restart Kolibri background services.")
+    server.signal_restart()
+    total_time = 0
+    while server.restart_check_active():
+        time.sleep(0.1)
+        total_time += 0.1
+        if total_time > 30:
+            logger.error("Restart attempt timed out")
+            sys.exit(1)
+    if OPTIONS["Server"]["CHERRYPY_START"]:
+        logger.info("Kolibri server has successfully been restarted.")
+    else:
+        logger.info("Kolibri background services have successfully been restarted.")
+    sys.exit(0)
+
+
 @main.command(cls=KolibriCommand, help="Stop the Kolibri process")
 def stop():
     """
@@ -616,6 +641,7 @@ def status():
 
 status.codes = {
     server.STATUS_RUNNING: "OK, running",
+    server.STATUS_RESTARTING: "Restarting",
     server.STATUS_STOPPED: "Stopped",
     server.STATUS_STARTING_UP: "Starting up",
     server.STATUS_NOT_RESPONDING: "Not responding",

@@ -46,6 +46,7 @@ STATUS_FAILED_TO_START = 6
 STATUS_UNCLEAN_SHUTDOWN = 7
 STATUS_UNKNOWN_INSTANCE = 8
 STATUS_SERVER_CONFIGURATION_ERROR = 9
+STATUS_RESTARTING = 10
 STATUS_PID_FILE_READ_ERROR = 99
 STATUS_PID_FILE_INVALID = 100
 STATUS_UNKNOWN = 101
@@ -132,7 +133,7 @@ class RestartCheckPlugin(SimplePlugin):
 
     def restart_check(self):
         """Reload the process if a restart has been flagged."""
-        if os.path.exists(RESTART_CHECK):
+        if restart_check_active():
             # The file has been deleted or modified.
             self.bus.log("Restart requested. Restarting.")
             self.thread.cancel()
@@ -225,6 +226,10 @@ def start(port=8080, serve_http=True):
 def signal_restart():
     with io.open(RESTART_CHECK, mode="w", encoding="utf-8") as f:
         f.write("")
+
+
+def restart_check_active():
+    return os.path.exists(RESTART_CHECK)
 
 
 def stop(pid=None, force=False):
@@ -528,6 +533,9 @@ def get_status():  # noqa: max-complexity=16
         if os.path.isfile(STARTUP_LOCK):
             raise NotRunning(STATUS_FAILED_TO_START)  # Failed to start
         raise NotRunning(STATUS_UNCLEAN_SHUTDOWN)  # Unclean shutdown
+
+    if pid and pid_exists(pid) and restart_check_active():
+        raise NotRunning(STATUS_RESTARTING)
 
     listen_port = port
 
