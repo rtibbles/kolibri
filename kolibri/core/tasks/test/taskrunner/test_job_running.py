@@ -1,16 +1,12 @@
 import tempfile
 import time
-import uuid
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
 
-from kolibri.core.tasks.compat import Event
 from kolibri.core.tasks.job import Job
 from kolibri.core.tasks.job import State
+from kolibri.core.tasks.main import connection
 from kolibri.core.tasks.queue import Queue
-from kolibri.core.tasks.storage import Storage
 from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.tasks.utils import import_stringified_func
 from kolibri.core.tasks.utils import stringify_func
@@ -18,36 +14,17 @@ from kolibri.core.tasks.worker import Worker
 
 
 @pytest.fixture
-def backend():
-    with tempfile.NamedTemporaryFile() as f:
-        connection = create_engine(
-            "sqlite:///{path}".format(path=f.name),
-            connect_args={"check_same_thread": False},
-            poolclass=NullPool,
-        )
-        b = Storage(connection)
-        yield b
-        b.clear()
-
-
-@pytest.fixture
 def inmem_queue():
-    with tempfile.NamedTemporaryFile() as f:
-        connection = create_engine(
-            "sqlite:///{path}".format(path=f.name),
-            connect_args={"check_same_thread": False},
-            poolclass=NullPool,
-        )
-        e = Worker(queues="pytest", connection=connection)
-        c = Queue(queue="pytest", connection=connection)
-        c.e = e
-        yield c
-        e.shutdown()
+    e = Worker(queues="pytest", connection=connection)
+    c = Queue(queue="pytest", connection=connection)
+    yield c
+    e.storage.clear()
+    e.shutdown()
 
 
 @pytest.fixture
 def simplejob():
-    return Job("builtins.id")
+    return Job("builtins.id", 1)
 
 
 @pytest.fixture
@@ -74,85 +51,15 @@ def cancelable_job():
             return
 
 
-FLAG = False
-
-EVENT_PROXY_MAPPINGS = {}
-
-
-def _underlying_event(f):
-    def func(self, *args, **kwargs):
-        """
-        Return the function f that's called with the EventProxy's
-        matching Event, as the first argument.
-        Returns:
-
-        """
-        event = EVENT_PROXY_MAPPINGS[self.event_id]
-        return f(self, event, *args, **kwargs)
-
-    return func
+def set_flag(filepath, val):
+    with open(filepath, "w") as f:
+        f.write(val)
 
 
-class EventProxy(object):
-    """
-    The tests in this file were originally written when we didn't need
-    to pickle objects in storage. That way, we could use threading.Event
-    objects to synchronize test and job function execution, and verify that
-    things work across threads easily.
-
-    With the move to ORMJob and pickling arguments, that means we can't
-    pass in vanilla events anymore. The pickle module would either error out,
-    or (with the dill extension to pickle), unpickle an event that's totally
-    different from the previous event.
-
-    To solve this, we use the EventProxy object. Whenever we instantiate this,
-    we generate an id, and a corresponding event, and then store that event
-    in a global dict with the id as the key. Calling in the EventProxy.wait, is_set
-    or set methods makes us look up the event object based on the id stored
-    in this event proxy instance, and then just call the appropriate method
-    in that event class.
-
-    Any extra args in the __init__ function is just passed to the event object
-    creation.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.event_id = uuid.uuid4().hex
-        EVENT_PROXY_MAPPINGS[self.event_id] = Event(*args, **kwargs)
-
-    @_underlying_event
-    def wait(self, event, timeout=None):
-        return event.wait(timeout=timeout)
-
-    @_underlying_event
-    def set(self, event):
-        return event.set()
-
-    @_underlying_event
-    def is_set(self, event):
-        return event.is_set()
-
-    @_underlying_event
-    def clear(self, event):
-        return event.clear()
-
-
-@pytest.fixture
-def flag():
-    e = EventProxy()
-    yield e
-    e.clear()
-
-
-def set_flag(threading_flag):
-    threading_flag.set()
-
-
-def make_job_updates(flag):
+def make_job_updates():
     job = get_current_job()
-    for i in range(3):
-        job.update_progress(i, 2)
-    set_flag(flag)
+    for j in range(3):
+        job.update_progress(j, 2)
 
 
 def failing_func():
@@ -193,29 +100,23 @@ class TestQueue(object):
         # Do we get back the metadata we save?
         assert inmem_queue.fetch_job(job_id).extra_metadata == metadata
 
-    def test_enqueue_runs_function(self, inmem_queue, flag):
-        job_id = inmem_queue.enqueue(set_flag, flag)
+    def test_enqueue_runs_function(self, inmem_queue):
+        _, filepath = tempfile.mkstemp()
+        job_id = inmem_queue.enqueue(set_flag, filepath, "flag")
 
-        flag.wait(timeout=5)
-        assert flag.is_set()
-
-        # sleep for half a second to make us switch to another thread
-        time.sleep(0.5)
-
+        interval = 0.1
+        time_spent = 0
         job = inmem_queue.fetch_job(job_id)
-        assert job.state == State.COMPLETED
+        while job.state != State.COMPLETED:
+            time.sleep(interval)
+            time_spent += interval
+            job = inmem_queue.fetch_job(job_id)
+            assert time_spent < 5
+        with open(filepath, "r") as f:
+            assert f.read() == "flag"
 
-    def test_enqueue_can_run_n_functions(self, inmem_queue):
-        n = 10
-        events = [EventProxy() for _ in range(n)]
-        for e in events:
-            inmem_queue.enqueue(set_flag, e)
-
-        for e in events:
-            assert e.wait(timeout=2)
-
-    def test_enqueued_job_can_receive_job_updates(self, inmem_queue, flag):
-        job_id = inmem_queue.enqueue(make_job_updates, flag, track_progress=True)
+    def test_enqueued_job_can_receive_job_updates(self, inmem_queue):
+        job_id = inmem_queue.enqueue(make_job_updates, track_progress=True)
 
         # sleep for half a second to make us switch to another thread
         time.sleep(0.5)
@@ -250,13 +151,10 @@ class TestQueue(object):
         job_id = inmem_queue.enqueue(cancelable_job, cancellable=True)
 
         interval = 0.1
-        time_spent = 0
         job = inmem_queue.fetch_job(job_id)
         while job.state != State.RUNNING:
             time.sleep(interval)
-            time_spent += interval
             job = inmem_queue.fetch_job(job_id)
-            assert time_spent < 5
         # Job should be running after this point
 
         # Now let's cancel...
@@ -264,12 +162,9 @@ class TestQueue(object):
         # And check the job state to make sure it's marked as cancelling
         job = inmem_queue.fetch_job(job_id)
         assert job.state == State.CANCELING
-        time_spent = 0
         while job.state != State.CANCELED:
             time.sleep(interval)
-            time_spent += interval
             job = inmem_queue.fetch_job(job_id)
-            assert time_spent < 5
         # and hopefully it's canceled by this point
         assert job.state == State.CANCELED
 
@@ -279,13 +174,10 @@ class TestQueue(object):
         )
 
         interval = 0.1
-        time_spent = 0
         job = inmem_queue.fetch_job(job_id)
         while job.state != State.RUNNING:
             time.sleep(interval)
-            time_spent += interval
             job = inmem_queue.fetch_job(job_id)
-            assert time_spent < 5
         # Job should be running after this point
 
         # Now let's cancel...
@@ -293,11 +185,8 @@ class TestQueue(object):
         # And check the job state to make sure it's marked as cancelling
         job = inmem_queue.fetch_job(job_id)
         assert job.state == State.CANCELING
-        time_spent = 0
         while job.state != State.CANCELED:
             time.sleep(interval)
-            time_spent += interval
             job = inmem_queue.fetch_job(job_id)
-            assert time_spent < 5
         # and hopefully it's canceled by this point
         assert job.state == State.CANCELED
