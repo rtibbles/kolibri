@@ -260,7 +260,7 @@ def get_zip_content_base_path():
 HASHI_FILENAME = None
 
 
-def get_hashi_filename():
+def get_hashi_js_filename():
     global HASHI_FILENAME
     if HASHI_FILENAME is None or getattr(settings, "DEVELOPER_MODE", None):
         with io.open(
@@ -272,13 +272,29 @@ def get_hashi_filename():
     return HASHI_FILENAME
 
 
+def get_hashi_filename(filename=None):
+    if filename is None:
+        filename = get_hashi_js_filename()
+    return ".".join(filename.split(".")[:-1])
+
+
+def get_hashi_html_filename():
+    return "{}.html".format(get_hashi_filename())
+
+
 def get_hashi_base_path():
     return "{}{}".format(conf.OPTIONS["Deployment"]["URL_PATH_PREFIX"], HASHI)
 
 
+def get_hashi_js_path():
+    return "{}{}{}".format(
+        conf.OPTIONS["Deployment"]["URL_PATH_PREFIX"], HASHI, get_hashi_js_filename()
+    )
+
+
 def get_hashi_path():
     return "{}{}{}".format(
-        conf.OPTIONS["Deployment"]["URL_PATH_PREFIX"], HASHI, get_hashi_filename()
+        conf.OPTIONS["Deployment"]["URL_PATH_PREFIX"], HASHI, get_hashi_html_filename()
     )
 
 

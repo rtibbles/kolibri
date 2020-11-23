@@ -36,9 +36,12 @@ from django.utils.safestring import mark_safe
 from kolibri.core.content.errors import InvalidStorageFilenameError
 from kolibri.core.content.utils.paths import get_content_storage_file_path
 from kolibri.core.content.utils.paths import get_hashi_base_path
-from kolibri.core.content.utils.paths import get_hashi_filename
+from kolibri.core.content.utils.paths import get_hashi_html_filename
+from kolibri.core.content.utils.paths import get_hashi_js_filename
+from kolibri.core.content.utils.paths import get_hashi_js_path
 from kolibri.core.content.utils.paths import get_hashi_path
 from kolibri.core.content.utils.paths import get_zip_content_base_path
+from kolibri.utils import conf
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +85,7 @@ hashi_template = """
         <meta name="google" content="notranslate">
     </head>
     <body style="margin: 0; padding: 0;">
-        <script type="text/javascript">{}</script>
+        <script type="text/javascript" src="{}"></script>
     </body>
 </html>
 """
@@ -90,27 +93,10 @@ hashi_template = """
 allowed_methods = set(["GET", "OPTIONS"])
 
 
-def _hashi_response_from_request(request):
-    if request.method not in allowed_methods:
-        return HttpResponseNotAllowed(allowed_methods)
-
-    if request.path_info.lstrip("/") != get_hashi_filename():
-        return HttpResponsePermanentRedirect(get_hashi_path())
-
-    if request.method == "OPTIONS":
-        return HttpResponse()
-
-    # if client has a cached version, use that we can safely assume nothing has changed
-    # as we provide a unique path per compiled hashi JS file.
-    if request.META.get("HTTP_IF_MODIFIED_SINCE"):
-        return HttpResponseNotModified()
-    CACHE_KEY = "HASHI_VIEW_RESPONSE_{}".format(get_hashi_filename())
-    cached_response = cache.get(CACHE_KEY)
-    if cached_response is not None:
-        return cached_response
+def _get_hashi_js():
     # Removes Byte Order Mark
     charset = "utf-8-sig"
-    basename = "content/{filename}".format(filename=get_hashi_filename())
+    basename = "content/{filename}".format(filename=get_hashi_js_filename())
 
     filename = None
     # First try finding the file using the storage class.
@@ -122,11 +108,58 @@ def _hashi_response_from_request(request):
         filename = find(basename)
 
     with codecs.open(filename, "r", charset) as fd:
-        content = fd.read()
-    content_type = "text/html"
-    response = HttpResponse(
-        mark_safe(hashi_template.format(content)), content_type=content_type
-    )
+        return fd.read()
+
+
+def _get_hashi_html():
+    return mark_safe(hashi_template.format(get_hashi_js_path()))
+
+
+def _hashi_response_from_request(request):
+    if request.method not in allowed_methods:
+        return HttpResponseNotAllowed(allowed_methods)
+
+    filename = request.path_info.lstrip("/")
+
+    file_extension = filename.split(".")[-1]
+
+    is_js = file_extension == "js"
+
+    is_html = file_extension == "html"
+
+    if is_js:
+        target_filename = get_hashi_js_filename()
+    elif is_html:
+        target_filename = get_hashi_html_filename()
+    else:
+        return HttpResponseNotFound()
+
+    if filename != target_filename:
+        if is_js:
+            target_path = get_hashi_js_path()
+        elif is_html:
+            target_path = get_hashi_path()
+        return HttpResponsePermanentRedirect(target_path)
+
+    if request.method == "OPTIONS":
+        return HttpResponse()
+
+    developer_mode = getattr(settings, "DEVELOPER_MODE", False)
+
+    # if client has a cached version, use that we can safely assume nothing has changed
+    # as we provide a unique path per compiled hashi JS file.
+    if request.META.get("HTTP_IF_MODIFIED_SINCE") and not developer_mode:
+        return HttpResponseNotModified()
+    CACHE_KEY = "HASHI_VIEW_RESPONSE_{}".format(target_filename)
+    cached_response = cache.get(CACHE_KEY)
+    if cached_response is not None and not developer_mode:
+        return cached_response
+
+    content_type = "text/html" if is_html else "text/javascript"
+
+    content = _get_hashi_html() if is_html else _get_hashi_js()
+
+    response = HttpResponse(content, content_type=content_type)
     response["Content-Length"] = len(response.content)
     response["Last-Modified"] = http_date(time.time())
     patch_response_headers(response, cache_timeout=YEAR_IN_SECONDS)
@@ -316,9 +349,17 @@ def get_embedded_file(zipped_path, zipped_filename, embedded_filepath):
     with zipfile.ZipFile(zipped_path) as zf:
 
         # handle H5P files
-        if zipped_path.endswith("h5p") and (
-            not embedded_filepath or embedded_filepath.startswith("dist/")
-        ):
+        if zipped_path.endswith("h5p"):
+            content_type = (
+                mimetypes.guess_type(zipped_path)[0] or "application/octet-stream"
+            )
+            response = FileResponse(open(zipped_path, "rb"), content_type=content_type)
+            file_size = os.stat(zipped_path).st_size
+            # set the content-length header to the size of the embedded file
+            if file_size:
+                response["Content-Length"] = file_size
+            return response
+        if not embedded_filepath or embedded_filepath.startswith("dist/"):
             return get_h5p(zf, embedded_filepath)
         # if no path, or a directory, is being referenced, look for an index.html file
         if not embedded_filepath or embedded_filepath.endswith("/"):
@@ -454,8 +495,38 @@ def zip_content_view(environ, start_response):
     return django_response_to_wsgi(response, environ, start_response)
 
 
+def static_view(environ, start_response):
+    """
+    Handles GET requests and serves a static file.
+    """
+    request = WSGIRequest(environ)
+    path = request.path.replace("/h5p/", "")
+    file_size = None
+    if path == "":
+        content = h5p_template.render(Context({}))
+        content_type = "text/html"
+        response = HttpResponse(content, content_type=content_type)
+        file_size = len(response.content)
+    else:
+        # return static H5P dist resources
+        file_path = find("assets/h5p-standalone-dist/" + path)
+        if file_path is None:
+            response = HttpResponseNotFound("{} not found".format(path))
+        else:
+            # try to guess the MIME type of the embedded file being referenced
+            content_type = (
+                mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+            )
+            response = FileResponse(open(file_path, "rb"), content_type=content_type)
+            file_size = os.stat(file_path).st_size
+    if file_size:
+        response["Content-Length"] = file_size
+    return django_response_to_wsgi(response, environ, start_response)
+
+
 def get_application():
     path_map = {
+        "{}h5p/".format(conf.OPTIONS["Deployment"]["URL_PATH_PREFIX"]): static_view,
         get_hashi_base_path(): hashi_view,
         get_zip_content_base_path(): zip_content_view,
     }

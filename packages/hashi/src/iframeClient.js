@@ -5,6 +5,7 @@ import Cookie from './cookie';
 import SCORM from './SCORM';
 import patchIndexedDB from './patchIndexedDB';
 import { events, nameSpace } from './hashiBase';
+import H5P from './H5P';
 
 /*
  * This class is initialized inside the context of a sandboxed iframe.
@@ -88,7 +89,6 @@ export default class SandboxEnvironment {
     }
     this.contentNamespace = contentNamespace;
     this.iframe = document.createElement('iframe');
-    this.iframe.src = startUrl;
     this.iframe.style.border = 0;
     this.iframe.style.padding = 0;
     this.iframe.style.margin = 0;
@@ -96,6 +96,10 @@ export default class SandboxEnvironment {
     this.iframe.style.width = '100%';
     this.iframe.height = '100%';
     document.body.appendChild(this.iframe);
-    this.initializeIframe(this.iframe.contentWindow);
+    if (startUrl.indexOf('.h5p/') === startUrl.length - 5) {
+      new H5P(this.iframe, startUrl, this.contentNamespace);
+    } else {
+      this.iframe.src = startUrl;
+    }
   }
 }
