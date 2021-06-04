@@ -46,21 +46,17 @@ export function showTopicsContent(store, id) {
 export function showTopicsTopic(store, { id, isRoot = false }) {
   return store.dispatch('loading').then(() => {
     store.commit('SET_PAGE_NAME', isRoot ? PageNames.TOPICS_CHANNEL : PageNames.TOPICS_TOPIC);
+    const include_coach_content =
+      store.getters.isAdmin || store.getters.isCoach || store.getters.isSuperuser;
     const promises = [
-      ContentNodeResource.fetchModel({ id, force: true }), // the topic
-      ContentNodeResource.fetchCollection({
-        getParams: {
-          parent: id,
-          include_coach_content:
-            store.getters.isAdmin || store.getters.isCoach || store.getters.isSuperuser,
-        },
-      }), // the topic's children
+      ContentNodeResource.fetchTree(id, { include_coach_content }),
       store.dispatch('setChannelInfo'),
     ];
 
     return ConditionalPromise.all(promises).only(
       samePageCheckGenerator(store),
-      ([topic, children]) => {
+      ([topic]) => {
+        const children = (topic.children && topic.children.results) || [];
         const currentChannel = store.getters.getChannelObject(topic.channel_id);
         if (!currentChannel) {
           router.replace({ name: PageNames.CONTENT_UNAVAILABLE });

@@ -80,6 +80,14 @@
         :genContentLink="genContentLink"
       />
 
+      <KButton
+        v-if="topic.children.more"
+        primary
+        :text="$tr('viewMore')"
+        @click="viewMore"
+      />
+
+
     </div>
 
   </div>
@@ -92,6 +100,7 @@
   import { mapState } from 'vuex';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import ProgressIcon from 'kolibri.coreVue.components.ProgressIcon';
+  import { ContentNodeResource } from 'kolibri.resources';
   import { PageNames } from '../constants';
   import ContentCardGroupGrid from './ContentCardGroupGrid';
   import CustomContentRenderer from './ChannelRenderer/CustomContentRenderer';
@@ -165,10 +174,18 @@
           params: { id },
         };
       },
+      viewMore() {
+        if (this.topic.children.more) {
+          ContentNodeResource.fetchMoreTree(this.topic.children.more).then(topic => {
+            this.$store.commit('topicsTree/SET_MORE', topic);
+          });
+        }
+      },
     },
     $trs: {
       documentTitleForChannel: 'Topics - { channelTitle }',
       documentTitleForTopic: '{ topicTitle } - { channelTitle }',
+      viewMore: 'View more',
     },
   };
 

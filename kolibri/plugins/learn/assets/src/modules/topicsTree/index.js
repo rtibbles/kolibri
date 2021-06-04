@@ -36,5 +36,10 @@ export default {
         }
       });
     },
+    SET_MORE(state, topic) {
+      state.topic = topic;
+      const children = (topic.children && topic.children.results) || [];
+      state.contents.push(...children);
+    },
   },
 };
