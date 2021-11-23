@@ -483,6 +483,8 @@ function immediatelyUpdateContentSession(store) {
 // Set the debounce artificially short in tests to prevent slowdowns.
 const updateContentSessionDebounceTime = process.env.NODE_ENV === 'test' ? 1 : 2000;
 
+const noSessionErrorText = 'Cannot update a content session before one has been initialized';
+
 /**
  * Update a content session for progress tracking
  */
@@ -491,7 +493,7 @@ export function updateContentSession(
   { progressDelta, progress, contentState, interaction, immediate = false } = {}
 ) {
   if (store.state.logging.session_id === null) {
-    throw ReferenceError('Cannot update a content session before one has been initialized');
+    throw ReferenceError(noSessionErrorText);
   }
   if (!isUndefined(progressDelta) && !isUndefined(progress)) {
     throw TypeError('Must only specify either progressDelta or progress');
@@ -573,7 +575,15 @@ export function startTrackingProgress(store) {
  */
 export function stopTrackingProgress(store) {
   clearTrackingInterval();
-  updateContentSession(store, { immediate: true });
+  try {
+    updateContentSession(store, { immediate: true });
+  } catch (e) {
+    if (e instanceof ReferenceError && e.message === noSessionErrorText) {
+      logging.debug('Tried to stop tracking progress when no content session had been initialized');
+    } else {
+      throw e;
+    }
+  }
 }
 
 export function setChannelInfo(store) {
