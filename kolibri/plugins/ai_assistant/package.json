@@ -1,0 +1,8 @@
+{
+  "name": "kolibri-plugin-ai-assistant",
+  "version": "1.0.0",
+  "description": "AI Assistant plugin for Kolibri",
+  "dependencies": {
+    "@leeoniya/ufuzzy": "^1.0.14"
+  }
+}
