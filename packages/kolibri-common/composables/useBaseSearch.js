@@ -1,6 +1,7 @@
-import { get, set } from '@vueuse/core';
+import { get, useMemoize, set } from '@vueuse/core';
 import invert from 'lodash/invert';
 import isEqual from 'lodash/isEqual';
+import uFuzzy from '@leeoniya/ufuzzy';
 import logger from 'kolibri-logging';
 import { computed, getCurrentInstance, inject, provide, ref, watch } from 'vue';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
@@ -20,6 +21,8 @@ import Modalities from 'kolibri-constants/Modalities';
 import { deduplicateResources } from '../utils/contentNode';
 
 export const logging = logger.getLogger(__filename);
+
+const fuzzySearch = new uFuzzy({});
 
 const activitiesLookup = invert(LearningActivities);
 
@@ -177,6 +180,7 @@ export default function useBaseSearch({
   const _results = ref([]);
   const more = ref(null);
   const labels = ref(null);
+  const autoCompleteSuggestions = ref([]);
 
   const { isAdmin, isCoach, isSuperuser, isUserLoggedIn } = useUser();
 
@@ -340,6 +344,29 @@ export default function useBaseSearch({
     }
   }
 
+  const _memoizedSearchBankFetch = useMemoize(getParams => {
+    return ContentNodeResource.fetchCollection({ getParams }).then(data => {
+      const results = data.results || data;
+      return {
+        results,
+        haystack: results.map(r => r.title),
+      };
+    });
+  });
+
+  const keyWordAutoCompleteHandler = async keywordsValue => {
+    if (keywordsValue && keywordsValue.length > 2) {
+      // Fetch the autocomplete suggestions
+      const getParams = createBaseSearchGetParams();
+      // Only fetch resources for autocomplete suggestions
+      getParams.kind = 'content';
+      const { results, haystack } = await _memoizedSearchBankFetch(getParams);
+      const suggestionIndices = fuzzySearch.filter(haystack, keywordsValue);
+      const suggestions = suggestionIndices.map(i => results[i]);
+      set(autoCompleteSuggestions, suggestions);
+    }
+  };
+
   function removeFilterTag({ value, key }) {
     if (key === 'keywords') {
       set(searchTerms, {
@@ -469,6 +496,10 @@ export default function useBaseSearch({
   // Currently selected search terms
   provide('activeSearchTerms', searchTerms);
 
+  // Handling for search autocomplete
+  provide('keyWordAutoCompleteHandler', keyWordAutoCompleteHandler);
+  provide('autoCompleteSuggestions', autoCompleteSuggestions);
+
   return {
     currentRoute,
     searchTerms,
@@ -499,6 +530,8 @@ export function injectBaseSearch() {
   const searchableLabels = inject('searchableLabels');
   const activeSearchTerms = inject('activeSearchTerms');
   const searchLoading = inject('searchLoading');
+  const keyWordAutoCompleteHandler = inject('keyWordAutoCompleteHandler');
+  const autoCompleteSuggestions = inject('autoCompleteSuggestions');
   return {
     availableLearningActivities,
     availableLibraryCategories,
@@ -509,5 +542,7 @@ export function injectBaseSearch() {
     searchableLabels,
     activeSearchTerms,
     searchLoading,
+    keyWordAutoCompleteHandler,
+    autoCompleteSuggestions,
   };
 }

@@ -167,6 +167,12 @@ importers:
         specifier: 'catalog:'
         version: 2.7.16
 
+  kolibri/plugins/ai_assistant:
+    dependencies:
+      '@leeoniya/ufuzzy':
+        specifier: ^1.0.14
+        version: 1.0.19
+
   kolibri/plugins/bloompub_viewer:
     dependencies:
       kolibri:
@@ -1158,6 +1164,9 @@ importers:
 
   packages/kolibri-common:
     dependencies:
+      '@leeoniya/ufuzzy':
+        specifier: ^1.0.18
+        version: 1.0.19
       '@shopify/draggable':
         specifier: 1.0.0-beta.8
         version: 1.0.0-beta.8
@@ -3012,6 +3021,9 @@ packages:
   '@khanacademy/wonder-stuff-core@1.5.5':
     resolution: {integrity: sha512-0OkhkjuM2zoS6k9Y8WPFGq0OL5WjgL8faOukM5P/wY7M9RC1q/oYCECg5YUf+OFfXenSHgBi2TmJ6cpT/F1how==}
     engines: {node: '>=16'}
+
+  '@leeoniya/ufuzzy@1.0.19':
+    resolution: {integrity: sha512-0pikDeYt0IHEUPza5RTCDXc/17S1pTrYnReEMp8Aa6k1ovzw5QdZLwicW8TjljwEZRb6oYag0xmALohrcq/yOQ==}
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}
@@ -10728,6 +10740,8 @@ snapshots:
       - react-router-dom
 
   '@khanacademy/wonder-stuff-core@1.5.5': {}
+
+  '@leeoniya/ufuzzy@1.0.19': {}
 
   '@leichtgewicht/ip-codec@2.0.5': {}
 
