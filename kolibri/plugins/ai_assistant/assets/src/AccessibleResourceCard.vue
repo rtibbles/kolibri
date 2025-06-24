@@ -1,10 +1,9 @@
 <template>
 
-  <a :href="to" style="text-decoration: none; color: inherit">
+  <a :href="to" style="text-decoration: none; color: inherit; width: 100%;">
     <KCard
-      :to="to"
-      :headingLevel="headingLevel"
       :orientation="windowBreakpoint === 0 ? 'vertical' : 'horizontal'"
+      headingLevel="6"
       thumbnailDisplay="small"
       :title="contentNode.title"
       :thumbnailSrc="contentNode.thumbnail"
@@ -17,22 +16,7 @@
         </div>
       </template>
       <template #belowTitle>
-        <div>
-          <slot name="belowTitle"></slot>
-          <br v-if="contentNode.description" >
-          <KTextTruncator
-            v-if="contentNode.description"
-            class="truncator"
-            :text="contentNode.description"
-            :maxLines="2"
-            style="min-height: 17px; margin-bottom: 8px"
-          />
-          <MetadataChips :tags="metadataTags" />
-          <div
-            v-if="!contentNode.description"
-            style="min-height: 17px"
-          ></div>
-        </div>
+        <MetadataChips :tags="metadataTags" />
       </template>
     </KCard>
   </a>
@@ -74,10 +58,6 @@
       },
       contentNode: {
         type: Object,
-        required: true,
-      },
-      headingLevel: {
-        type: Number,
         required: true,
       },
     },

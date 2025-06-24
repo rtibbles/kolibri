@@ -10,7 +10,6 @@
         :key="content.id"
         :to="contentCardLink(content)"
         :contentNode="content"
-        :headingLevel="cardsHeadingLevel"
       />
     </KCardGrid>
   </div>
@@ -34,11 +33,6 @@
       contentList: {
         type: Array,
         required: true,
-      },
-      // Heading level for the cards
-      cardsHeadingLevel: {
-        type: Number,
-        default: 3,
       },
     },
 

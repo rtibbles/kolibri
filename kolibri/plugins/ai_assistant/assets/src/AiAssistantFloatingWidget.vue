@@ -129,14 +129,16 @@
 
         try {
           const data = await this.callAiApi(userMessage);
-
-          // Add AI response
-          this.messages.push({
-            id: this.messageId++,
-            text: data.response,
-            type: 'ai',
-            relevant_content: data.relevant_content,
-          });
+          
+          for (const datum of data) {
+            // Add AI response
+            this.messages.push({
+              id: this.messageId++,
+              text: datum.response,
+              type: 'ai',
+              relevant_content: datum.relevant_content,
+            });
+          }
         } catch (error) {
           this.messages.push({
             id: this.messageId++,
@@ -152,7 +154,6 @@
       async callAiApi(message) {
         // Extract context parameters using fuzzy matching
         const contextParams = this.extractContextFromMessage(message);
-        console.log('Context parameters:', contextParams);
         const response = await client({url: urls['kolibri:kolibri.plugins.ai_assistant:ai_assistant_chat'](), method: 'POST', data:{
           message,
           ...contextParams,
@@ -168,8 +169,6 @@
         // Use fuzzy matching to find relevant context
         const uf = new uFuzzy();
         const [idxs, info, order] = uf.search(haystack.terms, message);
-
-        console.log(idxs, info, order);
 
         const contextParams = {};
 
