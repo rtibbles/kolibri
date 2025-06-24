@@ -37,6 +37,10 @@
           <div :class="['message-bubble', message.type]" :style="{ background: message.type === 'user' ? $themeTokens.primary : $themeTokens.secondary }">
             {{ message.text }}
           </div>
+          <ContentCardList
+            v-if="message.type === 'ai' && message.relevant_content && message.relevant_content.results"
+            :contentList="message.relevant_content && message.relevant_content.results"
+          />
         </div>
         <div
           v-if="isLoading"
@@ -77,9 +81,13 @@
   import urls from 'kolibri/urls';
   import { LearningActivities, ContentLevels, Categories } from 'kolibri/constants';
   import { coreString } from 'kolibri/uiText/commonCoreStrings';
+  import ContentCardList from './ContentCardList.vue';
 
   export default {
     name: 'AiAssistantFloatingWidget',
+    components: {
+      ContentCardList,
+    },
     data() {
       return {
         isExpanded: false,
@@ -120,13 +128,14 @@
         this.scrollToBottom();
 
         try {
-          const response = await this.callAiApi(userMessage);
+          const data = await this.callAiApi(userMessage);
 
           // Add AI response
           this.messages.push({
             id: this.messageId++,
-            text: response.response,
+            text: data.response,
             type: 'ai',
+            relevant_content: data.relevant_content,
           });
         } catch (error) {
           this.messages.push({
@@ -281,6 +290,7 @@
     width: 60px;
     height: 60px;
     color: white;
+    background: white;
     cursor: pointer;
     border-radius: 50%;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -348,10 +358,6 @@
     gap: 12px;
     padding: 16px;
     overflow-y: auto;
-  }
-
-  .message {
-    display: flex;
   }
 
   .message-bubble {
