@@ -151,12 +151,8 @@ Provide a helpful and educational response."""
         except Exception as e:
             # Fallback response if AI fails
             print(f"AI model error: {e}")
-            context_info = ""
-            if relevant_content:
-                content_titles = [content.get('title', 'Unknown') for content in relevant_content[:3]]
-                context_info = f" I found {len(relevant_content)} relevant resources: {', '.join(content_titles)}. However, I'm unable to process them with AI at the moment."
             
-            ai_response = f"I received your message: '{message}'.{context_info} Please check the system configuration or try again later."
+            ai_response = f"I received your message: '{message}'. Please check the system configuration or try again later."
         
         return Response({
             "response": ai_response,

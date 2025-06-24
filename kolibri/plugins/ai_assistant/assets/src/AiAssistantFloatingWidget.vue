@@ -34,7 +34,7 @@
           :key="message.id"
           class="message"
         >
-          <div :class="['message-bubble', message.type]">
+          <div :class="['message-bubble', message.type]" :style="{ background: message.type === 'user' ? $themeTokens.primary : $themeTokens.secondary }">
             {{ message.text }}
           </div>
         </div>
@@ -76,7 +76,7 @@
   import client from 'kolibri/client';
   import urls from 'kolibri/urls';
   import { LearningActivities, ContentLevels, Categories } from 'kolibri/constants';
-  import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
+  import { coreString } from 'kolibri/uiText/commonCoreStrings';
 
   export default {
     name: 'AiAssistantFloatingWidget',
@@ -143,25 +143,13 @@
       async callAiApi(message) {
         // Extract context parameters using fuzzy matching
         const contextParams = this.extractContextFromMessage(message);
+        console.log('Context parameters:', contextParams);
+        const response = await client({url: urls['kolibri:kolibri.plugins.ai_assistant:ai_assistant_chat'](), method: 'POST', data:{
+          message,
+          ...contextParams,
+        }});
 
-        try {
-          // TODO: Replace with actual API call to /api/plugin/ai_assistant/chat/
-          const response = await client.post(urls['kolibri:kolibri.plugins.ai_assistant:ai_assistant_chat'],{
-            message,
-            ...contextParams,
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          return await response.json();
-        } catch (error) {
-          // Fallback response
-          return {
-            response: `I received your message: "${message}". Context detected: ${Object.keys(contextParams).join(', ') || 'none'}`,
-          };
-        }
+        return response.data;
       },
 
       extractContextFromMessage(message) {
@@ -170,41 +158,26 @@
 
         // Use fuzzy matching to find relevant context
         const uf = new uFuzzy();
-        const idxs = uf.filter(haystack.terms, message);
+        const [idxs, info, order] = uf.search(haystack.terms, message);
+
+        console.log(idxs, info, order);
 
         const contextParams = {};
 
-        if (idxs && idxs.length > 0) {
-          // Get the best matches
-          const info = uf.info(idxs, haystack.terms, message);
-          const order = uf.sort(info, haystack.terms, message);
 
-          // Take top matches above a certain threshold
-          for (let i = 0; i < Math.min(5, order.length); i++) {
-            const idx = order[i];
-            const match = haystack.mappings[idxs[idx]];
-            if (info.scores && info.scores[i] > 0.3) {
-              // threshold for relevance
-              const field = match.field;
-              const value = match.value;
+        // Take top matches above a certain threshold
+        for (const idx of order) {
+          const match = haystack.mappings[idxs[idx]];
+          // threshold for relevance
+          const field = match.field;
+          const value = match.value;
 
-              // Group values by field
-              if (!contextParams[field]) {
-                contextParams[field] = [];
-              }
-              if (!contextParams[field].includes(value)) {
-                contextParams[field].push(value);
-              }
-            }
+          // Group values by field
+          if (!contextParams[field]) {
+            contextParams[field] = [];
           }
+          contextParams[field].push(value);
         }
-
-        // Convert arrays to comma-separated strings for API
-        Object.keys(contextParams).forEach(field => {
-          if (Array.isArray(contextParams[field])) {
-            contextParams[field] = contextParams[field].join(',');
-          }
-        });
 
         return contextParams;
       },
@@ -230,18 +203,18 @@
 
         // Add learning activities
         for (const [key, value] of Object.entries(LearningActivities)) {
-          const text = coreStrings.$tr(key);
+          const text = coreString(key);
           mappings.push({ text, field: 'learning_activities', value });
         }
         // Add content levels (grade levels)
         for (const [key, value] of Object.entries(ContentLevels)) {
-          const text = coreStrings.$tr(key);
+          const text = coreString(key);
           mappings.push({ text, field: 'grade_levels', value });
         }
 
         // Add categories/subjects
         for (const [key, value] of Object.entries(Categories)) {
-          const text = coreStrings.$tr(key);
+          const text = coreString(key);
           mappings.push({ text, field: 'categories', value });
         }
 
@@ -391,13 +364,11 @@
   .message-bubble.user {
     margin-left: auto;
     color: white;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-bottom-right-radius: 6px;
   }
 
   .message-bubble.ai {
     color: #333333;
-    background-color: #f1f3f4;
     border-bottom-left-radius: 6px;
   }
 
