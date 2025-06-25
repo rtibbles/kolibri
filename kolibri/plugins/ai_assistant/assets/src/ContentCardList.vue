@@ -38,7 +38,7 @@
 
     computed: {
       gridLayoutOverrides() {
-        return [{ breakpoints: [0, 1, 2, 3, 4, 5, 6, 7], rowGap: '24px', cardsPerRow: 1 }];
+        return [{ breakpoints: [0, 1, 2, 3, 4, 5, 6, 7], rowGap: '8px', cardsPerRow: 1 }];
       },
     },
     methods: {
@@ -57,6 +57,7 @@
     display: block;
     padding: 0;
     margin: 0;
+    margin-top: 12px;
     list-style: none;
   }
 

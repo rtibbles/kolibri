@@ -3,7 +3,7 @@
   <a :href="to" style="text-decoration: none; color: inherit; width: 100%;">
     <KCard
       :orientation="windowBreakpoint === 0 ? 'vertical' : 'horizontal'"
-      headingLevel="6"
+      :headingLevel="6"
       thumbnailDisplay="small"
       :title="contentNode.title"
       :thumbnailSrc="contentNode.thumbnail"
@@ -27,7 +27,6 @@
 <script>
 
   import { toRefs } from 'vue';
-  import { validateLinkObject } from 'kolibri/utils/validators';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import MetadataChips from 'kolibri-common/components/MetadataChips';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
@@ -52,9 +51,8 @@
     },
     props: {
       to: {
-        type: Object,
+        type: String,
         required: true,
-        validator: validateLinkObject,
       },
       contentNode: {
         type: Object,
