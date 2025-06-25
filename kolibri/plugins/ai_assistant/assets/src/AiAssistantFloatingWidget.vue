@@ -3,7 +3,7 @@
   <div class="ai-assistant-widget">
     <!-- Floating Icon -->
     <div
-      v-if="!isExpanded"
+      v-if="!state.isExpanded"
       class="floating-icon"
       @click="toggleExpanded"
     >
@@ -12,7 +12,7 @@
 
     <!-- Expanded Chat Window -->
     <div
-      v-if="isExpanded"
+      v-if="state.isExpanded"
       class="chat-window"
     >
       <div class="chat-header" :style="{ background: $themeTokens.primary }">
@@ -76,6 +76,8 @@
 
 <script>
 
+  import { ref } from 'vue';
+  import { useStorage } from '@vueuse/core'
   import uFuzzy from '@leeoniya/ufuzzy/dist/uFuzzy.cjs';
   import client from 'kolibri/client';
   import urls from 'kolibri/urls';
@@ -88,20 +90,37 @@
     components: {
       ContentCardList,
     },
-    data() {
+    setup() {
+      const state = useStorage(
+        'assistantState',
+        { isExpanded: false, mostRecentMessages: [] },
+        localStorage,
+        { mergeDefaults: true }
+      );
+      const messages = state.value.mostRecentMessages || [];
+      const currentMessage = ref('');
+      const messageId = ref(0);
+      const isLoading = ref(false);
       return {
-        isExpanded: false,
-        messages: [],
-        currentMessage: '',
-        messageId: 0,
-        isLoading: false,
-        haystack: null,
-      };
+        state,
+        messages,
+        currentMessage,
+        messageId,
+        isLoading,
+      }
+    },
+    watch: {
+      'state.isExpanded': function() {
+        this.$nextTick(this.scrollToBottom);
+      },
+    },
+    mounted() {
+      this.scrollToBottom();
     },
     methods: {
       toggleExpanded() {
-        this.isExpanded = !this.isExpanded;
-        if (this.isExpanded) {
+        this.state.isExpanded = !this.state.isExpanded;
+        if (this.state.isExpanded) {
           this.$nextTick(() => {
             if (this.$refs.messageInput) {
               this.$refs.messageInput.focus();
@@ -124,31 +143,19 @@
         this.currentMessage = '';
         this.isLoading = true;
 
-        // Scroll to bottom
-        this.scrollToBottom();
-
-        try {
-          const data = await this.callAiApi(userMessage);
-          
-          for (const datum of data) {
-            // Add AI response
-            this.messages.push({
-              id: this.messageId++,
-              text: datum.response,
-              type: 'ai',
-              relevant_content: datum.relevant_content,
-            });
-          }
-        } catch (error) {
+        const data = await this.callAiApi(userMessage);
+        
+        for (const datum of data) {
+          // Add AI response
           this.messages.push({
             id: this.messageId++,
-            text: 'Sorry, I encountered an error. Please try again.',
-            type: 'ai error',
+            text: datum.response,
+            type: 'ai',
+            relevant_content: datum.relevant_content,
           });
-        } finally {
-          this.isLoading = false;
-          this.scrollToBottom();
         }
+        this.isLoading = false;
+        this.scrollToBottom();
       },
 
       async callAiApi(message) {
@@ -232,9 +239,11 @@
 
       scrollToBottom() {
         this.$nextTick(() => {
-          if (this.$refs.messagesContainer) {
-            this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
-          }
+          this.$nextTick(() => {
+            if (this.$refs.messagesContainer) {
+              this.$refs.messagesContainer.scrollTo({ top: this.$refs.messagesContainer.scrollHeight, behavior: 'smooth' });
+            }
+          });
         });
       },
     },
@@ -264,7 +273,7 @@
         context: 'Button to send the current message in the chat.',
       },
       assistantName: {
-        message: 'KolibrAI',
+        message: 'Kolibri Assistant',
         context: 'The name of the AI assistant widget.',
       },
     },
@@ -310,7 +319,7 @@
     display: flex;
     flex-direction: column;
     width: 350px;
-    height: 500px;
+    height: 60vh;
     overflow: hidden;
     background: white;
     border-radius: 12px;
