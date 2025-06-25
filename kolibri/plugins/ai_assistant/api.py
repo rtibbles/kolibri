@@ -179,12 +179,16 @@ class AiAssistantViewSet(ViewSet):
                 "keywords": keyword,
                 "max_results": 5,  # Limit to first 5 results
             }
+            new_candidates = (
+                contentnode_viewset.serialize_list(request, query_params) or {}
+            ).get("results", [])
+
+            new_candidates = [
+                node for node in new_candidates if isinstance(node, dict) and node["kind"] != "topic"
+            ]
+
             # Use serialize_list to get filtered content nodes
-            candidate_content_list.extend(
-                (contentnode_viewset.serialize_list(request, query_params) or {}).get(
-                    "results", []
-                )
-            )
+            candidate_content_list.extend(new_candidates)
 
         # deduplicate content nodes and build a dictionary for easy access
         candidate_content = {node["id"]: node for node in candidate_content_list}
