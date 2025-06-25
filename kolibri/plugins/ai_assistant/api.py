@@ -13,7 +13,6 @@ from langchain.schema import HumanMessage
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 
-
 # Create instance for serialize_list usage
 contentnode_viewset = ContentNodeViewset()
 
@@ -217,17 +216,23 @@ class AiAssistantViewSet(ViewSet):
             if content_id in candidate_content:
                 relevant_content.append(candidate_content[content_id])
 
-        return Response(
-            [
-                {
-                    "response": initial_response.get("response", ""),
-                },
+        # include the initial informational AI response
+        response = [
+            {
+                "response": initial_response.get("response", ""),
+            }
+        ]
+
+        # if there are relevant content nodes, include and explain them in the response
+        if relevant_content:
+            response.append(
                 {
                     "response": content_intro,
                     "relevant_content": relevant_content,
-                },
-            ]
-        )
+                }
+            )
+
+        return Response(response)
 
     @decorators.action(methods=["get"], detail=False)
     def status(self, request):
