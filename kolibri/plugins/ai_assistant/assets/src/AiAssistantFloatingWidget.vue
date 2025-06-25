@@ -38,8 +38,8 @@
             {{ message.text }}
           </div>
           <ContentCardList
-            v-if="message.type === 'ai' && message.relevant_content && message.relevant_content.results"
-            :contentList="message.relevant_content && message.relevant_content.results"
+            v-if="message.type === 'ai' && message.relevant_content"
+            :contentList="message.relevant_content"
           />
         </div>
         <div
