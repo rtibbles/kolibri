@@ -132,6 +132,8 @@
       async sendMessage() {
         if (!this.currentMessage.trim() || this.isLoading) return;
 
+        this.scrollToBottom();
+
         // Add user message
         this.messages.push({
           id: this.messageId++,
