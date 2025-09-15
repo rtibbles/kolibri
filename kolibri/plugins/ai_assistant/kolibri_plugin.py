@@ -1,6 +1,4 @@
-from kolibri.core.hooks import FrontEndBaseSyncHook
-from kolibri.core.webpack import hooks as webpack_hooks
-
+from kolibri.core.content.hooks import ContentNodeSearchFilterHook
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import register_hook
 
@@ -10,15 +8,19 @@ class AiAssistantPlugin(KolibriPluginBase):
     A plugin to provide AI assistant functionality within Kolibri.
     """
 
-    untranslated_view_urls = "api_urls"
     kolibri_options = "options"
 
 
 @register_hook
-class AiAssistantAsset(webpack_hooks.WebpackBundleHook):
-    bundle_id = "main"
+class AiAssistantSearchFilterHook(ContentNodeSearchFilterHook):
+    @property
+    def filter_backend(self):
+        try:
+            from .api import get_ai_chat_settings
+            from .api import LLMContentNodeSearchFilter
 
-
-@register_hook
-class InclusionHook(FrontEndBaseSyncHook):
-    bundle_class = AiAssistantAsset
+            # Ensure settings are valid
+            get_ai_chat_settings()
+            return LLMContentNodeSearchFilter
+        except (ValueError, ImportError):
+            return None
