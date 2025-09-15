@@ -78,3 +78,16 @@ class ContentNodeDisplayHook(KolibriHook):
     @abstractmethod
     def node_url(self, content_node):
         pass
+
+
+@define_hook(only_one_registered=True)
+class ContentNodeSearchFilterHook(KolibriHook):
+    """
+    A hook that registers a capability of a plugin to provide a replacement
+    DRF SearchFilter implementation for use in ContentNode search filtering.
+    """
+
+    @property
+    @abstractmethod
+    def filter_backend(self):
+        pass
