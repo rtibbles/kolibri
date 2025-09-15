@@ -1,24 +1,21 @@
+# flake8: noqa: E501
 import json
+import logging
 
-from rest_framework import decorators
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.viewsets import ViewSet
+from langchain.schema import HumanMessage
+from langchain.schema import SystemMessage
 
-from kolibri.core.content.api import ContentNodeViewset
+from kolibri.core.content.api import ContentNodeSearchFilter
 from kolibri.utils.conf import OPTIONS
 
-from langchain.schema import SystemMessage
-from langchain.schema import HumanMessage
 
-
-# Create instance for serialize_list usage
-contentnode_viewset = ContentNodeViewset()
+logger = logging.getLogger(__name__)
 
 # Best ollama models:
 # - gemma3:12b
 # - granite3.3:8b
 # - mistral:7b
+
 
 def robust_json_parser(json_str):
 
@@ -62,7 +59,7 @@ def get_ai_chat_settings():
 
     if provider.lower() not in ["openai", "anthropic", "ollama"]:
         raise ValueError(f"Unsupported AI provider: {provider}")
-    
+
     return api_key, provider, model_name
 
 
@@ -74,37 +71,31 @@ def get_ai_chat_model():
         # Create appropriate langchain model based on provider
         if provider.lower() == "openai":
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
-                api_key=api_key,
-                model=model_name,
-                temperature=0.9,
-                max_tokens=1000
+                api_key=api_key, model=model_name, temperature=0.9, max_tokens=1000
             )
         elif provider.lower() == "anthropic":
             from langchain_anthropic import ChatAnthropic
+
             return ChatAnthropic(
-                api_key=api_key,
-                model=model_name,
-                temperature=0.9,
-                max_tokens=1000
+                api_key=api_key, model=model_name, temperature=0.9, max_tokens=1000
             )
         elif provider.lower() == "ollama":
             from langchain_ollama import ChatOllama
-            return ChatOllama(
-                model=model_name,
-                temperature=0.9,
-                max_tokens=1000
-            )
+
+            return ChatOllama(model=model_name, temperature=0.9, max_tokens=1000)
     except ImportError as e:
         raise ImportError(f"Required langchain packages not installed: {e}")
     except Exception as e:
         raise Exception(f"Failed to initialize AI model: {e}")
 
+
 HALLUCINATION_AVOIDANCE_SYSTEM_PROMPT = """
 # ———— Hallucination Avoidance ————
-For any question, you may only state facts you are fully confident in. 
-Before answering, check whether you have verifiable knowledge of the topic. 
-If you have any doubt—even a 1% chance you might be wrong—you must not attempt an answer.  
+For any question, you may only state facts you are fully confident in.
+Before answering, check whether you have verifiable knowledge of the topic.
+If you have any doubt—even a 1% chance you might be wrong—you must not attempt an answer.
 Instead you must reply exactly in JSON as:
 
 {
@@ -118,9 +109,9 @@ Do not add any other text or attempt to guess.
 
 CONFIDENCE_GUARDRAIL_SYSTEM_PROMPT = """
 # ———— Confidence Guardrail ————
-Before you generate any factual claim, assess whether you can be fully confident (e.g. ≥90%) in its accuracy. 
+Before you generate any factual claim, assess whether you can be fully confident (e.g. ≥90%) in its accuracy.
 If you have any doubt or cannot verify it against your internal knowledge, you must reply exactly:
-“I don’t know.” 
+“I don’t know.”
 Under no circumstances should you fabricate or guess. Lives depend on your accuracy. Always err on the side of caution.
 # ——————————————————————
 """
@@ -187,35 +178,24 @@ def query_ai(prompt, system_prompt=None, parse_json=True):
         try:
             return robust_json_parser(response.content)
         except json.JSONDecodeError:
-            print("Failed to parse AI response as JSON:", response.content)
+            logging.error("Failed to parse AI response as JSON:", response.content)
             return {"error": "Failed to parse AI response"}
     return response.content
 
 
-class AiAssistantViewSet(ViewSet):
-    """
-    API endpoints for AI assistant functionality
-    """
+class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
+    _search_terms = None
 
-    # permission_classes = (IsAuthenticated,)
+    def get_search_terms(self, request):
+        if self._search_terms:
+            return self._search_terms
+        return super().get_search_terms(request)
 
-    @decorators.action(methods=["post"], detail=False)
-    def chat(self, request):
-        """
-        Handle AI chat interactions with optional ContentNode context parameters
-        
-        Accepts message and optional ContentNode filter parameters for RAG:
-        - message: The user's chat message
-        - kind: Filter by content kind (video, audio, document, etc.)
-        - grade_levels: Filter by grade levels
-        - learning_activities: Filter by learning activities
-        - categories: Filter by categories
-        """
-
-        message = request.data.get("message", "")
-
+    def filter_queryset(self, request, queryset, view):
+        message = self.get_cleaned_search_value()
+        search_fields = self.get_search_fields()
         if not message:
-            return Response({"error": "Message is required"}, status=400)
+            return queryset
 
         # Get the search terms to use for RAG
         initial_response = query_ai(
@@ -224,91 +204,49 @@ class AiAssistantViewSet(ViewSet):
             system_prompt=HALLUCINATION_AVOIDANCE_SYSTEM_PROMPT + INITIAL_SYSTEM_PROMPT,
         )
 
-        candidate_content_list = []
-        for keyword in initial_response.get("search_terms", []):
-            if not isinstance(keyword, str):
-                return Response({"error": "Invalid search term format"}, status=400)            
-            query_params = {
-                "keywords": keyword,
-                "max_results": 5,  # Limit to first 5 results
-            }
-            new_candidates = (
-                contentnode_viewset.serialize_list(request, query_params) or {}
-            ).get("results", [])
+        search_terms = initial_response.get("search_terms", [])
 
-            new_candidates = [
-                node
-                for node in new_candidates
-                if isinstance(node, dict)
-                and node["kind"] != "topic"
-                and not node["coach_content"]
-            ]
+        if not search_terms:
+            return queryset
 
-            # Use serialize_list to get filtered content nodes
-            candidate_content_list.extend(new_candidates)
+        self._search_terms = search_terms
+        candidate_contentnodes = super().filter_queryset(request, queryset, view)
+        self._search_terms = None
 
-        # deduplicate content nodes by content_id and build a dictionary for easy access
-        candidate_content = {
-            node["content_id"][:10]: node for node in candidate_content_list
-        }
-
-        candidate_content_minimal = [
-            {"id": node["content_id"][:10], "title": node["title"], "description": node["description"], "kind": node["kind"]}
-            for node in candidate_content.values()
-        ]
+        candidate_values = candidate_contentnodes.values("id", *search_fields)
 
         # use AI to filter and rank content nodes
         prompt = SEARCH_RESULTS_PROMPT_TEMPLATE.format(
             message=message,
             original_response=initial_response.get("response", ""),
-            # search_terms=", ".join(initial_response.get("search_terms", [])),
-            resources=json.dumps(candidate_content_minimal, indent=2),
+            resources=json.dumps(candidate_values, indent=2),
         )
+
         try:
             result = query_ai(prompt=prompt, system_prompt=SEARCH_RESULTS_SYSTEM_PROMPT)
             content_intro = result.get("content_intro", "")
-            relevant_content_ids = result.get("relevant_resources", [])
+            relevant_ids = result.get("relevant_resources", [])
         except Exception as e:
-            return Response({"error": f"AI processing failed: {str(e)}"}, status=500)
+            logger.error(f"Error querying AI for search filtering: {e}")
+            return queryset
 
-        # filter the candidate content based on AI response
-        relevant_content = []
-        for content_id in relevant_content_ids:
-            if content_id in candidate_content:
-                relevant_content.append(candidate_content[content_id])
+        if not relevant_ids:
+            return queryset
+
+        results = candidate_contentnodes.filter(id__in=relevant_ids)
 
         # display debugging information to the console
-        print("Initial AI response:", initial_response)
-        print("Candidate content nodes:", candidate_content_minimal)
-        print("Filtered relevant content IDs:", relevant_content_ids)
+        logger.debug("Initial AI response:", initial_response)
+        logger.debug("Candidate content nodes:", candidate_values)
+        logger.debug("Filtered relevant content IDs:", relevant_ids)
 
-        # include the initial informational AI response
-        response = [
-            {
-                "response": initial_response.get("response", ""),
-            }
-        ]
+        messages = []
+        if initial_response.get("response"):
+            messages.append(initial_response.get("response"))
 
-        # if there are relevant content nodes, include and explain them in the response
-        if relevant_content:
-            response.append(
-                {
-                    "response": content_intro,
-                    "relevant_content": relevant_content,
-                }
-            )
+        if content_intro:
+            messages.append(content_intro)
 
-        return Response(response)
+        setattr(request, "messages", messages)
 
-    @decorators.action(methods=["get"], detail=False)
-    def status(self, request):
-        """
-        Check AI assistant status and configuration
-        """
-        _, provider, model_name = get_ai_chat_settings()
-        return Response({
-            "enabled": True,
-            "provider": provider,
-            "model": model_name,
-            "status": "ready"
-        })
+        return results
