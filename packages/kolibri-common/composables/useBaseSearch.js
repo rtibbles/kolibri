@@ -1,7 +1,7 @@
 import { get, useMemoize, set } from '@vueuse/core';
 import invert from 'lodash/invert';
 import isEqual from 'lodash/isEqual';
-import uFuzzy from '@leeoniya/ufuzzy';
+// import uFuzzy from '@leeoniya/ufuzzy';
 import logger from 'kolibri-logging';
 import { computed, getCurrentInstance, inject, provide, ref, watch } from 'vue';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
@@ -21,7 +21,7 @@ import { deduplicateResources } from '../utils/contentNode';
 
 export const logging = logger.getLogger(__filename);
 
-const fuzzySearch = new uFuzzy({});
+// const fuzzySearch = new uFuzzy({});
 
 const activitiesLookup = invert(LearningActivities);
 
@@ -180,6 +180,7 @@ export default function useBaseSearch({
   const more = ref(null);
   const labels = ref(null);
   const autoCompleteSuggestions = ref([]);
+  const messages = ref([]);
 
   const { isAdmin, isCoach, isSuperuser, isUserLoggedIn } = useUser();
 
@@ -303,6 +304,7 @@ export default function useBaseSearch({
         set(_results, data.results || []);
         set(more, data.more);
         _setAvailableLabels(data.labels);
+        set(messages, data.messages || []);
         set(searchResultsLoading, false);
         set(scopedLabelsLoading, false);
       });
@@ -312,6 +314,7 @@ export default function useBaseSearch({
       ContentNodeResource.fetchCollection({ getParams }).then(data => {
         _setAvailableLabels(data.labels);
         set(more, null);
+        set(messages, []);
         set(scopedLabelsLoading, false);
       });
     } else {
@@ -319,6 +322,7 @@ export default function useBaseSearch({
       // and we're not gathering labels from the descendant
       set(more, null);
       set(labels, null);
+      set(messages, []);
       set(scopedLabelsLoading, false);
     }
   }
@@ -356,8 +360,9 @@ export default function useBaseSearch({
       const getParams = createBaseSearchGetParams();
       // Only fetch resources for autocomplete suggestions
       getParams.kind = 'content';
+      // eslint-disable-next-line no-unused-vars
       const { results, haystack } = await _memoizedSearchBankFetch(getParams);
-      const suggestionIndices = fuzzySearch.filter(haystack, keywordsValue);
+      const suggestionIndices = []; // fuzzySearch.filter(haystack, keywordsValue);
       const suggestions = suggestionIndices.map(i => results[i]);
       set(autoCompleteSuggestions, suggestions);
     }
@@ -505,6 +510,7 @@ export default function useBaseSearch({
     results,
     more,
     labels,
+    messages,
     search,
     searchMore,
     removeFilterTag,

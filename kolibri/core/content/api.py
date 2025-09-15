@@ -21,6 +21,8 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes
 from django.utils.encoding import iri_to_uri
+from django.utils.text import smart_split
+from django.utils.text import unescape_string_literal
 from django.views import View
 from django.views.decorators.cache import cache_page
 from django.views.decorators.cache import never_cache
@@ -40,6 +42,7 @@ from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.fields import CharField
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -54,6 +57,7 @@ from kolibri.core.auth.middleware import session_exempt
 from kolibri.core.bookmarks.models import Bookmark
 from kolibri.core.content import models
 from kolibri.core.content import serializers
+from kolibri.core.content.hooks import ContentNodeSearchFilterHook
 from kolibri.core.content.models import ContentDownloadRequest
 from kolibri.core.content.models import ContentRemovalRequest
 from kolibri.core.content.models import ContentRequestReason
@@ -450,7 +454,6 @@ contentnode_filter_fields = [
     "accessibility_labels",
     "categories",
     "learner_needs",
-    "keywords",
     "channels",
     "languages",
     "tree_id",
@@ -477,7 +480,6 @@ class ContentNodeFilter(FilterSet):
     accessibility_labels = CharFilter(method="bitmask_contains_and")
     categories = CharFilter(method="bitmask_contains_and")
     learner_needs = CharFilter(method="bitmask_contains_and")
-    keywords = CharFilter(method="filter_keywords")
     channels = UUIDInFilter(field_name="channel_id")
     languages = CharInFilter(field_name="lang_id")
     categories__isnull = BooleanFilter(field_name="categories", lookup_expr="isnull")
@@ -573,25 +575,66 @@ class ContentNodeFilter(FilterSet):
             return queryset.filter(pk__in=quizzes.values_list("pk", flat=True))
         return queryset
 
-    def filter_keywords(self, queryset, name, value):
-        # all words with punctuation removed
-        all_words = [w for w in re.split('[?.,!";: ]', value) if w]
-        # words in all_words that are not stopwords
-        critical_words = [w for w in all_words if w not in stopwords_set]
-        words = critical_words if critical_words else all_words
-        query = union(
-            [
-                # all critical words in title
-                intersection([Q(title__icontains=w) for w in words]),
-                # all critical words in description
-                intersection([Q(description__icontains=w) for w in words]),
-            ]
-        )
-
-        return queryset.filter(query)
-
     def bitmask_contains_and(self, queryset, name, value):
         return queryset.has_all_labels(name, value.split(","))
+
+
+def search_smart_split(search_terms):
+    """
+    Returns sanitized search terms as a list.
+    Vendored and modified from https://github.com/encode/django-rest-framework/blob/main/rest_framework/filters.py#L23
+    to add splitting by more punctuation types.
+    """
+    split_terms = []
+    for term in smart_split(search_terms):
+        # trim commas to avoid bad matching for quoted phrases
+        term = term.strip(",")
+        if term.startswith(('"', "'")) and term[0] == term[-1]:
+            # quoted phrases are kept together without any other split
+            split_terms.append(unescape_string_literal(term))
+        else:
+            # non-quoted tokens are split by ?.,!;, keeping only non-empty ones
+            for sub_term in re.split("[?.,!;:]", term):
+                if sub_term:
+                    split_terms.append(sub_term.strip())
+    return split_terms
+
+
+class ContentNodeSearchFilter(filters.SearchFilter):
+    search_param = "search"
+
+    def get_search_fields(self, view, request):
+        return ["title", "description"]
+
+    def get_cleaned_search_value(self, request):
+        value = request.query_params.get(
+            self.search_param, request.query_params.get("keywords", "")
+        )
+        field = CharField(trim_whitespace=False, allow_blank=True)
+        return field.run_validation(value)
+
+    def get_search_terms(self, request):
+        """
+        Search terms are set by a ?search=... query parameter,
+        and may be whitespace delimited.
+        For backwards compatibility, we also allow the keywords parameter,
+        but search will take precedence.
+        """
+        cleaned_value = self.get_cleaned_search_value(request)
+        split_terms = search_smart_split(cleaned_value)
+        critical_terms = [w for w in split_terms if w not in stopwords_set]
+        return critical_terms if critical_terms else split_terms
+
+
+def _lazy_search_filter_backend():
+    # Only one hook is allowed to be registered, so either choose that,
+    # or return the default backend defined above.
+    backends = [
+        hook.filter_backend
+        for hook in ContentNodeSearchFilterHook.registered_hooks
+        if hook.filter_backend
+    ] + [ContentNodeSearchFilter]
+    return backends[0]()
 
 
 class OptionalPageNumberPagination(ValuesViewsetPageNumberPagination):
@@ -636,7 +679,7 @@ class BaseContentNodeMixin(object):
     Also used for public ContentNode endpoints!
     """
 
-    filter_backends = (DjangoFilterBackend,)
+    filter_backends = (DjangoFilterBackend, _lazy_search_filter_backend)
     filterset_class = ContentNodeFilter
 
     values = (
@@ -847,9 +890,16 @@ class OptionalContentNodePagination(OptionalPagination):
     def paginate_queryset(self, queryset, request, view=None):
         # Record the queryset for use in returning available filters
         self.queryset = queryset
+        # Record the request for use in gathering any applied feedback
+        self.request = request
         return super(OptionalContentNodePagination, self).paginate_queryset(
             queryset, request, view=view
         )
+
+    def get_messages(self):
+        if hasattr(self, "request") and hasattr(self.request, "messages"):
+            return self.request.messages
+        return []
 
     def get_paginated_response(self, data):
         return Response(
@@ -863,6 +913,7 @@ class OptionalContentNodePagination(OptionalPagination):
                             self.queryset, self.use_deprecated_channels_labels
                         ),
                     ),
+                    ("messages", self.get_messages()),
                 ]
             )
         )
@@ -882,6 +933,13 @@ class OptionalContentNodePagination(OptionalPagination):
                 "labels": {
                     "type": "object",
                     "example": {"accessibility_labels": ["id1", "id2"]},
+                },
+                "messages": {
+                    "type": "array",
+                    "example": [
+                        "This content is about Physics.",
+                        "Compasses are little magnets used to find the Earth's magnetic north pole.",
+                    ],
                 },
             },
         }
