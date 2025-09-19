@@ -265,7 +265,7 @@
   .search-message {
     display: block;
     width: fit-content;
-    max-width: 100%;
+    max-width: calc(100% - 48px);
     padding: 12px 16px;
     margin-bottom: 16px;
     border: 2px solid;
