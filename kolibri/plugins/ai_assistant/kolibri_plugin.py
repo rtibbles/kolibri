@@ -1,6 +1,11 @@
+import logging
+
 from kolibri.core.content.hooks import ContentNodeSearchFilterHook
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import register_hook
+
+
+logger = logging.getLogger(__name__)
 
 
 class AiAssistantPlugin(KolibriPluginBase):
@@ -23,4 +28,7 @@ class AiAssistantSearchFilterHook(ContentNodeSearchFilterHook):
             get_ai_chat_settings()
             return LLMContentNodeSearchFilter
         except (ValueError, ImportError):
+            logger.exception(
+                "Failed to load AI assistant search filter; falling back to default backend"
+            )
             return None
