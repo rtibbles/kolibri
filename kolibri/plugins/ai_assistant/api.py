@@ -75,6 +75,7 @@ def get_ai_chat_model():
             return ChatOpenAI(
                 api_key=api_key, model=model_name, temperature=0.9, max_tokens=1000
             )
+        
         elif provider.lower() == "anthropic":
             from langchain_anthropic import ChatAnthropic
 
@@ -208,7 +209,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         message = self.get_cleaned_search_value(request)
         search_fields = self.get_search_fields(view, request)
         if not message:
-            return queryset
+            return super().filter_queryset(request, queryset, view)
 
         # Get the search terms to use for RAG
         initial_response = query_ai(
@@ -220,6 +221,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         search_terms = initial_response.get("search_terms", [])
 
         if not search_terms:
+            logger.warning("No search terms returned by AI, falling back to default search")
             return super().filter_queryset(request, queryset, view)
 
         self._search_terms = search_terms
@@ -244,6 +246,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             return super().filter_queryset(request, queryset, view)
 
         if not relevant_ids:
+            logger.warning(f"No relevant content IDs returned by AI filter (of {len(candidate_values)} candidates from keywords {search_terms}), returning default search")
             return super().filter_queryset(request, queryset, view)
 
         results = candidate_contentnodes.filter(id__in=relevant_ids)
