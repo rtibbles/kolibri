@@ -86,9 +86,13 @@ def get_ai_chat_model():
 
             return ChatOllama(model=model_name, temperature=0.9, max_tokens=1000)
     except ImportError as e:
-        raise ImportError(f"Required langchain packages not installed: {e}")
+        logger.exception("Required langchain packages missing for AI assistant")
+        raise ImportError(
+            f"Required langchain packages not installed: {e}"
+        ) from e
     except Exception as e:
-        raise Exception(f"Failed to initialize AI model: {e}")
+        logger.exception("Failed to initialize AI model")
+        raise Exception(f"Failed to initialize AI model: {e}") from e
 
 
 HALLUCINATION_AVOIDANCE_SYSTEM_PROMPT = """
@@ -177,8 +181,17 @@ def query_ai(prompt, system_prompt=None, parse_json=True):
     if parse_json:
         try:
             return robust_json_parser(response.content)
-        except json.JSONDecodeError:
-            logging.error("Failed to parse AI response as JSON:", response.content)
+        except json.JSONDecodeError as exc:
+            logger.exception(
+                "Failed to parse AI response as JSON. raw_content=%r", response.content
+            )
+            return {"error": "Failed to parse AI response"}
+        except Exception:
+            # Ensure unexpected parsing errors do not get swallowed silently.
+            logger.exception(
+                "Unexpected error while parsing AI response. raw_content=%r",
+                response.content,
+            )
             return {"error": "Failed to parse AI response"}
     return response.content
 
@@ -192,8 +205,8 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         return super().get_search_terms(request)
 
     def filter_queryset(self, request, queryset, view):
-        message = self.get_cleaned_search_value()
-        search_fields = self.get_search_fields()
+        message = self.get_cleaned_search_value(request)
+        search_fields = self.get_search_fields(view, request)
         if not message:
             return queryset
 
@@ -207,7 +220,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         search_terms = initial_response.get("search_terms", [])
 
         if not search_terms:
-            return queryset
+            return super().filter_queryset(request, queryset, view)
 
         self._search_terms = search_terms
         candidate_contentnodes = super().filter_queryset(request, queryset, view)
@@ -219,19 +232,19 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         prompt = SEARCH_RESULTS_PROMPT_TEMPLATE.format(
             message=message,
             original_response=initial_response.get("response", ""),
-            resources=json.dumps(candidate_values, indent=2),
+            resources=json.dumps(list(candidate_values), indent=2),
         )
 
         try:
             result = query_ai(prompt=prompt, system_prompt=SEARCH_RESULTS_SYSTEM_PROMPT)
             content_intro = result.get("content_intro", "")
             relevant_ids = result.get("relevant_resources", [])
-        except Exception as e:
-            logger.error(f"Error querying AI for search filtering: {e}")
-            return queryset
+        except Exception:
+            logger.exception("Error querying AI for search filtering")
+            return super().filter_queryset(request, queryset, view)
 
         if not relevant_ids:
-            return queryset
+            return super().filter_queryset(request, queryset, view)
 
         results = candidate_contentnodes.filter(id__in=relevant_ids)
 
