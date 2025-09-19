@@ -1,7 +1,10 @@
 # flake8: noqa: E501
 import json
 import logging
+import operator
+from functools import reduce
 
+from django.db import models
 from langchain.schema import HumanMessage
 from langchain.schema import SystemMessage
 
@@ -72,10 +75,8 @@ def get_ai_chat_model():
         if provider.lower() == "openai":
             from langchain_openai import ChatOpenAI
 
-            return ChatOpenAI(
-                api_key=api_key, model=model_name, temperature=0.9, max_tokens=1000
-            )
-        
+            return ChatOpenAI(api_key=api_key, model=model_name, max_tokens=1000)
+
         elif provider.lower() == "anthropic":
             from langchain_anthropic import ChatAnthropic
 
@@ -88,9 +89,7 @@ def get_ai_chat_model():
             return ChatOllama(model=model_name, temperature=0.9, max_tokens=1000)
     except ImportError as e:
         logger.exception("Required langchain packages missing for AI assistant")
-        raise ImportError(
-            f"Required langchain packages not installed: {e}"
-        ) from e
+        raise ImportError(f"Required langchain packages not installed: {e}") from e
     except Exception as e:
         logger.exception("Failed to initialize AI model")
         raise Exception(f"Failed to initialize AI model: {e}") from e
@@ -218,15 +217,42 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             system_prompt=HALLUCINATION_AVOIDANCE_SYSTEM_PROMPT + INITIAL_SYSTEM_PROMPT,
         )
 
-        search_terms = initial_response.get("search_terms", [])
+        logger.debug(initial_response)
+
+        search_terms = (
+            initial_response.get("search_terms", []) if initial_response else None
+        )
 
         if not search_terms:
-            logger.warning("No search terms returned by AI, falling back to default search")
+            logger.warning(
+                "No search terms returned by AI, falling back to default search"
+            )
             return super().filter_queryset(request, queryset, view)
 
-        self._search_terms = search_terms
-        candidate_contentnodes = super().filter_queryset(request, queryset, view)
-        self._search_terms = None
+        orm_lookups = [
+            self.construct_search(str(search_field)) for search_field in search_fields
+        ]
+
+        base = queryset
+        # generator which for each term builds the corresponding search
+        conditions = (
+            reduce(
+                operator.or_,
+                (models.Q(**{orm_lookup: term}) for orm_lookup in orm_lookups),
+            )
+            for term in search_terms
+        )
+        candidate_contentnodes = queryset.filter(reduce(operator.or_, conditions))
+
+        # Remove duplicates from results, if necessary
+        if self.must_call_distinct(candidate_contentnodes, search_fields):
+            # inspired by django.contrib.admin
+            # this is more accurate than .distinct form M2M relationship
+            # also is cross-database
+            candidate_contentnodes = candidate_contentnodes.filter(
+                pk=models.OuterRef("pk")
+            )
+            candidate_contentnodes = base.filter(models.Exists(candidate_contentnodes))
 
         candidate_values = candidate_contentnodes.values("id", *search_fields)
 
@@ -239,6 +265,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
 
         try:
             result = query_ai(prompt=prompt, system_prompt=SEARCH_RESULTS_SYSTEM_PROMPT)
+            logger.debug(result)
             content_intro = result.get("content_intro", "")
             relevant_ids = result.get("relevant_resources", [])
         except Exception:
@@ -246,7 +273,9 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             return super().filter_queryset(request, queryset, view)
 
         if not relevant_ids:
-            logger.warning(f"No relevant content IDs returned by AI filter (of {len(candidate_values)} candidates from keywords {search_terms}), returning default search")
+            logger.warning(
+                f"No relevant content IDs returned by AI filter (of {len(candidate_values)} candidates from keywords {search_terms}), returning default search"
+            )
             return super().filter_queryset(request, queryset, view)
 
         results = candidate_contentnodes.filter(id__in=relevant_ids)
