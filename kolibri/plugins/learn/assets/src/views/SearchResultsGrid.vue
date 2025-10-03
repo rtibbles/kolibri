@@ -268,6 +268,7 @@
     max-width: 100%;
     padding: 12px 16px;
     margin-bottom: 16px;
+    margin-right: 25px;
     border: 2px solid;
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -278,7 +279,6 @@
   }
 
   .search-message-text {
-    padding-right: 16px;
     margin: 0;
     font-size: 14px;
     line-height: 1.4;
