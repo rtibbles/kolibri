@@ -9,6 +9,7 @@ from langchain.schema import HumanMessage
 from langchain.schema import SystemMessage
 
 from kolibri.core.content.api import ContentNodeSearchFilter
+from kolibri.core.content.api import ContentNodeViewset
 from kolibri.utils.conf import OPTIONS
 
 
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 # - gemma3:12b
 # - granite3.3:8b
 # - mistral:7b
+
+# Create instance for serialize_list usage
+contentnode_viewset = ContentNodeViewset()
 
 
 def robust_json_parser(json_str):
@@ -75,18 +79,18 @@ def get_ai_chat_model():
         if provider.lower() == "openai":
             from langchain_openai import ChatOpenAI
 
-            return ChatOpenAI(api_key=api_key, model=model_name, max_tokens=1000)
+            return ChatOpenAI(api_key=api_key, model=model_name, max_tokens=2000)
 
         elif provider.lower() == "anthropic":
             from langchain_anthropic import ChatAnthropic
 
             return ChatAnthropic(
-                api_key=api_key, model=model_name, temperature=0.9, max_tokens=1000
+                api_key=api_key, model=model_name, temperature=0.1, max_tokens=2000
             )
         elif provider.lower() == "ollama":
             from langchain_ollama import ChatOllama
 
-            return ChatOllama(model=model_name, temperature=0.9, max_tokens=1000)
+            return ChatOllama(model=model_name, temperature=0.1, max_tokens=1500)
     except ImportError as e:
         logger.exception("Required langchain packages missing for AI assistant")
         raise ImportError(f"Required langchain packages not installed: {e}") from e
@@ -153,7 +157,7 @@ Prioritize resources that contain similar keywords to the user's question, or ar
 The format of your response must be in raw JSON (no backticks etc), as follows:
 {
     "content_intro": "Your brief intro to the discovered resources (they will be displayed as tiles below this message), or a note that no relevant resources were found.",
-    "relevant_resources": ["<resource_id_1>", "<resource_id_2>", ...],
+    "relevant_resources": ["<resource_index_1>", "<resource_index_2>", ...],
 }
 """
 
@@ -168,7 +172,7 @@ And the following resources were found:
 <candidate_content>{resources}</candidate_content>
 
 Please filter these resources down to the most relevant ones, order them from most to least relevant, and adapt your response to reference the
-resources found, or to note in your response if no relevant resources were found. Only include the IDs of the resources in your response, not the full details.
+resources found, or to note in your response if no relevant resources were found. Only include the list of indices of the resources in your response, not the full details.
 """
 
 
@@ -207,6 +211,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
     def filter_queryset(self, request, queryset, view):
         message = self.get_cleaned_search_value(request)
         search_fields = self.get_search_fields(view, request)
+        
         if not message:
             return super().filter_queryset(request, queryset, view)
 
@@ -233,57 +238,55 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             self.construct_search(str(search_field)) for search_field in search_fields
         ]
 
-        base = queryset
-        # generator which for each term builds the corresponding search
-        conditions = (
-            reduce(
+        candidate_content_list = []
+        for keyword in search_terms:
+            if not isinstance(keyword, str):
+                raise Exception(r"Error: Invalid search term format: {keyword}")
+            
+            query = reduce(
                 operator.or_,
-                (models.Q(**{orm_lookup: term}) for orm_lookup in orm_lookups),
+                (models.Q(**{orm_lookup: keyword}) for orm_lookup in orm_lookups),
             )
-            for term in search_terms
-        )
-        candidate_contentnodes = queryset.filter(reduce(operator.or_, conditions))
 
-        # Remove duplicates from results, if necessary
-        if self.must_call_distinct(candidate_contentnodes, search_fields):
-            # inspired by django.contrib.admin
-            # this is more accurate than .distinct form M2M relationship
-            # also is cross-database
-            candidate_contentnodes = candidate_contentnodes.filter(
-                pk=models.OuterRef("pk")
-            )
-            candidate_contentnodes = base.filter(models.Exists(candidate_contentnodes))
+            new_candidates = queryset.filter(query).exclude(kind="topic").exclude(coach_content=True).values()[:5]
 
-        candidate_values = candidate_contentnodes.values("id", *search_fields)
+            # Use serialize_list to get filtered content nodes
+            candidate_content_list.extend(new_candidates)
+
+        # deduplicate content nodes by content_id and build a dictionary for easy access
+        candidate_content = {
+            node["content_id"][:6]: node for node in candidate_content_list
+        }
+
+        candidate_content_minimal = [
+            {"id": node["content_id"][:6], "title": node["title"], "description": node["description"][:350], "kind": node["kind"]}
+            for node in candidate_content.values()
+        ]
 
         # use AI to filter and rank content nodes
         prompt = SEARCH_RESULTS_PROMPT_TEMPLATE.format(
             message=message,
             original_response=initial_response.get("response", ""),
-            resources=json.dumps(list(candidate_values), indent=2),
+            # search_terms=", ".join(initial_response.get("search_terms", [])),
+            resources=json.dumps(candidate_content_minimal, indent=2),
         )
-
         try:
             result = query_ai(prompt=prompt, system_prompt=SEARCH_RESULTS_SYSTEM_PROMPT)
-            logger.debug(result)
             content_intro = result.get("content_intro", "")
-            relevant_ids = result.get("relevant_resources", [])
-        except Exception:
-            logger.exception("Error querying AI for search filtering")
-            return super().filter_queryset(request, queryset, view)
+            relevant_content_ids = result.get("relevant_resources", [])
+        except Exception as e:
+            raise Exception(f"Error: AI processing failed: {str(e)}")
 
-        if not relevant_ids:
-            logger.warning(
-                f"No relevant content IDs returned by AI filter (of {len(candidate_values)} candidates from keywords {search_terms}), returning default search"
-            )
-            return super().filter_queryset(request, queryset, view)
-
-        results = candidate_contentnodes.filter(id__in=relevant_ids)
+        # filter the candidate content based on AI response
+        relevant_content = []
+        for content_id in relevant_content_ids:
+            if content_id in candidate_content:
+                relevant_content.append(candidate_content[content_id])
 
         # display debugging information to the console
-        logger.debug("Initial AI response:", initial_response)
-        logger.debug("Candidate content nodes:", candidate_values)
-        logger.debug("Filtered relevant content IDs:", relevant_ids)
+        print("Initial AI response:", initial_response)
+        print("Candidate content nodes:", candidate_content_minimal)
+        print("Filtered relevant content IDs:", relevant_content_ids)
 
         messages = []
         if initial_response.get("response"):
@@ -294,4 +297,9 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
 
         setattr(request, "messages", messages)
 
-        return results
+        full_content_ids = [node["content_id"] for node in relevant_content]
+
+        if not relevant_content:
+            return queryset.none()
+        else:
+            return queryset.filter(content_id__in=full_content_ids).distinct()
