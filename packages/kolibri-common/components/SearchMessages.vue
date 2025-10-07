@@ -4,8 +4,7 @@
     v-if="messages.length && !messagesDismissed"
     class="search-messages"
     :style="{
-      backgroundColor: $themeTokens.surface,
-      borderColor: $themeTokens.primary,
+      backgroundColor: $themePalette.grey.v_100,
     }"
   >
     <div class="search-messages-header">
@@ -22,8 +21,8 @@
       :key="i"
       class="search-message"
       :style="{
-        backgroundColor: $themeTokens.surfaceVariant,
-        borderColor: $themeTokens.secondary,
+        backgroundColor: $themeTokens.surface,
+        borderColor: $themeBrand.primary.v_100,
         color: $themeTokens.text,
       }"
     >
@@ -72,8 +71,6 @@
     position: relative;
     padding: 16px;
     margin-bottom: 24px;
-    border: 2px solid;
-    border-radius: 8px;
   }
 
   .search-messages-header {
