@@ -113,7 +113,6 @@
           :searchTerms="searchTerms"
           :searchLoading="searchLoading"
           :more="more"
-          :messages="messages"
           @setCardStyle="style => (currentCardViewStyle = style)"
           @setSidePanelMetadataContent="content => (metadataSidePanelContent = content)"
         />
@@ -282,7 +281,6 @@
         removeFilterTag,
         clearSearch,
         currentRoute,
-        messages,
       } = useSearch();
       search();
       const { fetchResumableContentNodes } = useLearnerResources();

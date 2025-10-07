@@ -23,6 +23,8 @@
       @clearSearch="onClearSearch"
     />
 
+    <SearchMessages />
+
     <UpdatedResourceSelection
       :isSelectable="isSelectable"
       :disabled="disabled"
@@ -51,6 +53,7 @@
 
   import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
   import SearchChips from 'kolibri-common/components/SearchChips';
+  import SearchMessages from 'kolibri-common/components/SearchMessages';
   import { searchAndFilterStrings } from 'kolibri-common/strings/searchAndFilterStrings';
   import { PageNames } from '../../../../../../constants';
   import { coachStrings } from '../../../../../common/commonCoachStrings';
@@ -64,6 +67,7 @@
   export default {
     name: 'SelectFromSearchResults',
     components: {
+      SearchMessages,
       SearchChips,
       UpdatedResourceSelection,
     },

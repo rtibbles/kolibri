@@ -30,6 +30,8 @@
       @clearSearch="onClearSearch"
     />
 
+    <SearchMessages />
+
     <UpdatedResourceSelection
       :disabled="disabled"
       :isSelectable="!settings.isChoosingManually"
@@ -59,6 +61,7 @@
   import { getCurrentInstance } from 'vue';
   import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
   import SearchChips from 'kolibri-common/components/SearchChips';
+  import SearchMessages from 'kolibri-common/components/SearchMessages';
   import { searchAndFilterStrings } from 'kolibri-common/strings/searchAndFilterStrings';
   import { PageNames } from '../../../../../../constants';
   import UpdatedResourceSelection from '../../../../../common/resourceSelection/UpdatedResourceSelection.vue';
@@ -70,6 +73,7 @@
       QuizResourceSelectionHeader,
       SearchChips,
       UpdatedResourceSelection,
+      SearchMessages,
     },
     setup(props) {
       const instance = getCurrentInstance();
