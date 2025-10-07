@@ -500,6 +500,7 @@ export default function useBaseSearch({
   // Handling for search autocomplete
   provide('keyWordAutoCompleteHandler', keyWordAutoCompleteHandler);
   provide('autoCompleteSuggestions', autoCompleteSuggestions);
+  provide('messages', messages);
 
   return {
     currentRoute,
@@ -534,6 +535,7 @@ export function injectBaseSearch() {
   const searchLoading = inject('searchLoading');
   const keyWordAutoCompleteHandler = inject('keyWordAutoCompleteHandler');
   const autoCompleteSuggestions = inject('autoCompleteSuggestions');
+  const messages = inject('messages');
   return {
     availableLearningActivities,
     availableLibraryCategories,
@@ -546,5 +548,6 @@ export function injectBaseSearch() {
     searchLoading,
     keyWordAutoCompleteHandler,
     autoCompleteSuggestions,
+    messages,
   };
 }
