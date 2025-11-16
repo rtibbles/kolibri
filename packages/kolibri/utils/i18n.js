@@ -185,6 +185,22 @@ class Translator {
   $formatPlural(plural, options = {}) {
     return Vue.prototype.$formatPlural(plural, options);
   }
+  // Formatting utility methods
+  $formatNameWithId(name, id) {
+    return formatNameWithId(name, id);
+  }
+  $formatQuoted(phrase) {
+    return formatQuoted(phrase);
+  }
+  $formatDashSeparated(...items) {
+    return formatDashSeparated(...items);
+  }
+  $formatLabelWithDetails(label, details) {
+    return formatLabelWithDetails(label, details);
+  }
+  $formatList(items, options = {}) {
+    return formatList(items, options);
+  }
 }
 
 /**
@@ -223,6 +239,13 @@ function _setUpVueIntl() {
     const nameSpace = this.$options.name || this.$options.$trNameSpace;
     return $trWrapper(nameSpace, this.$options.$trs, this.$formatMessage, messageId, args);
   };
+
+  // Add formatting utility methods to Vue prototype
+  Vue.prototype.$formatNameWithId = formatNameWithId;
+  Vue.prototype.$formatQuoted = formatQuoted;
+  Vue.prototype.$formatDashSeparated = formatDashSeparated;
+  Vue.prototype.$formatLabelWithDetails = formatLabelWithDetails;
+  Vue.prototype.$formatList = formatList;
 
   Vue.setLocale(currentLanguage);
   if (languageGlobals.coreLanguageMessages) {
@@ -288,14 +311,82 @@ export function localeCompare(str1, str2) {
   }
 }
 
-// Wrapper to Intl.ListFormat
-export function formatList(array) {
+/**
+ * Format utilities for non-translatable string composition
+ * These functions handle locale-aware formatting without requiring translation
+ */
+
+/**
+ * Format a name with an ID in parentheses: 'name' (id)
+ * @param {string} name - The name to format
+ * @param {string} id - The ID to show in parentheses
+ * @returns {string} Formatted string: 'name' (id)
+ */
+export function formatNameWithId(name, id) {
+  return `'${name}' (${id})`;
+}
+
+/**
+ * Quote a phrase: 'phrase'
+ * @param {string} phrase - The phrase to quote
+ * @returns {string} Formatted string: 'phrase'
+ */
+export function formatQuoted(phrase) {
+  return `'${phrase}'`;
+}
+
+/**
+ * Format items separated by dashes: item1 - item2 - item3
+ * @param {...string} items - Items to join with dashes
+ * @returns {string} Formatted string with items separated by ' - '
+ */
+export function formatDashSeparated(...items) {
+  return items.join(' - ');
+}
+
+/**
+ * Format a label with details using a colon: label: details
+ * @param {string} label - The label
+ * @param {string} details - The details
+ * @returns {string} Formatted string: label: details
+ */
+export function formatLabelWithDetails(label, details) {
+  return `${label}: ${details}`;
+}
+
+/**
+ * Format a list of items using locale-aware list formatting
+ * Uses Intl.ListFormat when available, falls back to comma separation
+ * @param {Array} items - Array of items to format as a list
+ * @param {Object} options - Formatting options
+ * @param {string} options.style - 'long', 'short', or 'narrow' (default: 'long')
+ * @param {string} options.type - 'conjunction' (and), 'disjunction' (or), or 'unit' (default: 'conjunction')
+ * @returns {string} Formatted list string
+ */
+export function formatList(items, options = {}) {
+  const { style = 'long', type = 'conjunction' } = options;
+
   if (Intl.ListFormat) {
-    const formatter = new Intl.ListFormat(currentLanguage, { style: 'short', type: 'unit' });
-    return formatter.format(array);
-  } else {
-    return array.join(', ');
+    try {
+      const formatter = new Intl.ListFormat(currentLanguage, { style, type });
+      return formatter.format(items);
+    } catch (e) {
+      // Fall back to simple joining if ListFormat fails
+      logging.warn('Intl.ListFormat failed, falling back to simple join', e);
+    }
   }
+
+  // Fallback for browsers without Intl.ListFormat
+  if (items.length === 0) return '';
+  if (items.length === 1) return String(items[0]);
+  if (items.length === 2) {
+    // For 'conjunction' type, use 'and'; for 'disjunction', use 'or'
+    const separator = type === 'disjunction' ? ' or ' : ' and ';
+    return items.join(separator);
+  }
+  // For 3+ items: "item1, item2, and item3"
+  const separator = type === 'disjunction' ? ', or ' : ', and ';
+  return items.slice(0, -1).join(', ') + separator + items[items.length - 1];
 }
 
 /**

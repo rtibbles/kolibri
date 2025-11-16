@@ -347,10 +347,6 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Facility name',
     context: "The name of the facility. For example: 'Demo facility'.",
   },
-  facilityNameWithId: {
-    message: '{facilityName} ({id})',
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
   facilityDuplicated: {
     message: 'There is already a facility with this name on this device',
     context:
@@ -1163,32 +1159,6 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Incorrect username or password',
     context:
       "Error message a user sees if they've used the wrong username or password when they sign in to Kolibri.",
-  },
-
-  // Formatting
-  nameWithIdInParens: {
-    message: `'{name}' ({id})`,
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
-  quotedPhrase: {
-    message: `'{phrase}'`,
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
-  dashSeparatedPair: {
-    message: '{item1} - {item2}',
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
-  dashSeparatedTriple: {
-    message: '{item1} - {item2} - {item3}',
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
-  labelColonThenDetails: {
-    message: '{label}: {details}',
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
-  },
-  commaSeparatedPair: {
-    message: '{item1}, {item2}',
-    context: 'DO NOT TRANSLATE\nCopy the source string.',
   },
 
   // Demographic-specific strings

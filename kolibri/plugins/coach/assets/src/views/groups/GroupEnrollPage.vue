@@ -157,10 +157,7 @@
         }
         if (this.sortedFilteredUsers.length === 0 && this.filterInput !== '') {
           // TODO internationalize this
-          return this.coreString('labelColonThenDetails', {
-            label: this.$tr('noUsersMatch'),
-            details: this.filterInput,
-          });
+          return this.$formatLabelWithDetails(this.$tr('noUsersMatch'), this.filterInput);
         }
 
         return '';

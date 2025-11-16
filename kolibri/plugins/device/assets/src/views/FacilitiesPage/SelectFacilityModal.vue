@@ -48,10 +48,10 @@
     },
     computed: {
       deviceInfoMsg() {
-        return this.coreString('commaSeparatedPair', {
-          item1: this.formatNameAndId(this.device.name, this.device.id),
-          item2: this.device.baseurl,
-        });
+        return this.$formatList(
+          [this.formatNameAndId(this.device.name, this.device.id), this.device.baseurl],
+          { type: 'unit' }
+        );
       },
     },
     beforeMount() {

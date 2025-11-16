@@ -135,10 +135,10 @@
       },
       deviceDescription() {
         if (this.device.name) {
-          return this.$tr('commaSeparatedPair', {
-            first: this.formatNameAndId(this.device.name, this.device.id),
-            second: this.device.baseurl,
-          });
+          return this.$formatList(
+            [this.formatNameAndId(this.device.name, this.device.id), this.device.baseurl],
+            { type: 'unit' }
+          );
         }
         return '';
       },
@@ -225,12 +225,6 @@
       },
       isImporting(learner) {
         return this.learnersBeingImported.includes(learner.id);
-      },
-    },
-    $trs: {
-      commaSeparatedPair: {
-        message: '{first}, {second}',
-        context: 'DO NOT TRANSLATE\nCopy the source string.',
       },
     },
   };

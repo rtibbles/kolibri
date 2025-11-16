@@ -37,7 +37,7 @@
               class="facility-loader"
             />
             <span v-else>
-              {{ coreString('facilityNameWithId', { facilityName: facilityName, id: lastPartId }) }}
+              {{ $formatNameWithId(facilityName, lastPartId) }}
               <KButton
                 appearance="basic-link"
                 :text="coreString('editAction')"

@@ -1,6 +1,6 @@
-import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
 import { getTaskString } from 'kolibri-common/uiText/tasks';
 import bytesForHumans from 'kolibri/uiText/bytesForHumans';
+import { formatNameWithId } from 'kolibri/utils/i18n';
 
 export const TaskTypes = {
   REMOTECHANNELIMPORT: 'kolibri.core.content.tasks.remotechannelimport',
@@ -63,8 +63,6 @@ export const SyncTaskStatuses = {
   FAILED: 'FAILED',
 };
 
-const { coreString } = commonCoreStrings.methods;
-
 const syncTaskStatusToStepMap = {
   [SyncTaskStatuses.SESSION_CREATION]: 1,
   [SyncTaskStatuses.REMOTE_QUEUING]: 2,
@@ -96,8 +94,8 @@ export const syncStatusToDescriptionMap = {
   [SyncTaskStatuses.REMOTE_DEQUEUING]: () => getTaskString('remotelyIntegratingDataStatus'),
 };
 
-function formatNameWithId(name, id) {
-  return coreString('nameWithIdInParens', { name, id: id.slice(0, 4) });
+function formatNameWithIdShort(name, id) {
+  return formatNameWithId(name, id.slice(0, 4));
 }
 
 const PUSHPULLSTEPS = 7;
@@ -110,7 +108,7 @@ export function syncFacilityTaskDisplayInfo(task) {
   let deviceNameMsg = '';
   let headingMsg = '';
 
-  const facilityName = formatNameWithId(task.extra_metadata.facility_name, task.facility_id);
+  const facilityName = formatNameWithIdShort(task.extra_metadata.facility_name, task.facility_id);
 
   if (task.type === TaskTypes.SYNCPEERPULL) {
     headingMsg = getTaskString('importFacilityTaskLabel', { facilityName });

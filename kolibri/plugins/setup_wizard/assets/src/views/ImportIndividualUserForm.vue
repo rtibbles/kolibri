@@ -194,10 +194,10 @@
       },
       formDescription() {
         if (this.device && this.device.name) {
-          return this.$tr('commaSeparatedPair', {
-            first: this.formatNameAndId(this.device.name, this.deviceId),
-            second: this.device.baseurl,
-          });
+          return this.$formatList(
+            [this.formatNameAndId(this.device.name, this.deviceId), this.device.baseurl],
+            { type: 'unit' }
+          );
         }
         return '';
       },
@@ -407,10 +407,6 @@
       },
     },
     $trs: {
-      commaSeparatedPair: {
-        message: '{first}, {second}',
-        context: 'DO NOT TRANSLATE\nCopy the source string.',
-      },
       importIndividualUsersHeader: {
         message: 'Import individual user accounts',
         context: "The title of the 'Import individual user accounts' step in the wizard setup",
