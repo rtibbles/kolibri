@@ -2,14 +2,14 @@ import useFacilities from 'kolibri-common/composables/useFacilities';
 import { ComponentMap } from '../../constants';
 
 export function showSignUpPage(store, fromRoute) {
-  const { getFacilities } = useFacilities();
+  const { getMinimalFacilities } = useFacilities();
 
   // Don't do anything if going between Sign Up steps
   if (fromRoute.name === ComponentMap.SIGN_UP) {
     return Promise.resolve();
   }
 
-  return getFacilities()
+  return getMinimalFacilities()
     .then(() => {
       store.dispatch('reset');
     })

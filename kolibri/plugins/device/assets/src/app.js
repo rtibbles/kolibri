@@ -44,13 +44,14 @@ class DeviceManagementModule extends KolibriApp {
     }
   }
   ready() {
-    const { getFacilities, facilities } = useFacilities();
+    const { getMinimalFacilities, facilities } = useFacilities();
     // reset module states after leaving their respective page
     router.beforeEach((to, from, next) => {
       if (facilities.value.length === 0) {
-        getFacilities().then(next, next);
+        getMinimalFacilities().then(next, next);
+      } else {
+        next();
       }
-      next();
     });
     router.afterEach((toRoute, fromRoute) => {
       this.store.dispatch('resetModuleState', { toRoute, fromRoute });

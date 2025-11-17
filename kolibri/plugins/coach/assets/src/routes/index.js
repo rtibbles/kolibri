@@ -21,11 +21,11 @@ import groupsRoutes from './groupsRoutes';
 function showHomePage(toRoute) {
   const initClassInfoPromise = store.dispatch('initClassInfo', toRoute.params.classId);
   const { isSuperuser } = useUser();
-  const { getFacilities, facilities } = useFacilities();
+  const { getMinimalFacilities, facilities } = useFacilities();
 
   const getFacilitiesPromise =
     get(isSuperuser) && get(facilities).length === 0
-      ? getFacilities().catch(() => {})
+      ? getMinimalFacilities().catch(() => {})
       : Promise.resolve();
 
   return Promise.all([initClassInfoPromise, getFacilitiesPromise]);
@@ -55,11 +55,11 @@ export default [
       // if user only has access to one facility, facility_id will not be accessible from URL,
       // but always defaulting to userFacilityId would cause problems for multi-facility admins
       const { userFacilityId } = useUser();
-      const { facilities, getFacilities, userIsMultiFacilityAdmin } = useFacilities();
+      const { facilities, getMinimalFacilities, userIsMultiFacilityAdmin } = useFacilities();
       const facilityId = toRoute.params.facility_id || get(userFacilityId);
 
       if (facilities.value.length === 0) {
-        await getFacilities();
+        await getMinimalFacilities();
       }
 
       if (userIsMultiFacilityAdmin.value && !toRoute.params.facility_id) {

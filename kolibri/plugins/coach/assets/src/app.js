@@ -11,7 +11,7 @@ import routes from './routes';
 import pluginModule from './modules/pluginModule';
 import HomeActivityPage from './views/home/HomeActivityPage';
 
-const { getFacilities, facilities } = useFacilities();
+const { getMinimalFacilities, facilities } = useFacilities();
 
 function _channelListState(data) {
   return data.map(channel => ({
@@ -164,7 +164,7 @@ class CoachToolsModule extends KolibriApp {
       }
 
       if (get(isSuperuser) && facilities.value.length === 0) {
-        promises.push(getFacilities().catch(() => {}));
+        promises.push(getMinimalFacilities().catch(() => {}));
       }
 
       if (promises.length > 0) {

@@ -17,8 +17,8 @@ export default {
       store.commit('CORE_SET_ERROR', null);
     },
     setFacilitiesAndConfig() {
-      const { getFacilities, getFacilityConfig, selectedFacility } = useFacilities();
-      return getFacilities().then(() => {
+      const { getMinimalFacilities, getFacilityConfig, selectedFacility } = useFacilities();
+      return getMinimalFacilities().then(() => {
         return getFacilityConfig(selectedFacility.value.id);
       });
     },

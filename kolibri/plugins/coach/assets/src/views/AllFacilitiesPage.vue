@@ -55,7 +55,11 @@
     mixins: [commonCoach, commonCoreStrings],
     setup() {
       const { userFacilityId } = useUser();
-      const { facilities, userIsMultiFacilityAdmin } = useFacilities();
+      const { facilities, userIsMultiFacilityAdmin, getFacilities } = useFacilities();
+
+      // Load full facility data (including num_classrooms) for display
+      getFacilities();
+
       return { userFacilityId, userIsMultiFacilityAdmin, facilities };
     },
     props: {

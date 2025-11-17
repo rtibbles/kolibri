@@ -4,7 +4,7 @@ import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
 import { PageNames } from '../../constants';
 
-const { getFacilities, facilities } = useFacilities();
+const { getMinimalFacilities, facilities } = useFacilities();
 
 export async function showLessonResourceContentPreview(store, params) {
   const { classId, lessonId, contentId } = params;
@@ -12,7 +12,7 @@ export async function showLessonResourceContentPreview(store, params) {
   const { isSuperuser } = useUser();
   const getFacilitiesPromise =
     get(isSuperuser) && get(facilities).length === 0
-      ? getFacilities().catch(() => {})
+      ? getMinimalFacilities().catch(() => {})
       : Promise.resolve();
 
   await Promise.all([initClassInfoPromise, getFacilitiesPromise]);

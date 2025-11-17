@@ -899,6 +899,34 @@ class FacilityViewSet(ValuesViewset):
         serializer.save()
         return Response()
 
+    @decorators.action(methods=["get"], detail=False)
+    def exists(self, request):
+        """
+        Lightweight existence check. Returns none/single/multiple.
+        Only counts up to 2 to avoid expensive queries on large deployments.
+        """
+        # Just get IDs, count up to 2
+        facility_ids = list(Facility.objects.values_list("id", flat=True)[:2])
+        count = len(facility_ids)
+
+        if count == 0:
+            state = "none"
+        elif count == 1:
+            state = "single"
+        else:
+            state = "multiple"
+
+        return Response({"exists": state})
+
+    @decorators.action(methods=["get"], detail=False)
+    def names(self, request):
+        """
+        Returns only id and name for all facilities.
+        No expensive aggregations (num_users, num_classrooms, sync status).
+        """
+        facilities = Facility.objects.values("id", "name")
+        return Response(list(facilities))
+
 
 class PublicFacilityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Facility.objects.all()

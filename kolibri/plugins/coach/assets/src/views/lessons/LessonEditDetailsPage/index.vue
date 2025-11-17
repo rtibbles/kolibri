@@ -43,11 +43,11 @@
     setup() {
       const { createSnackbar } = useSnackbar();
       const { isSuperuser } = useUser();
-      const { getFacilities, facilities } = useFacilities();
+      const { getMinimalFacilities, facilities } = useFacilities();
       return {
         createSnackbar,
         isSuperuser,
-        getFacilities,
+        getMinimalFacilities,
         facilities,
       };
     },
@@ -83,7 +83,7 @@
       );
       const getFacilitiesPromise =
         this.isSuperuser && this.facilities.length === 0
-          ? this.getFacilities().catch(() => {})
+          ? this.getMinimalFacilities().catch(() => {})
           : Promise.resolve();
 
       Promise.all([initClassInfoPromise, getFacilitiesPromise])

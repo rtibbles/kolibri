@@ -5,6 +5,8 @@ import redirectBrowser from 'kolibri/utils/redirectBrowser';
 import FacilityDatasetResource from 'kolibri-common/apiResources/FacilityDatasetResource';
 import Lockr from 'lockr';
 import store from 'kolibri/store';
+import client from 'kolibri/client';
+import urls from 'kolibri/urls';
 
 const _facilityConfig = ref({});
 const _facilities = ref([]);
@@ -69,6 +71,19 @@ export default function useFacilities() {
     setFacilityConfig(config);
   }
 
+  async function checkFacilityExists() {
+    const url = urls['kolibri:kolibri.plugins.facility:facility-exists']();
+    const response = await client.get(url);
+    return response.data.exists; // "none" | "single" | "multiple"
+  }
+
+  async function getMinimalFacilities() {
+    const url = urls['kolibri:kolibri.plugins.facility:facility-names']();
+    const response = await client.get(url);
+    _facilities.value = response.data;
+    return _facilities.value;
+  }
+
   //mutations
   function setFacilityConfig(facilityConfig) {
     _facilityConfig.value = facilityConfig;
@@ -93,5 +108,7 @@ export default function useFacilities() {
     userIsMultiFacilityAdmin,
     currentFacilityName,
     setFacilityId,
+    checkFacilityExists,
+    getMinimalFacilities,
   };
 }

@@ -194,7 +194,11 @@
     mixins: [commonCoreStrings, commonUserStrings],
     setup() {
       const { isAppContext, login } = useUser();
-      const { selectedFacility } = useFacilities();
+      const { selectedFacility, getFacilities } = useFacilities();
+
+      // Load full facility data (including dataset properties) for display
+      getFacilities();
+
       return { login, isAppContext, selectedFacility };
     },
     data() {
@@ -250,7 +254,11 @@
         return this.selectedFacility.dataset.learner_can_login_with_no_password;
       },
       showUsersList() {
-        return this.selectedFacility.num_users <= MAX_USERS_FOR_LISTING_VIEW && this.isAppContext;
+        return (
+          this.usernamesForCurrentFacility.length > 0 &&
+          this.usernamesForCurrentFacility.length <= MAX_USERS_FOR_LISTING_VIEW &&
+          this.isAppContext
+        );
       },
       suggestions() {
         // Filter suggestions on the client side so we don't hammer the server
@@ -326,11 +334,12 @@
       },
     },
     created() {
-      // Only fetch if we should fetch for this facility
-      if (this.showUsersList) {
+      // Fetch users paginated in app context to determine if we should show the list
+      if (this.isAppContext) {
         FacilityUsernameResource.fetchCollection({
           getParams: {
             facility: this.selectedFacility.id,
+            page_size: MAX_USERS_FOR_LISTING_VIEW + 1,
           },
         }).then(data => {
           this.usernamesForCurrentFacility = data.map(u => u.username);

@@ -8,6 +8,8 @@ const MOCK_DEFAULTS = {
   getFacilityConfig: jest.fn(),
   setFacilityConfig: jest.fn(),
   setFacilities: jest.fn(),
+  checkFacilityExists: jest.fn(),
+  getMinimalFacilities: jest.fn(),
 };
 
 export function useFacilitiesMock(overrides = {}) {

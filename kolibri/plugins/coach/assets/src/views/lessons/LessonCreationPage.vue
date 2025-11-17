@@ -48,11 +48,11 @@
       },
     },
     created() {
-      const { getFacilities, facilities } = useFacilities();
+      const { getMinimalFacilities, facilities } = useFacilities();
       const initClassInfoPromise = this.$store.dispatch('initClassInfo', this.classId);
       const getFacilitiesPromise =
         this.isSuperuser && facilities.value.length === 0
-          ? getFacilities().catch(() => {})
+          ? getMinimalFacilities().catch(() => {})
           : Promise.resolve();
 
       Promise.all([initClassInfoPromise, getFacilitiesPromise]);

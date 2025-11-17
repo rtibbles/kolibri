@@ -7,7 +7,7 @@ import useFacilities from 'kolibri-common/composables/useFacilities';
 
 // Place outside the function to keep the state
 const groupsAreLoading = ref(false);
-const { getFacilities, facilities } = useFacilities();
+const { getMinimalFacilities, facilities } = useFacilities();
 
 export function useGroups() {
   function setGroupsLoading(loading) {
@@ -18,7 +18,7 @@ export function useGroups() {
     const initClassInfoPromise = store.dispatch('initClassInfo', classId);
     const getFacilitiesPromise =
       useUser().isSuperuser.value && facilities.value.length === 0
-        ? getFacilities().catch(() => {})
+        ? getMinimalFacilities().catch(() => {})
         : Promise.resolve();
 
     await Promise.all([initClassInfoPromise, getFacilitiesPromise]);
