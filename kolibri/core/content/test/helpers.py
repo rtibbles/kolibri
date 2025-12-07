@@ -45,6 +45,9 @@ class ChannelBuilder(object):
     """
     This class is purely to generate all the relevant data for a single
     channel for use during testing.
+
+    Can work with different model classes via dependency injection to support
+    both current models and historic schema versions.
     """
 
     __TREE_CACHE = {}
@@ -58,11 +61,75 @@ class ChannelBuilder(object):
         "root_node",
     )
 
-    def __init__(self, levels=3, num_children=5):
+    # Realistic content libraries organized by subject and content kind
+    MATH_CONTENT = {
+        content_kinds.VIDEO: [
+            ("Introduction to Algebra", "Learn fundamental algebraic concepts including variables, expressions, and basic equation solving"),
+            ("Quadratic Equations Explained", "Master the techniques for solving quadratic equations using factoring, completing the square, and the quadratic formula"),
+            ("Geometry Basics", "Explore the fundamental concepts of shapes, angles, and spatial relationships"),
+            ("Fractions and Decimals", "Understanding numerical representations and conversions between fractions and decimals"),
+        ],
+        content_kinds.EXERCISE: [
+            ("Practice: Linear Equations", "Solve problems involving single-variable linear equations with step-by-step guidance"),
+            ("Quiz: Basic Arithmetic", "Test your knowledge of addition, subtraction, multiplication, and division"),
+            ("Challenge: Word Problems", "Apply mathematical concepts to solve real-world scenarios"),
+        ],
+        content_kinds.DOCUMENT: [
+            ("Algebra Study Guide", "Comprehensive reference material covering algebraic principles and problem-solving strategies"),
+            ("Mathematics Formula Sheet", "Quick reference guide for essential mathematical formulas and theorems"),
+        ],
+        content_kinds.AUDIO: [
+            ("Mathematics Podcast: Problem Solving", "Audio discussion of mathematical problem-solving techniques and strategies"),
+            ("Learn Math Through Stories", "Engaging audio content that teaches mathematical concepts through narratives"),
+        ],
+    }
+
+    SCIENCE_CONTENT = {
+        content_kinds.VIDEO: [
+            ("The Water Cycle", "Understanding how water moves through Earth's systems via evaporation, condensation, and precipitation"),
+            ("Photosynthesis Explained", "Learn how plants convert sunlight into energy through the process of photosynthesis"),
+            ("Newton's Laws of Motion", "Explore the three fundamental laws that describe the relationship between objects and forces"),
+            ("Cell Structure and Function", "Discover the basic building blocks of life and how cells operate"),
+        ],
+        content_kinds.EXERCISE: [
+            ("Practice: Scientific Method", "Apply the scientific method to solve problems and design experiments"),
+            ("Quiz: States of Matter", "Test your understanding of solids, liquids, gases, and phase transitions"),
+        ],
+        content_kinds.DOCUMENT: [
+            ("Biology Lab Guide", "Step-by-step instructions for conducting biology experiments safely and effectively"),
+            ("Chemistry Reference Tables", "Periodic table and essential chemistry data for students"),
+        ],
+        content_kinds.AUDIO: [
+            ("Science Podcast: Climate Change", "Audio exploration of climate science and environmental changes"),
+        ],
+    }
+
+    MIXED_CONTENT = {
+        content_kinds.TOPIC: [
+            ("Learning Resources", "Root topic containing various educational materials"),
+            ("Advanced Topics", "Collection of advanced learning resources across multiple subjects"),
+            ("Foundational Concepts", "Essential knowledge for building a strong academic foundation"),
+        ],
+    }
+
+    def __init__(self, levels=3, num_children=5, realistic=True, subject='mixed', models=None):
         self.levels = levels
         self.num_children = num_children
+        self.realistic = realistic
+        self.subject = subject
 
         self.modified = set()
+
+        # Dependency injection for models
+        if models is None:
+            self.models = {
+                'ChannelMetadata': ChannelMetadata,
+                'ContentNode': ContentNode,
+                'File': File,
+                'LocalFile': LocalFile,
+            }
+        else:
+            self.models = models
 
         try:
             self.load_data()
@@ -75,6 +142,78 @@ class ChannelBuilder(object):
     @property
     def cache_key(self):
         return "{}_{}".format(self.levels, self.num_children)
+
+    def _get_content_library_for_subject(self):
+        """Get the appropriate content library based on subject"""
+        if self.subject == 'math':
+            return self.MATH_CONTENT
+        elif self.subject == 'science':
+            return self.SCIENCE_CONTENT
+        else:
+            # For mixed, combine both
+            combined = {}
+            for kind in set(list(self.MATH_CONTENT.keys()) + list(self.SCIENCE_CONTENT.keys())):
+                combined[kind] = (
+                    self.MATH_CONTENT.get(kind, []) +
+                    self.SCIENCE_CONTENT.get(kind, [])
+                )
+            return combined
+
+    def _get_realistic_title_description(self, kind):
+        """Get realistic title and description for a content kind"""
+        if not self.realistic:
+            return "Test", "Blah blah blah"
+
+        content_library = self._get_content_library_for_subject()
+
+        if kind in content_library and content_library[kind]:
+            title, description = random.choice(content_library[kind])
+            return title, description
+        elif kind == content_kinds.TOPIC and self.MIXED_CONTENT.get(content_kinds.TOPIC):
+            title, description = random.choice(self.MIXED_CONTENT[content_kinds.TOPIC])
+            return title, description
+        else:
+            # Fallback to generic realistic content
+            return self._generate_generic_realistic_content(kind)
+
+    def _generate_generic_realistic_content(self, kind):
+        """Generate generic but realistic content for any kind"""
+        kind_titles = {
+            content_kinds.VIDEO: "Educational Video",
+            content_kinds.EXERCISE: "Practice Exercise",
+            content_kinds.DOCUMENT: "Study Material",
+            content_kinds.AUDIO: "Audio Lesson",
+            content_kinds.TOPIC: "Learning Topic",
+            content_kinds.HTML5: "Interactive Content",
+        }
+        kind_descriptions = {
+            content_kinds.VIDEO: "Informative video content for learning",
+            content_kinds.EXERCISE: "Practice problems to reinforce learning",
+            content_kinds.DOCUMENT: "Reading material and reference content",
+            content_kinds.AUDIO: "Audio-based educational content",
+            content_kinds.TOPIC: "Collection of related learning resources",
+            content_kinds.HTML5: "Interactive learning application",
+        }
+        title = kind_titles.get(kind, "Educational Content")
+        description = kind_descriptions.get(kind, "Learning resource for students")
+        return title, description
+
+    def _get_realistic_author(self):
+        """Get a realistic author name"""
+        if not self.realistic:
+            return ""
+        authors = [
+            "Kolibri Content Team",
+            "Educational Content Creators",
+            "Learning Equity",
+            "Open Education Resources",
+        ]
+        return random.choice(authors)
+
+    def _get_appropriate_license(self):
+        """Get an appropriate license name"""
+        licenses = ["CC BY", "CC BY-SA", "CC BY-NC", "CC BY-NC-SA"]
+        return random.choice(licenses)
 
     def generate_new_tree(self):
         self.channel = self.channel_data()
@@ -114,17 +253,19 @@ class ChannelBuilder(object):
         self.__TREE_CACHE[self.cache_key] = copy.deepcopy(data)
 
     def generate_nodes_from_root_node(self):
-        self._django_nodes = ContentNode.objects.build_tree_nodes(self.root_node)
+        self._django_nodes = self.models['ContentNode'].objects.build_tree_nodes(self.root_node)
 
         self.nodes = {n["id"]: n for n in map(to_dict, self._django_nodes)}
 
     def insert_into_default_db(self):
-        ContentNode.objects.bulk_create(self._django_nodes)
-        ChannelMetadata.objects.create(**self.channel)
-        LocalFile.objects.bulk_create(
-            (LocalFile(**l) for l in self.localfiles.values())
+        self.models['ContentNode'].objects.bulk_create(self._django_nodes)
+        self.models['ChannelMetadata'].objects.create(**self.channel)
+        self.models['LocalFile'].objects.bulk_create(
+            (self.models['LocalFile'](**l) for l in self.localfiles.values())
         )
-        File.objects.bulk_create((File(**f) for f in self.files.values()))
+        self.models['File'].objects.bulk_create(
+            (self.models['File'](**f) for f in self.files.values())
+        )
 
     def recurse_tree_until_leaf_container(self, parent):
         if not parent.get("children"):
@@ -356,16 +497,25 @@ class ChannelBuilder(object):
         return node
 
     def channel_data(self, channel_id=None, version=1):
+        if self.realistic:
+            name = "Educational Content Library"
+            description = "Comprehensive educational resources for testing content import and export"
+            author = "Kolibri Content Team"
+        else:
+            name = "testing"
+            description = "Test channel"
+            author = "Outis"
+
         return {
             "root_id": None,
             "last_updated": None,
-            "version": 1,
-            "author": "Outis",
-            "description": "Test channel",
+            "version": version,
+            "author": author,
+            "description": description,
             "tagline": None,
             "min_schema_version": "1",
             "thumbnail": "",
-            "name": "testing",
+            "name": name,
             "id": channel_id or uuid4_hex(),
         }
 
@@ -413,18 +563,24 @@ class ChannelBuilder(object):
     ):
         # First kind in choices is Topic, so exclude it here.
         kind = kind or random.choice(content_kinds.choices[1:])[0]
+
+        # Get realistic content
+        title, description = self._get_realistic_title_description(kind)
+        author = self._get_realistic_author()
+        license_name = self._get_appropriate_license()
+
         return {
             "options": "{}",
             "content_id": content_id or uuid4_hex(),
             "channel_id": self.channel["id"],
-            "description": "Blah blah blah",
+            "description": description,
             "id": node_id or uuid4_hex(),
-            "license_name": "GNU",
+            "license_name": license_name,
             "license_owner": "",
             "license_description": None,
             "lang_id": None,
-            "author": "",
-            "title": "Test",
+            "author": author,
+            "title": title,
             "parent_id": None if root else parent_id or uuid4_hex(),
             "kind": kind,
             "coach_content": False,

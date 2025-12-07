@@ -84,10 +84,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("version", type=str, nargs="?")
+        parser.add_argument(
+            "--use-existing-fixture",
+            action="store_true",
+            help="Load content_import_test.json instead of generating from ChannelBuilder (default: use ChannelBuilder)"
+        )
 
     def handle(self, *args, **options):
 
         version = options["version"]
+        use_existing_fixture = options.get("use_existing_fixture", False)
 
         if not version:
             version = str(int(CONTENT_SCHEMA_VERSION) + 1)
@@ -147,8 +153,25 @@ class Command(BaseCommand):
         # Only do this if we are generating a new export schema version
         if not no_export_schema:
 
-            # Load fixture data into the test database with Django
-            call_command("loaddata", "content_import_test.json", interactive=False)
+            if use_existing_fixture:
+                # OLD: Load static fixture
+                call_command("loaddata", "content_import_test.json", interactive=False)
+            else:
+                # NEW: Generate from ChannelBuilder with dependency injection
+                from kolibri.core.content.test.fixture_presets import create_basic_content_fixture
+
+                # Get the dynamically registered models
+                app_config = apps.get_app_config(app_name)
+                models = {
+                    'ChannelMetadata': app_config.get_model('ChannelMetadata'),
+                    'ContentNode': app_config.get_model('ContentNode'),
+                    'File': app_config.get_model('File'),
+                    'LocalFile': app_config.get_model('LocalFile'),
+                }
+
+                # Inject the current models into ChannelBuilder
+                builder = create_basic_content_fixture(models=models)
+                builder.insert_into_default_db()
 
             data = {}
 
