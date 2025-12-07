@@ -309,7 +309,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--cache-path",
-        default="/cext_cache",
+        default="cext_cache",
         help="The path in which pip cache data is stored",
     )
     args = parser.parse_args()
