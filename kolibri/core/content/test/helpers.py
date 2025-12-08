@@ -56,8 +56,10 @@ class ChannelBuilder(object):
         "channel",
         "files",
         "localfiles",
+        "tags",
         "node_to_files_map",
         "localfile_to_files_map",
+        "node_to_tags_map",
         "root_node",
     )
 
@@ -122,11 +124,13 @@ class ChannelBuilder(object):
 
         # Dependency injection for models
         if models is None:
+            from kolibri.core.content.models import ContentTag
             self.models = {
                 'ChannelMetadata': ChannelMetadata,
                 'ContentNode': ContentNode,
                 'File': File,
                 'LocalFile': LocalFile,
+                'ContentTag': ContentTag,
             }
         else:
             self.models = models
@@ -219,8 +223,10 @@ class ChannelBuilder(object):
         self.channel = self.channel_data()
         self.files = {}
         self.localfiles = {}
+        self.tags = {}
         self.node_to_files_map = {}
         self.localfile_to_files_map = {}
+        self.node_to_tags_map = {}
 
         self.root_node = self.generate_topic()
         self.channel["root_id"] = self.root_node["id"]
@@ -258,14 +264,32 @@ class ChannelBuilder(object):
         self.nodes = {n["id"]: n for n in map(to_dict, self._django_nodes)}
 
     def insert_into_default_db(self):
+        # Create content nodes
         self.models['ContentNode'].objects.bulk_create(self._django_nodes)
+
+        # Create channel
         self.models['ChannelMetadata'].objects.create(**self.channel)
+
+        # Create local files
         self.models['LocalFile'].objects.bulk_create(
             (self.models['LocalFile'](**l) for l in self.localfiles.values())
         )
+
+        # Create files
         self.models['File'].objects.bulk_create(
             (self.models['File'](**f) for f in self.files.values())
         )
+
+        # Create tags
+        if 'ContentTag' in self.models and self.tags:
+            self.models['ContentTag'].objects.bulk_create(
+                (self.models['ContentTag'](**t) for t in self.tags.values())
+            )
+
+            # Set up many-to-many relationships for tags
+            for node_id, tag_ids in self.node_to_tags_map.items():
+                node = self.models['ContentNode'].objects.get(id=node_id)
+                node.tags.set(tag_ids)
 
     def recurse_tree_until_leaf_container(self, parent):
         if not parent.get("children"):
@@ -452,11 +476,23 @@ class ChannelBuilder(object):
             node["ancestors"] = json.dumps(node["ancestors"])
             contentnode_list.append(node)
 
+        # Build node-to-tags mapping records (for ManyToMany through table)
+        node_tags_list = []
+        for node_id, tag_ids in self.node_to_tags_map.items():
+            for tag_id in tag_ids:
+                node_tags_list.append({
+                    "id": uuid4_hex(),
+                    "contentnode_id": node_id,
+                    "contenttag_id": tag_id,
+                })
+
         return {
             "content_channel": [self.channel],
             "content_contentnode": contentnode_list,
             "content_file": list(self.files.values()),
             "content_localfile": list(self.localfiles.values()),
+            "content_contenttag": list(self.tags.values()),
+            "content_contentnode_tags": node_tags_list,
         }
 
     def recurse_and_generate(self, parent_id, levels):
@@ -530,6 +566,44 @@ class ChannelBuilder(object):
         self.localfiles[data["id"]] = data
 
         return data
+
+    def tag_data(self, tag_name):
+        """
+        Create a content tag.
+
+        Args:
+            tag_name: The name of the tag
+
+        Returns:
+            Dict with tag data
+        """
+        # Check if tag already exists
+        for tag in self.tags.values():
+            if tag["tag_name"] == tag_name:
+                return tag
+
+        data = {
+            "id": uuid4_hex(),
+            "tag_name": tag_name,
+        }
+
+        self.tags[data["id"]] = data
+
+        return data
+
+    def add_tag_to_node(self, node_id, tag_id):
+        """
+        Associate a tag with a content node.
+
+        Args:
+            node_id: The ID of the content node
+            tag_id: The ID of the tag
+        """
+        if node_id not in self.node_to_tags_map:
+            self.node_to_tags_map[node_id] = []
+
+        if tag_id not in self.node_to_tags_map[node_id]:
+            self.node_to_tags_map[node_id].append(tag_id)
 
     def file_data(
         self,

@@ -196,6 +196,23 @@ def create_basic_content_fixture(models=None):
     topic["children"] = [exercise, document, audio]
     root["children"] = [video, topic, audio_no_license]
 
+    # Create tags
+    tag_mathematics = builder.tag_data("mathematics")
+    tag_algebra = builder.tag_data("algebra")
+    tag_educational = builder.tag_data("educational")
+
+    # Assign tags to nodes (to match old fixture structure)
+    # Root has 3 tags
+    builder.add_tag_to_node(root["id"], tag_mathematics["id"])
+    builder.add_tag_to_node(root["id"], tag_algebra["id"])
+    builder.add_tag_to_node(root["id"], tag_educational["id"])
+
+    # Video has 1 tag
+    builder.add_tag_to_node(video["id"], tag_algebra["id"])
+
+    # Topic has 1 tag
+    builder.add_tag_to_node(topic["id"], tag_mathematics["id"])
+
     # Generate Django model instances
     builder.generate_nodes_from_root_node()
 

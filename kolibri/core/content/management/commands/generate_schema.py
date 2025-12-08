@@ -167,6 +167,7 @@ class Command(BaseCommand):
                     'ContentNode': app_config.get_model('ContentNode'),
                     'File': app_config.get_model('File'),
                     'LocalFile': app_config.get_model('LocalFile'),
+                    'ContentTag': app_config.get_model('ContentTag'),
                 }
 
                 # Inject the current models into ChannelBuilder

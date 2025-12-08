@@ -58,6 +58,8 @@ def infer_schema_from_fixture(fixture_data):
     elif isinstance(fixture_data, list):
         # Django fixture format: [{model, pk, fields}]
         table_fields = {}
+        has_tags_field = False
+
         for item in fixture_data:
             model = item.get('model', '')
             if 'fields' not in item:
@@ -69,12 +71,34 @@ def infer_schema_from_fixture(fixture_data):
 
             table_fields[table_name].update(item['fields'].keys())
 
+            # Check if contentnode has tags field
+            if 'contentnode' in model.lower() and 'tags' in item.get('fields', {}):
+                has_tags_field = True
+
         # Convert to schema format
         for table_name, fields in table_fields.items():
             schema[table_name] = {
                 'fields': sorted(fields),
                 'sample': None,
             }
+
+        # Add synthetic through table schema if tags exist
+        if has_tags_field:
+            # Infer through table name from the contentnode table name
+            for table_name in table_fields.keys():
+                if 'contentnode' in table_name.lower():
+                    # Generate through table name: content.contentnode -> content.contentnode_tags
+                    if '.' in table_name:
+                        prefix = table_name.rsplit('.', 1)[0]
+                        through_table = f"{prefix}.contentnode_tags"
+                    else:
+                        through_table = f"{table_name}_tags"
+
+                    schema[through_table] = {
+                        'fields': ['id', 'contentnode_id', 'contenttag_id'],
+                        'sample': None,
+                    }
+                    break
 
     return schema
 
@@ -114,13 +138,38 @@ def transform_record_to_schema(record, allowed_fields):
     """
     transformed = {}
 
+    # Always preserve the ID field if it exists in the record
+    if 'id' in record:
+        transformed['id'] = record['id']
+
+    # Field name mappings (new name -> old name)
+    # Django uses "parent" for the ForeignKey field, but fixtures use "parent_id"
+    field_mappings = {
+        'parent': 'parent_id',
+        'channel': 'channel_id',
+    }
+
     for field in allowed_fields:
+        # Skip 'id' as we already handled it
+        if field == 'id':
+            continue
+
         if field in record:
             transformed[field] = record[field]
         else:
-            # Field exists in old schema but not in our new data
-            # Use appropriate default based on field name
-            transformed[field] = get_default_for_field(field)
+            # Check if this field has a mapped name in new data
+            source_field = None
+            for new_name, old_name in field_mappings.items():
+                if old_name == field and new_name in record:
+                    source_field = new_name
+                    break
+
+            if source_field:
+                transformed[field] = record[source_field]
+            else:
+                # Field exists in old schema but not in our new data
+                # Use appropriate default based on field name
+                transformed[field] = get_default_for_field(field)
 
     return transformed
 
@@ -138,30 +187,61 @@ def map_table_names(new_tables, old_tables):
         if old_table in new_tables:
             mapping[old_table] = old_table
         else:
-            # Try to find similar name (handle prefix differences)
-            # e.g., content_contentnode vs contentnode
-            old_suffix = old_table.split('_')[-1]
+            # Try to find similar name (handle different naming conventions)
+            # Convert old_table from "content.contentnode" to "content_contentnode"
+            normalized_old = old_table.replace('.', '_')
+
+            # First try exact match of normalized name
+            if normalized_old in new_tables:
+                mapping[old_table] = normalized_old
+                continue
+
+            # Try to find matching table in new data by model name
+            if '.' in old_table:
+                # Django fixture format: "content.channelmetadata"
+                old_model = old_table.split('.')[-1]
+            else:
+                # Schema format: "content_contentnode"
+                old_model = old_table.split('_')[-1]
+
+            # Try to find matching table in new data
             for new_table in new_tables:
-                new_suffix = new_table.split('_')[-1]
-                if old_suffix == new_suffix:
+                if '.' in new_table:
+                    new_model = new_table.split('.')[-1]
+                else:
+                    new_model = new_table.split('_')[-1]
+
+                # Check if model names match or if one contains the other
+                if (old_model == new_model or
+                    old_model in new_table or
+                    new_model in old_table or
+                    (old_model.replace('metadata', '') == new_model or
+                     new_model.replace('metadata', '') == old_model)):
                     mapping[old_table] = new_table
                     break
 
     return mapping
 
 
-def transform_to_schema(new_data, old_schema):
+def transform_to_schema(new_data, old_schema, old_data=None):
     """
     Transform new realistic content data to match old schema structure.
 
     Args:
         new_data: Dict from ChannelBuilder.data (current schema)
         old_schema: Schema inferred from historic fixture
+        old_data: Original fixture data to preserve certain tables
 
     Returns:
         Data structure matching old schema with new realistic content
     """
     transformed = {}
+
+    # Tables to preserve from old fixture (not yet supported by ChannelBuilder)
+    # Tags are now generated by ChannelBuilder, so no need to preserve them
+    PRESERVE_TABLES = [
+        # Empty for now - all tables are generated by ChannelBuilder
+    ]
 
     # Map new table names to old table names
     table_mapping = map_table_names(new_data.keys(), old_schema.keys())
@@ -181,8 +261,17 @@ def transform_to_schema(new_data, old_schema):
     # Handle tables that existed in old schema but not in new data
     for old_table in old_schema:
         if old_table not in transformed:
-            # This table existed in old schema but we don't have data
-            transformed[old_table] = []
+            # Check if this is a table we should preserve from old data
+            if old_table in PRESERVE_TABLES and old_data:
+                # Preserve the original data for this table
+                if isinstance(old_data, dict):
+                    transformed[old_table] = old_data.get(old_table, [])
+                elif isinstance(old_data, list):
+                    # Django fixture format - extract records for this model
+                    transformed[old_table] = old_data  # Will be filtered in convert function
+            else:
+                # This table existed in old schema but we don't have data
+                transformed[old_table] = []
 
     return transformed
 
@@ -191,10 +280,38 @@ def convert_to_django_fixture_format(data_dict):
     """Convert {table: [records]} format to Django fixture format"""
     fixture = []
 
+    # Build node-to-tags mapping from the through table
+    node_to_tags = {}
+    through_table_name = None
+    for table_name in data_dict.keys():
+        # Match both "content_contentnode_tags" and "content.contentnode_tags"
+        normalized_table = table_name.replace('.', '_')
+        if 'contentnode_tags' in normalized_table:
+            through_table_name = table_name
+            for record in data_dict[table_name]:
+                node_id = record.get('contentnode_id')
+                tag_id = record.get('contenttag_id')
+                if node_id and tag_id:
+                    if node_id not in node_to_tags:
+                        node_to_tags[node_id] = []
+                    node_to_tags[node_id].append(tag_id)
+            break
+
     for table_name, records in data_dict.items():
+        # Skip the through table - it's represented inline in the tags field
+        if through_table_name and table_name == through_table_name:
+            continue
+
         for record in records:
-            pk = record.get('id')
-            fields = {k: v for k, v in record.items() if k != 'id'}
+            # Get the record ID - check both 'id' and 'pk' fields
+            pk = record.get('id') or record.get('pk')
+
+            # Extract fields (exclude id/pk)
+            fields = {k: v for k, v in record.items() if k not in ('id', 'pk')}
+
+            # Add tags field for contentnodes
+            if 'contentnode' in table_name.lower():
+                fields['tags'] = node_to_tags.get(pk, [])
 
             fixture.append({
                 'model': table_name,
@@ -233,8 +350,8 @@ def migrate_historic_fixture(fixture_filename, new_content_builder, base_dir=FIX
     # Get new realistic content data
     new_data = new_content_builder.data
 
-    # Transform new data to match old schema
-    migrated_data = transform_to_schema(new_data, old_schema)
+    # Transform new data to match old schema, preserving certain tables from old data
+    migrated_data = transform_to_schema(new_data, old_schema, old_data)
 
     # Preserve the same format (dict vs list)
     if isinstance(old_data, dict):
