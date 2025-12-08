@@ -109,11 +109,14 @@ def get_default_for_field(field_name):
     if field_name in ('lft', 'rght', 'tree_id', 'level', 'sort_order'):
         return None
     # Boolean fields
-    if field_name in ('available', 'thumbnail', 'supplementary', 'coach_content',
+    if field_name in ('available', 'supplementary', 'coach_content',
                       'randomize', 'is_manipulable'):
         return False
-    # Numeric fields
-    if 'size' in field_name or field_name in ('priority', 'number_of_assessments'):
+    # Numeric fields (IntegerField, BigIntegerField)
+    if 'size' in field_name or 'count' in field_name or field_name in ('priority', 'number_of_assessments'):
+        return None
+    # Foreign key fields (should be None if not present)
+    if field_name in ('root', 'parent', 'parent_id', 'channel_id'):
         return None
     # List/array fields
     if field_name in ('assessment_item_ids',):
@@ -121,7 +124,7 @@ def get_default_for_field(field_name):
     # Dict/JSON fields
     if field_name in ('mastery_model', 'options'):
         return "{}"
-    # String fields
+    # String fields (CharField, TextField)
     return ""
 
 
@@ -142,11 +145,15 @@ def transform_record_to_schema(record, allowed_fields):
     if 'id' in record:
         transformed['id'] = record['id']
 
-    # Field name mappings (new name -> old name)
-    # Django uses "parent" for the ForeignKey field, but fixtures use "parent_id"
+    # Field name mappings (new field name in data -> old field name in schema)
+    # Format: {name_in_new_data: name_in_old_schema}
     field_mappings = {
         'parent': 'parent_id',
         'channel': 'channel_id',
+        'contentnode_id': 'contentnode',
+        'lang_id': 'lang',
+        'local_file_id': 'local_file',
+        'root_id': 'root',
     }
 
     for field in allowed_fields:

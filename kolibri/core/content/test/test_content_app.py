@@ -52,15 +52,15 @@ class ContentNodeTestBase(object):
         test the directional characteristic of prerequisite relationship
         """
 
-        c1 = content.ContentNode.objects.get(title="c1")
-        root = content.ContentNode.objects.get(title="root")
-        # if root is the prerequisite of c1
-        expected_output = content.ContentNode.objects.filter(title__in=["root"])
-        actual_output = content.ContentNode.objects.filter(prerequisite_for=c1)
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
+        # if Learning Resources is the prerequisite of Introduction to Algebra
+        expected_output = content.ContentNode.objects.filter(title__in=["Learning Resources"])
+        actual_output = content.ContentNode.objects.filter(prerequisite_for=Introduction to Algebra)
         self.assertEqual(set(expected_output), set(actual_output))
-        # then c1 should not be the prerequisite of root
-        unexpected_output = content.ContentNode.objects.filter(title__in=["c1"])
-        actual_output = content.ContentNode.objects.filter(prerequisite_for=root)
+        # then Introduction to Algebra should not be the prerequisite of Learning Resources
+        unexpected_output = content.ContentNode.objects.filter(title__in=["Introduction to Algebra"])
+        actual_output = content.ContentNode.objects.filter(prerequisite_for=Learning Resources)
         self.assertNotEqual(set(actual_output), set(unexpected_output))
 
     def test_get_has_prerequisites(self):
@@ -68,15 +68,15 @@ class ContentNodeTestBase(object):
         test the directional characteristic of prerequisite relationship
         """
 
-        c1 = content.ContentNode.objects.get(title="c1")
-        root = content.ContentNode.objects.get(title="root")
-        # if root is the prerequisite of c1
-        expected_output = content.ContentNode.objects.filter(title__in=["c1"])
-        actual_output = content.ContentNode.objects.filter(has_prerequisite=root)
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
+        # if Learning Resources is the prerequisite of Introduction to Algebra
+        expected_output = content.ContentNode.objects.filter(title__in=["Introduction to Algebra"])
+        actual_output = content.ContentNode.objects.filter(has_prerequisite=Learning Resources)
         self.assertEqual(set(expected_output), set(actual_output))
-        # then c1 should not be the prerequisite of root
-        unexpected_output = content.ContentNode.objects.filter(title__in=["root"])
-        actual_output = content.ContentNode.objects.filter(has_prerequisite=c1)
+        # then Introduction to Algebra should not be the prerequisite of Learning Resources
+        unexpected_output = content.ContentNode.objects.filter(title__in=["Learning Resources"])
+        actual_output = content.ContentNode.objects.filter(has_prerequisite=Introduction to Algebra)
         self.assertNotEqual(set(actual_output), set(unexpected_output))
 
     def test_get_all_related(self):
@@ -84,21 +84,21 @@ class ContentNodeTestBase(object):
         test the nondirectional characteristic of related relationship
         """
 
-        c1 = content.ContentNode.objects.get(title="c1")
-        c2 = content.ContentNode.objects.get(title="c2")
-        # if c1 is related to c2
-        expected_output = content.ContentNode.objects.filter(title__in=["c2"])
-        actual_output = content.ContentNode.objects.filter(related=c1)
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Advanced Mathematics = content.ContentNode.objects.get(title="Advanced Mathematics")
+        # if Introduction to Algebra is related to Advanced Mathematics
+        expected_output = content.ContentNode.objects.filter(title__in=["Advanced Mathematics"])
+        actual_output = content.ContentNode.objects.filter(related=Introduction to Algebra)
         self.assertEqual(set(expected_output), set(actual_output))
-        # then c2 should be related to c1
-        expected_output = content.ContentNode.objects.filter(title__in=["c1"])
-        actual_output = content.ContentNode.objects.filter(related=c2)
+        # then Advanced Mathematics should be related to Introduction to Algebra
+        expected_output = content.ContentNode.objects.filter(title__in=["Introduction to Algebra"])
+        actual_output = content.ContentNode.objects.filter(related=Advanced Mathematics)
         self.assertEqual(set(expected_output), set(actual_output))
 
     def test_descendants_of_kind(self):
 
-        p = content.ContentNode.objects.get(title="root")
-        expected_output = content.ContentNode.objects.filter(title__in=["c1"])
+        p = content.ContentNode.objects.get(title="Learning Resources")
+        expected_output = content.ContentNode.objects.filter(title__in=["Introduction to Algebra"])
         actual_output = p.get_descendants(include_self=False).filter(
             kind=content_kinds.VIDEO
         )
@@ -106,12 +106,12 @@ class ContentNodeTestBase(object):
 
     def test_get_top_level_topics(self):
 
-        p = content.ContentNode.objects.get(title="root")
+        p = content.ContentNode.objects.get(title="Learning Resources")
         expected_output = content.ContentNode.objects.filter(
             parent=p, kind=content_kinds.TOPIC
         )
         actual_output = (
-            content.ContentNode.objects.get(title="root")
+            content.ContentNode.objects.get(title="Learning Resources")
             .get_children()
             .filter(kind=content_kinds.TOPIC)
         )
@@ -130,21 +130,21 @@ class ContentNodeTestBase(object):
 
     def test_channelmetadata_str(self):
         # test for ChannelMetadata __str__
-        p = content.ChannelMetadata.objects.get(name="testing")
-        self.assertEqual(str(p), "testing")
+        p = content.ChannelMetadata.objects.get(name="Educational Content Library")
+        self.assertEqual(str(p), "Educational Content Library")
 
     def test_tags(self):
-        root_tag_count = content.ContentNode.objects.get(title="root").tags.count()
-        self.assertEqual(root_tag_count, 3)
+        Learning Resources_tag_count = content.ContentNode.objects.get(title="Learning Resources").tags.count()
+        self.assertEqual(Learning Resources_tag_count, 3)
 
-        c1_tag_count = content.ContentNode.objects.get(title="c1").tags.count()
-        self.assertEqual(c1_tag_count, 1)
+        Introduction to Algebra_tag_count = content.ContentNode.objects.get(title="Introduction to Algebra").tags.count()
+        self.assertEqual(Introduction to Algebra_tag_count, 1)
 
-        c2_tag_count = content.ContentNode.objects.get(title="c2").tags.count()
-        self.assertEqual(c2_tag_count, 1)
+        Advanced Mathematics_tag_count = content.ContentNode.objects.get(title="Advanced Mathematics").tags.count()
+        self.assertEqual(Advanced Mathematics_tag_count, 1)
 
-        c2c1_tag_count = content.ContentNode.objects.get(title="c2c1").tags.count()
-        self.assertEqual(c2c1_tag_count, 0)
+        Advanced MathematicsIntroduction to Algebra_tag_count = content.ContentNode.objects.get(title="Linear Equations Practice").tags.count()
+        self.assertEqual(Advanced MathematicsIntroduction to Algebra_tag_count, 0)
 
     def test_local_files(self):
         self.assertTrue(
@@ -169,7 +169,7 @@ class ContentNodeTestBase(object):
         )
         self.assertTrue(
             content.LocalFile.objects.filter(
-                id="8ad3fffedf144cba9492e16daec1e39a"
+                id="8ad3fffedf144cba9492e16daeIntroduction to Algebrae39a"
             ).exists()
         )
 
@@ -386,8 +386,8 @@ class ContentNodeAPIBase(object):
             self._assert_node(actual, expected)
 
     def test_contentnode_list(self):
-        root = content.ContentNode.objects.get(title="root")
-        nodes = root.get_descendants(include_self=True).filter(available=True)
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
+        nodes = Learning Resources.get_descendants(include_self=True).filter(available=True)
         expected_output = len(nodes)
         response = self._get(reverse("kolibri:core:contentnode-list"))
         self.assertEqual(len(response.data), expected_output)
@@ -411,8 +411,8 @@ class ContentNodeAPIBase(object):
         self.assertIn("channels", response.data.get("labels"))
 
     def test_contentnode_etag(self):
-        root = content.ContentNode.objects.get(title="root")
-        nodes = root.get_descendants(include_self=True).filter(available=True)
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
+        nodes = Learning Resources.get_descendants(include_self=True).filter(available=True)
         expected_len = len(nodes)
         url = reverse("kolibri:core:contentnode-list")
 
@@ -515,16 +515,16 @@ class ContentNodeAPIBase(object):
         return recursion_depth if not recursion_depths else max(recursion_depths)
 
     def test_contentnode_tree(self):
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
-        self._recurse_and_assert([response.data], [root])
+        self._recurse_and_assert([response.data], [Learning Resources])
 
     def test_contentnode_tree_filtered_queryset_node(self):
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         response = self.client.get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
             + "?parent={}".format(uuid.uuid4().hex)
         )
         self.assertEqual(response.status_code, 404)
@@ -552,19 +552,19 @@ class ContentNodeAPIBase(object):
         builder = ChannelBuilder(levels=2, num_children=30)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
-        self._recurse_and_assert([response.data], [root])
+        self._recurse_and_assert([response.data], [Learning Resources])
 
     def test_contentnode_tree_depth_1(self):
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id}),
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id}),
             data={"depth": 1},
         )
-        self._recurse_and_assert([response.data], [root])
+        self._recurse_and_assert([response.data], [Learning Resources])
 
     @unittest.skipIf(
         getattr(settings, "DATABASES")["default"]["ENGINE"]
@@ -575,15 +575,15 @@ class ContentNodeAPIBase(object):
         builder = ChannelBuilder(levels=2, num_children=17)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
-        next__gt = content.ContentNode.objects.filter(parent=root)[11].rght
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
+        next__gt = content.ContentNode.objects.filter(parent=Learning Resources)[11].rght
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id}),
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id}),
             data={"next__gt": next__gt},
         )
         self.assertEqual(len(response.data["children"]["results"]), 5)
         self.assertIsNone(response.data["children"]["more"])
-        first_node = content.ContentNode.objects.filter(parent=root)[12]
+        first_node = content.ContentNode.objects.filter(parent=Learning Resources)[12]
         self._recurse_and_assert(
             [response.data["children"]["results"][0]], [first_node], recursion_depth=1
         )
@@ -597,9 +597,9 @@ class ContentNodeAPIBase(object):
         builder = ChannelBuilder(levels=2, num_children=17)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
         first_child = response.data["children"]["results"][0]
         self.assertEqual(first_child["children"]["more"]["params"]["depth"], 1)
@@ -617,27 +617,27 @@ class ContentNodeAPIBase(object):
         builder = ChannelBuilder(levels=5, num_children=1)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
-        max_depth = self._recurse_and_assert([response.data], [root])
+        max_depth = self._recurse_and_assert([response.data], [Learning Resources])
         # Should recurse all the way down the tree through a total of 6 levels
-        # including the root.
+        # including the Learning Resources.
         self.assertEqual(max_depth, 6)
 
     def test_contentnode_tree_singleton_child(self):
         builder = ChannelBuilder(levels=5, num_children=2)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
-        first_child = root.children.first()
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
+        first_child = Learning Resources.children.first()
         first_child.available = False
         first_child.save()
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
-        max_depth = self._recurse_and_assert([response.data], [root])
+        max_depth = self._recurse_and_assert([response.data], [Learning Resources])
         # Should recurse an extra level to find multiple descendants under the first grandchild.
         self.assertEqual(max_depth, 3)
 
@@ -645,14 +645,14 @@ class ContentNodeAPIBase(object):
         builder = ChannelBuilder(levels=5, num_children=2)
         builder.insert_into_default_db()
         content.ContentNode.objects.all().update(available=True)
-        root = content.ContentNode.objects.get(id=builder.root_node["id"])
-        first_grandchild = root.children.first().children.first()
+        Learning Resources = content.ContentNode.objects.get(id=builder.Learning Resources_node["id"])
+        first_grandchild = Learning Resources.children.first().children.first()
         first_grandchild.available = False
         first_grandchild.save()
         response = self._get(
-            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": Learning Resources.id})
         )
-        max_depth = self._recurse_and_assert([response.data], [root])
+        max_depth = self._recurse_and_assert([response.data], [Learning Resources])
         # Should recurse an extra level to find multiple descendants under the first child.
         self.assertEqual(max_depth, 3)
 
@@ -667,40 +667,40 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     maxDiff = None
 
     def test_prerequisite_for_filter(self):
-        c1_id = content.ContentNode.objects.get(title="c1").id
+        Introduction to Algebra_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
         response = self.client.get(
-            reverse("kolibri:core:contentnode-list"), data={"prerequisite_for": c1_id}
+            reverse("kolibri:core:contentnode-list"), data={"prerequisite_for": Introduction to Algebra_id}
         )
-        self.assertEqual(response.data[0]["title"], "root")
+        self.assertEqual(response.data[0]["title"], "Learning Resources")
 
     def test_has_prerequisite_filter(self):
-        root_id = content.ContentNode.objects.get(title="root").id
+        Learning Resources_id = content.ContentNode.objects.get(title="Learning Resources").id
         response = self.client.get(
-            reverse("kolibri:core:contentnode-list"), data={"has_prerequisite": root_id}
+            reverse("kolibri:core:contentnode-list"), data={"has_prerequisite": Learning Resources_id}
         )
-        self.assertEqual(response.data[0]["title"], "c1")
+        self.assertEqual(response.data[0]["title"], "Introduction to Algebra")
 
     def test_related_filter(self):
-        c1_id = content.ContentNode.objects.get(title="c1").id
+        Introduction to Algebra_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
         response = self.client.get(
-            reverse("kolibri:core:contentnode-list"), data={"related": c1_id}
+            reverse("kolibri:core:contentnode-list"), data={"related": Introduction to Algebra_id}
         )
-        self.assertEqual(response.data[0]["title"], "c2")
+        self.assertEqual(response.data[0]["title"], "Advanced Mathematics")
 
     @mock.patch("kolibri.core.content.api.get_channel_stats_from_studio")
     def test_contentnode_granular_network_import(self, stats_mock):
-        c1 = content.ContentNode.objects.get(title="root")
-        c1_id = c1.id
-        c2_id = content.ContentNode.objects.get(title="c1").id
-        c3_id = content.ContentNode.objects.get(title="c2").id
+        Introduction to Algebra = content.ContentNode.objects.get(title="Learning Resources")
+        Introduction to Algebra_id = Introduction to Algebra.id
+        Advanced Mathematics_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
+        c3_id = content.ContentNode.objects.get(title="Advanced Mathematics").id
         content.ContentNode.objects.all().update(available=False)
         stats = {
-            c1_id: {
+            Introduction to Algebra_id: {
                 "total_resources": 2,
                 "coach_content": False,
                 "num_coach_contents": 0,
             },
-            c2_id: {
+            Advanced Mathematics_id: {
                 "total_resources": 1,
                 "coach_content": False,
                 "num_coach_contents": 0,
@@ -713,14 +713,14 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         }
         stats_mock.return_value = stats
         response = self.client.get(
-            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": c1_id})
+            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": Introduction to Algebra_id})
         )
 
         self.assertEqual(
             response.data,
             {
-                "id": c1_id,
-                "title": "root",
+                "id": Introduction to Algebra_id,
+                "title": "Learning Resources",
                 "kind": "topic",
                 "is_leaf": False,
                 "available": False,
@@ -732,11 +732,11 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 "new_resource": False,
                 "num_new_resources": 0,
                 "updated_resource": False,
-                "ancestors": list(c1.get_ancestors().values("id", "title")),
+                "ancestors": list(Introduction to Algebra.get_ancestors().values("id", "title")),
                 "children": [
                     {
-                        "id": c2_id,
-                        "title": "c1",
+                        "id": Advanced Mathematics_id,
+                        "title": "Introduction to Algebra",
                         "kind": "video",
                         "is_leaf": True,
                         "available": False,
@@ -751,7 +751,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                     },
                     {
                         "id": c3_id,
-                        "title": "c2",
+                        "title": "Advanced Mathematics",
                         "kind": "topic",
                         "is_leaf": False,
                         "available": False,
@@ -773,13 +773,13 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         content.LocalFile.objects.update(available=False)
         content.ContentNode.objects.update(available=False)
 
-        c1 = content.ContentNode.objects.get(title="root")
-        c1_id = c1.id
-        c2_id = content.ContentNode.objects.get(title="c1").id
-        c3_id = content.ContentNode.objects.get(title="c2").id
+        Introduction to Algebra = content.ContentNode.objects.get(title="Learning Resources")
+        Introduction to Algebra_id = Introduction to Algebra.id
+        Advanced Mathematics_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
+        c3_id = content.ContentNode.objects.get(title="Advanced Mathematics").id
 
         stats = {
-            c1_id: {
+            Introduction to Algebra_id: {
                 "total_resources": 1,
                 "coach_content": False,
                 "num_coach_contents": 0,
@@ -793,14 +793,14 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         stats_mock.return_value = stats
 
         response = self.client.get(
-            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": c1_id}),
+            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": Introduction to Algebra_id}),
             {"importing_from_drive_id": "123"},
         )
         self.assertEqual(
             response.data,
             {
-                "id": c1_id,
-                "title": "root",
+                "id": Introduction to Algebra_id,
+                "title": "Learning Resources",
                 "kind": "topic",
                 "is_leaf": False,
                 "available": False,
@@ -812,11 +812,11 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 "new_resource": False,
                 "num_new_resources": 0,
                 "updated_resource": False,
-                "ancestors": list(c1.get_ancestors().values("id", "title")),
+                "ancestors": list(Introduction to Algebra.get_ancestors().values("id", "title")),
                 "children": [
                     {
-                        "id": c2_id,
-                        "title": "c1",
+                        "id": Advanced Mathematics_id,
+                        "title": "Introduction to Algebra",
                         "kind": "video",
                         "is_leaf": True,
                         "available": False,
@@ -831,7 +831,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                     },
                     {
                         "id": c3_id,
-                        "title": "c2",
+                        "title": "Advanced Mathematics",
                         "kind": "topic",
                         "is_leaf": False,
                         "available": False,
@@ -853,12 +853,12 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         content.LocalFile.objects.update(available=False)
         content.ContentNode.objects.update(available=False)
 
-        c1 = content.ContentNode.objects.get(title="root")
-        c1_id = c1.id
-        c2_id = content.ContentNode.objects.get(title="c1").id
-        c3_id = content.ContentNode.objects.get(title="c2").id
+        Introduction to Algebra = content.ContentNode.objects.get(title="Learning Resources")
+        Introduction to Algebra_id = Introduction to Algebra.id
+        Advanced Mathematics_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
+        c3_id = content.ContentNode.objects.get(title="Advanced Mathematics").id
         stats = {
-            c1_id: {
+            Introduction to Algebra_id: {
                 "total_resources": 1,
                 "coach_content": False,
                 "num_coach_contents": 0,
@@ -872,14 +872,14 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         stats_mock.return_value = stats
 
         response = self.client.get(
-            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": c1_id}),
+            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": Introduction to Algebra_id}),
             {"importing_from_peer_id": "test"},
         )
         self.assertEqual(
             response.data,
             {
-                "id": c1_id,
-                "title": "root",
+                "id": Introduction to Algebra_id,
+                "title": "Learning Resources",
                 "kind": "topic",
                 "is_leaf": False,
                 "available": False,
@@ -891,11 +891,11 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 "new_resource": False,
                 "num_new_resources": 0,
                 "updated_resource": False,
-                "ancestors": list(c1.get_ancestors().values("id", "title")),
+                "ancestors": list(Introduction to Algebra.get_ancestors().values("id", "title")),
                 "children": [
                     {
-                        "id": c2_id,
-                        "title": "c1",
+                        "id": Advanced Mathematics_id,
+                        "title": "Introduction to Algebra",
                         "kind": "video",
                         "is_leaf": True,
                         "available": False,
@@ -910,7 +910,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                     },
                     {
                         "id": c3_id,
-                        "title": "c2",
+                        "title": "Advanced Mathematics",
                         "kind": "topic",
                         "is_leaf": False,
                         "available": False,
@@ -928,18 +928,18 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         )
 
     def test_contentnode_granular_export_available(self):
-        c1 = content.ContentNode.objects.get(title="c1")
-        c1_id = c1.id
-        content.ContentNode.objects.filter(title="c1").update(on_device_resources=1)
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Introduction to Algebra_id = Introduction to Algebra.id
+        content.ContentNode.objects.filter(title="Introduction to Algebra").update(on_device_resources=1)
         response = self.client.get(
-            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": c1_id}),
+            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": Introduction to Algebra_id}),
             data={"for_export": True},
         )
         self.assertEqual(
             response.data,
             {
-                "id": c1_id,
-                "title": "c1",
+                "id": Introduction to Algebra_id,
+                "title": "Introduction to Algebra",
                 "kind": "video",
                 "is_leaf": True,
                 "available": True,
@@ -952,23 +952,23 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 "new_resource": None,
                 "num_new_resources": None,
                 "updated_resource": None,
-                "ancestors": list(c1.get_ancestors().values("id", "title")),
+                "ancestors": list(Introduction to Algebra.get_ancestors().values("id", "title")),
             },
         )
 
     def test_contentnode_granular_export_unavailable(self):
-        c1 = content.ContentNode.objects.get(title="c1")
-        c1_id = c1.id
-        content.ContentNode.objects.filter(title="c1").update(available=False)
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Introduction to Algebra_id = Introduction to Algebra.id
+        content.ContentNode.objects.filter(title="Introduction to Algebra").update(available=False)
         response = self.client.get(
-            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": c1_id}),
+            reverse("kolibri:core:contentnode_granular-detail", kwargs={"pk": Introduction to Algebra_id}),
             data={"for_export": True},
         )
         self.assertEqual(
             response.data,
             {
-                "id": c1_id,
-                "title": "c1",
+                "id": Introduction to Algebra_id,
+                "title": "Introduction to Algebra",
                 "kind": "video",
                 "is_leaf": True,
                 "available": False,
@@ -981,34 +981,34 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 "new_resource": None,
                 "num_new_resources": None,
                 "updated_resource": None,
-                "ancestors": list(c1.get_ancestors().values("id", "title")),
+                "ancestors": list(Introduction to Algebra.get_ancestors().values("id", "title")),
             },
         )
 
     def test_contentnode_retrieve(self):
-        c1_id = content.ContentNode.objects.get(title="c1").id
+        Introduction to Algebra_id = content.ContentNode.objects.get(title="Introduction to Algebra").id
         response = self.client.get(
-            reverse("kolibri:core:contentnode-detail", kwargs={"pk": c1_id})
+            reverse("kolibri:core:contentnode-detail", kwargs={"pk": Introduction to Algebra_id})
         )
-        self.assertEqual(response.data["id"], c1_id.__str__())
+        self.assertEqual(response.data["id"], Introduction to Algebra_id.__str__())
 
     def test_contentnode_descendants_assessments_exercise_node(self):
-        c1 = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
-        c1_id = c1.id
+        Introduction to Algebra = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
+        Introduction to Algebra_id = Introduction to Algebra.id
         response = self.client.get(
             reverse("kolibri:core:contentnode-descendants-assessments"),
-            data={"ids": c1_id},
+            data={"ids": Introduction to Algebra_id},
         )
         self.assertEqual(
             next(
-                item["num_assessments"] for item in response.data if item["id"] == c1_id
+                item["num_assessments"] for item in response.data if item["id"] == Introduction to Algebra_id
             ),
-            c1.assessmentmetadata.first().number_of_assessments,
+            Introduction to Algebra.assessmentmetadata.first().number_of_assessments,
         )
 
     def test_contentnode_descendants_assessments_exercise_parent(self):
-        c1 = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
-        parent = c1.parent
+        Introduction to Algebra = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
+        parent = Introduction to Algebra.parent
         parent_id = parent.id
         response = self.client.get(
             reverse("kolibri:core:contentnode-descendants-assessments"),
@@ -1020,33 +1020,33 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 for item in response.data
                 if item["id"] == parent_id
             ),
-            c1.assessmentmetadata.first().number_of_assessments,
+            Introduction to Algebra.assessmentmetadata.first().number_of_assessments,
         )
 
-    def test_contentnode_descendants_assessments_exercise_root(self):
-        c1 = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
-        root = content.ContentNode.objects.get(parent__isnull=True)
-        root_id = root.id
+    def test_contentnode_descendants_assessments_exercise_Learning Resources(self):
+        Introduction to Algebra = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
+        Learning Resources = content.ContentNode.objects.get(parent__isnull=True)
+        Learning Resources_id = Learning Resources.id
         response = self.client.get(
             reverse("kolibri:core:contentnode-descendants-assessments"),
-            data={"ids": root_id},
+            data={"ids": Learning Resources_id},
         )
         self.assertEqual(
             next(
                 item["num_assessments"]
                 for item in response.data
-                if item["id"] == root_id
+                if item["id"] == Learning Resources_id
             ),
-            c1.assessmentmetadata.first().number_of_assessments,
+            Introduction to Algebra.assessmentmetadata.first().number_of_assessments,
         )
 
     def test_contentnode_descendants_assessments_exercise_parent_sum_siblings(self):
-        c1 = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
-        parent = c1.parent
+        Introduction to Algebra = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
+        parent = Introduction to Algebra.parent
         parent_id = parent.id
         sibling = content.ContentNode.objects.create(
             pk="6a406ac66b224106aa2e93f73a94333d",
-            channel_id=c1.channel_id,
+            channel_id=Introduction to Algebra.channel_id,
             content_id="ded4a083e75f4689b386fd2b706e792a",
             kind=content_kinds.EXERCISE,
             parent=parent,
@@ -1068,21 +1068,21 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 for item in response.data
                 if item["id"] == parent_id
             ),
-            c1.assessmentmetadata.first().number_of_assessments
+            Introduction to Algebra.assessmentmetadata.first().number_of_assessments
             + sibling_assessment_metadata.number_of_assessments,
         )
 
     def test_contentnode_descendants_assessments_exercise_parent_sum_siblings_one_unavailable(
         self,
     ):
-        c1 = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
-        c1.available = False
-        c1.save()
-        parent = c1.parent
+        Introduction to Algebra = content.ContentNode.objects.filter(kind=content_kinds.EXERCISE).first()
+        Introduction to Algebra.available = False
+        Introduction to Algebra.save()
+        parent = Introduction to Algebra.parent
         parent_id = parent.id
         sibling = content.ContentNode.objects.create(
             pk="6a406ac66b224106aa2e93f73a94333d",
-            channel_id=c1.channel_id,
+            channel_id=Introduction to Algebra.channel_id,
             content_id="ded4a083e75f4689b386fd2b706e792a",
             kind=content_kinds.EXERCISE,
             parent=parent,
@@ -1108,7 +1108,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         )
 
     def test_contentnode_recommendations(self):
-        node_id = content.ContentNode.objects.get(title="c2c2").id
+        node_id = content.ContentNode.objects.get(title="Algebra Study Guide").id
         response = self.client.get(
             reverse(
                 "kolibri:core:contentnode-recommendations-for", kwargs={"pk": node_id}
@@ -1117,7 +1117,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(len(response.data), 2)
 
     def test_contentnode_recommendations_does_error_for_unavailable_node(self):
-        node = content.ContentNode.objects.get(title="c2c2")
+        node = content.ContentNode.objects.get(title="Algebra Study Guide")
         node.available = False
         node.save()
         node_id = node.id
@@ -1129,7 +1129,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_contentnode_ids(self):
-        titles = ["c2c2", "c2c3"]
+        titles = ["Advanced MathematicsAdvanced Mathematics", "Advanced Mathematicsc3"]
         nodes = [content.ContentNode.objects.get(title=title) for title in titles]
         response = self.client.get(
             reverse("kolibri:core:contentnode-list"),
@@ -1140,7 +1140,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
             self.assertEqual(response.data[i]["title"], titles[i])
 
     def test_contentnode_content_id(self):
-        node = content.ContentNode.objects.get(title="c2c2")
+        node = content.ContentNode.objects.get(title="Algebra Study Guide")
         response = self.client.get(
             reverse("kolibri:core:contentnode-list"),
             data={"content_id": node.content_id},
@@ -1156,7 +1156,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_contentnode_parent(self):
-        parent = content.ContentNode.objects.get(title="c2")
+        parent = content.ContentNode.objects.get(title="Advanced Mathematics")
         children = parent.get_children()
         response = self.client.get(
             reverse("kolibri:core:contentnode-list"),
@@ -1168,9 +1168,9 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
     def test_contentnode_tags(self):
         expected = {
-            "root": ["tag_1", "tag_2", "tag_3"],
-            "c1": ["tag_1"],
-            "c2": ["tag_2"],
+            "Learning Resources": ["mathematics", "algebra", "educational"],
+            "Introduction to Algebra": ["algebra"],
+            "Advanced Mathematics": ["mathematics"],
         }
         for title, tags in expected.items():
             node = content.ContentNode.objects.get(title=title)
@@ -1181,26 +1181,26 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
     def test_channelmetadata_list(self):
         response = self.client.get(reverse("kolibri:core:channel-list", kwargs={}))
-        self.assertEqual(response.data[0]["name"], "testing")
+        self.assertEqual(response.data[0]["name"], "Educational Content Library")
 
     def test_channelmetadata_retrieve(self):
         data = content.ChannelMetadata.objects.values()[0]
         response = self.client.get(
             reverse("kolibri:core:channel-detail", kwargs={"pk": data["id"]})
         )
-        self.assertEqual(response.data["name"], "testing")
+        self.assertEqual(response.data["name"], "Educational Content Library")
 
     def test_channelmetadata_langfield(self):
         data = content.ChannelMetadata.objects.first()
-        root_lang = content.Language.objects.get(pk=1)
-        data.root.lang = root_lang
-        data.root.save()
+        Learning Resources_lang = content.Language.objects.get(pk=1)
+        data.Learning Resources.lang = Learning Resources_lang
+        data.Learning Resources.save()
 
         response = self.client.get(
             reverse("kolibri:core:channel-detail", kwargs={"pk": data.id})
         )
-        self.assertEqual(response.data["lang_code"], root_lang.lang_code)
-        self.assertEqual(response.data["lang_name"], root_lang.lang_name)
+        self.assertEqual(response.data["lang_code"], Learning Resources_lang.lang_code)
+        self.assertEqual(response.data["lang_name"], Learning Resources_lang.lang_name)
 
     def test_channelmetadata_langfield_none(self):
         data = content.ChannelMetadata.objects.first()
@@ -1224,7 +1224,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(response.data[0]["id"], "6199dde695db4ee4ab392222d5af1e5c")
 
     def test_channelmetadata_content_unavailable_param_filter_false(self):
-        content.ContentNode.objects.filter(title="root").update(available=False)
+        content.ContentNode.objects.filter(title="Learning Resources").update(available=False)
         response = self.client.get(
             reverse("kolibri:core:channel-list"), {"available": False}
         )
@@ -1235,7 +1235,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(response.data[0]["available"], True)
 
     def test_channelmetadata_content_available_field_false(self):
-        content.ContentNode.objects.filter(title="root").update(available=False)
+        content.ContentNode.objects.filter(title="Learning Resources").update(available=False)
         response = self.client.get(reverse("kolibri:core:channel-list"))
         self.assertEqual(response.data[0]["available"], False)
 
@@ -1251,7 +1251,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         content.ChannelMetadata.objects.create(
             id="63acff41781543828861ade41dbdd7ff",
             name="no exercise channel metadata",
-            root=no_exercise_channel,
+            Learning Resources=no_exercise_channel,
         )
         no_filter_response = self.client.get(reverse("kolibri:core:channel-list"))
         self.assertEqual(len(no_filter_response.data), 2)
@@ -1259,7 +1259,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
             reverse("kolibri:core:channel-list"), {"contains_exercise": True}
         )
         self.assertEqual(len(with_filter_response.data), 1)
-        self.assertEqual(with_filter_response.data[0]["name"], "testing")
+        self.assertEqual(with_filter_response.data[0]["name"], "Educational Content Library")
 
     def test_file_list(self):
         response = self.client.get(reverse("kolibri:core:file-list"))
@@ -1280,12 +1280,12 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         user = FacilityUser.objects.create(username="learner", facility=facility)
         user.set_password("pass")
         user.save()
-        root = content.ContentNode.objects.get(title="root")
-        c1 = content.ContentNode.objects.get(title="c1")
-        c2 = content.ContentNode.objects.get(title="c2")
-        c2c1 = content.ContentNode.objects.get(title="c2c1")
-        c2c3 = content.ContentNode.objects.get(title="c2c3")
-        for node, progress in [(c2c1, 0.7), (c2c3, 0.5)]:
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
+        Introduction to Algebra = content.ContentNode.objects.get(title="Introduction to Algebra")
+        Advanced Mathematics = content.ContentNode.objects.get(title="Advanced Mathematics")
+        Advanced MathematicsIntroduction to Algebra = content.ContentNode.objects.get(title="Linear Equations Practice")
+        Advanced Mathematicsc3 = content.ContentNode.objects.get(title="Mathematics Podcast")
+        for node, progress in [(Advanced MathematicsIntroduction to Algebra, 0.7), (Advanced Mathematicsc3, 0.5)]:
             ContentSummaryLog.objects.create(
                 user=user,
                 content_id=node.content_id,
@@ -1294,11 +1294,11 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
                 start_timestamp=datetime.datetime.now(),
             )
 
-        return facility, root, c1, c2, c2c1, c2c3
+        return facility, Learning Resources, Introduction to Algebra, Advanced Mathematics, Advanced MathematicsIntroduction to Algebra, Advanced Mathematicsc3
 
     def test_contentnode_progress_list_endpoint(self):
 
-        facility, root, c1, c2, c2c1, c2c3 = self._setup_contentnode_progress()
+        facility, Learning Resources, Introduction to Algebra, Advanced Mathematics, Advanced MathematicsIntroduction to Algebra, Advanced Mathematicsc3 = self._setup_contentnode_progress()
 
         response = self.client.get(reverse("kolibri:core:contentnodeprogress-list"))
 
@@ -1315,7 +1315,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
         response = self.client.get(reverse("kolibri:core:contentnodeprogress-list"))
 
-        self.assertEqual(get_progress_fraction(c2c1), 0.7)
+        self.assertEqual(get_progress_fraction(Advanced MathematicsIntroduction to Algebra), 0.7)
 
     def test_filtering_coach_content_anon(self):
         response = self.client.get(
@@ -1338,13 +1338,13 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
     def test_search_total_results(self):
         response = self.client.get(
-            reverse("kolibri:core:contentnode_search-list"), data={"search": "root"}
+            reverse("kolibri:core:contentnode_search-list"), data={"search": "Learning Resources"}
         )
         self.assertEqual(response.data["total_results"], 1)
 
     def test_search_kinds(self):
         response = self.client.get(
-            reverse("kolibri:core:contentnode_search-list"), data={"search": "root"}
+            reverse("kolibri:core:contentnode_search-list"), data={"search": "Learning Resources"}
         )
         self.assertEqual(list(response.data["content_kinds"]), [content_kinds.TOPIC])
 
@@ -1358,7 +1358,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
     def test_search_channels(self):
         response = self.client.get(
-            reverse("kolibri:core:contentnode_search-list"), data={"search": "root"}
+            reverse("kolibri:core:contentnode_search-list"), data={"search": "Learning Resources"}
         )
         self.assertEqual(response.data["channel_ids"][:], [self.the_channel_id])
 
@@ -1383,13 +1383,13 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         self.assertEqual(len(response.data["results"]), 0)
         # regular search
         response = self.client.get(
-            reverse("kolibri:core:contentnode_search-list"), data={"search": "root"}
+            reverse("kolibri:core:contentnode_search-list"), data={"search": "Learning Resources"}
         )
         self.assertEqual(len(response.data["results"]), 1)
 
     def _create_session_logs(self):
         content_ids = (
-            "f2332710c2fd483386cdeb5ecbdda81f",
+            "f2332710Advanced Mathematicsfd483386cdeb5ecbdda81f",
             "ce603df7c46b424b934348995e1b05fb",
             "481e1bda1faa445d801ceb2afbd2f42f",
         )
@@ -1473,7 +1473,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     def _create_summary_logs(self):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
-        content_ids = ("f2332710c2fd483386cdeb5ecbdda81f",)
+        content_ids = ("f2332710Advanced Mathematicsfd483386cdeb5ecbdda81f",)
         channel_id = "6199dde695db4ee4ab392222d5af1e5c"
         ContentSummaryLog.objects.create(
             channel_id=channel_id,
@@ -1528,10 +1528,10 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     def test_next_steps_prereq(self):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         ContentSummaryLog.objects.create(
-            channel_id=root.channel_id,
-            content_id=root.content_id,
+            channel_id=Learning Resources.channel_id,
+            content_id=Learning Resources.content_id,
             user_id=user.id,
             progress=1,
             start_timestamp=timezone.now(),
@@ -1540,7 +1540,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         user.set_password(DUMMY_PASSWORD)
         user.save()
         self.client.login(username=user.username, password=DUMMY_PASSWORD)
-        post_req = root.prerequisite_for.first()
+        post_req = Learning Resources.prerequisite_for.first()
         expected_content_ids = (post_req.content_id,)
         response = self.client.get(
             reverse("kolibri:core:usercontentnode-list"), data={"next_steps": True}
@@ -1551,10 +1551,10 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     def test_next_steps_prereq_zero_cache(self):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         ContentSummaryLog.objects.create(
-            channel_id=root.channel_id,
-            content_id=root.content_id,
+            channel_id=Learning Resources.channel_id,
+            content_id=Learning Resources.content_id,
             user_id=user.id,
             progress=1,
             start_timestamp=timezone.now(),
@@ -1571,10 +1571,10 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     def test_next_steps_prereq_in_progress(self):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         ContentSummaryLog.objects.create(
-            channel_id=root.channel_id,
-            content_id=root.content_id,
+            channel_id=Learning Resources.channel_id,
+            content_id=Learning Resources.content_id,
             user_id=user.id,
             progress=1,
             start_timestamp=timezone.now(),
@@ -1583,7 +1583,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         user.set_password(DUMMY_PASSWORD)
         user.save()
         self.client.login(username=user.username, password=DUMMY_PASSWORD)
-        post_req = root.prerequisite_for.first()
+        post_req = Learning Resources.prerequisite_for.first()
         ContentSummaryLog.objects.create(
             channel_id=post_req.channel_id,
             content_id=post_req.content_id,
@@ -1602,10 +1602,10 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     def test_next_steps_prereq_coach_content_not_coach(self):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         ContentSummaryLog.objects.create(
-            channel_id=root.channel_id,
-            content_id=root.content_id,
+            channel_id=Learning Resources.channel_id,
+            content_id=Learning Resources.content_id,
             user_id=user.id,
             progress=1,
             start_timestamp=timezone.now(),
@@ -1614,7 +1614,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         user.set_password(DUMMY_PASSWORD)
         user.save()
         self.client.login(username=user.username, password=DUMMY_PASSWORD)
-        post_req = root.prerequisite_for.first()
+        post_req = Learning Resources.prerequisite_for.first()
         post_req.coach_content = True
         post_req.save()
         response = self.client.get(
@@ -1627,10 +1627,10 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         facility = Facility.objects.create(name="MyFac")
         user = FacilityUser.objects.create(username="user", facility=facility)
         facility.add_coach(user)
-        root = content.ContentNode.objects.get(title="root")
+        Learning Resources = content.ContentNode.objects.get(title="Learning Resources")
         ContentSummaryLog.objects.create(
-            channel_id=root.channel_id,
-            content_id=root.content_id,
+            channel_id=Learning Resources.channel_id,
+            content_id=Learning Resources.content_id,
             user_id=user.id,
             progress=1,
             start_timestamp=timezone.now(),
@@ -1639,7 +1639,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         user.set_password(DUMMY_PASSWORD)
         user.save()
         self.client.login(username=user.username, password=DUMMY_PASSWORD)
-        post_req = root.prerequisite_for.first()
+        post_req = Learning Resources.prerequisite_for.first()
         post_req.coach_content = True
         post_req.save()
         expected_content_ids = (post_req.content_id,)
@@ -1878,7 +1878,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
             mock_response = mock.Mock()
             mock_response.headers = {}
             mock_response.status_code = 200
-            expected = content.ContentNode.objects.get(title="c2c2")
+            expected = content.ContentNode.objects.get(title="Algebra Study Guide")
             assessmentmetadata = (
                 expected.assessmentmetadata.all()
                 .values(
@@ -2117,7 +2117,7 @@ class ChannelThumbnailViewTestCase(APITestCase):
             id="63acff41781543828861ade41dbdd7ff",
             name="no exercise channel metadata",
             thumbnail=self.thumbnail,
-            root=self.content_node,
+            Learning Resources=self.content_node,
         )
 
     def test_channel_thumbnail_view(self):

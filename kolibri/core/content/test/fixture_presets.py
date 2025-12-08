@@ -47,6 +47,12 @@ def create_basic_content_fixture(models=None):
         models=models
     )
 
+    # Clear auto-generated files and nodes since we'll create our own custom tree
+    builder.files = {}
+    builder.localfiles = {}
+    builder.node_to_files_map = {}
+    builder.localfile_to_files_map = {}
+
     # Use specific channel ID for compatibility with existing tests
     builder.channel = builder.channel_data(
         channel_id="6199dde695db4ee4ab392222d5af1e5c",
@@ -60,12 +66,19 @@ def create_basic_content_fixture(models=None):
 
     # Build the tree structure manually for precise control
     # Root node (was "root")
-    root = builder.generate_topic(parent_id=None)
-    root["id"] = "da7ecc42e62553eebc8121242746e88a"
-    root["content_id"] = "ffdfadc415214ec0b1438f002f23d7bf"
-    root["title"] = "Learning Resources"
-    root["description"] = "Root topic containing various educational materials"
-    root["license_name"] = "CC BY"
+    root = builder.contentnode_data(
+        node_id="da7ecc42e62553eebc8121242746e88a",
+        content_id="ffdfadc415214ec0b1438f002f23d7bf",
+        parent_id=None,
+        kind=content_kinds.TOPIC,
+        root=True
+    )
+    root.update({
+        "title": "Learning Resources",
+        "description": "Root topic containing various educational materials",
+        "license_name": "CC BY",
+        "author": "",
+    })
     builder.root_node = root
     builder.channel["root_id"] = root["id"]
 
