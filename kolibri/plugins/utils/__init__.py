@@ -10,6 +10,9 @@ from django.conf import settings as django_settings
 from django.core.exceptions import AppRegistryNotReady
 from django.core.management import call_command
 from django.urls import reverse
+from packaging.specifiers import InvalidSpecifier
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 from semver import VersionInfo
 
 if sys.version_info < (3, 10):
@@ -295,6 +298,104 @@ def is_plugin_updated(plugin_name):
     except KeyError:
         # We have no previous record of this plugin, so it is updated
         return True
+
+
+def get_plugin_kolibri_requirement(plugin_name):
+    """
+    Extract the kolibri version requirement from a plugin's package metadata.
+
+    Reads the Requires-Dist metadata from the plugin's installed package
+    to find any declared dependency on kolibri (e.g., "kolibri>=1.0,<2.0").
+
+    Returns None for:
+    - Internal plugins (those starting with "kolibri.")
+    - Plugins without a declared kolibri dependency
+    - Plugins whose package metadata cannot be read
+    """
+    if not is_external_plugin(plugin_name):
+        return None
+
+    top_level_module = plugin_name.split(".")[0]
+    try:
+        dist = distribution(top_level_module)
+        requires = dist.requires or []
+        for req in requires:
+            # Handle requirements like "kolibri>=1.0,<2.0" or "kolibri[extra]>=1.0"
+            req_lower = req.lower()
+            if req_lower.startswith("kolibri"):
+                # Extract the part after "kolibri", removing any extras like [dev]
+                remainder = req[7:]  # len("kolibri") == 7
+                # Remove extras specification if present
+                if remainder.startswith("["):
+                    bracket_end = remainder.find("]")
+                    if bracket_end != -1:
+                        remainder = remainder[bracket_end + 1 :]
+                # Remove environment markers (everything after ";")
+                specifier_str = remainder.split(";")[0].strip()
+                if specifier_str:
+                    return specifier_str
+    except PackageNotFoundError:
+        pass
+    except Exception as e:
+        logger.debug(
+            "Error reading package metadata for {}: {}".format(plugin_name, e)
+        )
+    return None
+
+
+def compute_plugin_compatibility(plugin_name):
+    """
+    Compute whether a plugin is compatible with the current Kolibri version.
+
+    Parses the plugin's declared kolibri version requirement and checks
+    if the current kolibri version satisfies that requirement.
+
+    Returns:
+        tuple: (is_compatible: bool, requirement: str|None)
+        - is_compatible is True if no requirement declared or requirement is satisfied
+        - requirement is the declared version specifier string, or None
+    """
+    requirement = get_plugin_kolibri_requirement(plugin_name)
+    if requirement is None:
+        return (True, None)
+
+    try:
+        specifier = SpecifierSet(requirement)
+        current = Version(kolibri.__version__)
+        is_compatible = current in specifier
+        return (is_compatible, requirement)
+    except InvalidSpecifier:
+        logger.warning(
+            "Plugin {} has invalid version specifier: {}".format(
+                plugin_name, requirement
+            )
+        )
+        return (True, requirement)
+    except Exception as e:
+        logger.debug(
+            "Error checking compatibility for {}: {}".format(plugin_name, e)
+        )
+        return (True, requirement)
+
+
+def get_plugin_compatibility(plugin_name):
+    """
+    Get compatibility info for a plugin, using cached value when available.
+
+    Checks if a recomputation is needed (Kolibri upgraded, plugin upgraded,
+    or plugin never checked), and if so, computes and caches the result.
+    Otherwise returns the cached value.
+
+    Returns:
+        tuple: (is_compatible: bool, requirement: str|None)
+    """
+    if config.needs_compatibility_recheck(plugin_name):
+        compatible, requirement = compute_plugin_compatibility(plugin_name)
+        config.update_compatibility(plugin_name, compatible, requirement)
+        return (compatible, requirement)
+
+    cached = config.get("PLUGIN_COMPATIBILITY", {}).get(plugin_name, {})
+    return (cached.get("compatible", True), cached.get("requirement"))
 
 
 class PluginUpdateException(Exception):

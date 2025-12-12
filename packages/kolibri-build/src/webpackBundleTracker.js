@@ -52,6 +52,7 @@ class BundleTrackerPlugin {
       status: 'initialization',
       assets: {},
       chunks: {},
+      kolibriVersion: null,
     };
     this.name = 'BundleTrackerPlugin';
 
@@ -151,7 +152,12 @@ class BundleTrackerPlugin {
     }
 
     /** @type {Contents} */
-    const output = { status: 'done', assets: {}, chunks: {} };
+    const output = {
+      status: 'done',
+      assets: {},
+      chunks: {},
+      kolibriVersion: require('kolibri/package.json').version,
+    };
     each(stats.compilation.assets, (file, assetName) => {
       const fileInfo = {
         name: assetName,

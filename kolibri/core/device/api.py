@@ -399,6 +399,8 @@ class PluginsViewSet(viewsets.ViewSet):
             "name": plugin.name(get_language()),
             "id": plugin.module_path.replace(".", "*"),
             "enabled": plugin.enabled,
+            "version_compatible": plugin.version_compatible,
+            "version_requirement": plugin.version_requirement,
         }
 
     def list(self, request):

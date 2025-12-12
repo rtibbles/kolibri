@@ -170,6 +170,10 @@ def __initialize():
         raise RuntimeError(
             "Django settings already configured when plugin registry initialized"
         )
+
+    # Update Kolibri version tracking (invalidates compatibility cache if version changed)
+    config.update_kolibri_version()
+
     registry.register_plugins(config.ACTIVE_PLUGINS)
     __initialized = True
     return registry
