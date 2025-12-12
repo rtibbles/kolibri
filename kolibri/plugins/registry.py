@@ -202,9 +202,6 @@ def __initialize():
             "Django settings already configured when plugin registry initialized"
         )
 
-    # Update Kolibri version tracking (invalidates compatibility cache if version changed)
-    config.update_kolibri_version()
-
     registry.register_plugins(config.ACTIVE_PLUGINS)
 
     # Log warnings for incompatible plugins

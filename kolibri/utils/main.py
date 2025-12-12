@@ -371,5 +371,11 @@ def update(old_version, new_version):
 
     run_upgrades(old_version, new_version)
 
+    # Clear plugin compatibility cache when Kolibri version changes
+    # so plugins will be rechecked against the new version
+    from kolibri.plugins import config as plugin_config
+
+    plugin_config.clear_compatibility_cache()
+
     with open(version_file(), "w") as f:
         f.write(kolibri.__version__)

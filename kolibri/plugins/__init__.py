@@ -70,8 +70,6 @@ class ConfigDict(dict):
                 "UPDATED_PLUGINS": [],
                 # The current versions of plugins (both internal and external)
                 "PLUGIN_VERSIONS": {},
-                # Track Kolibri version for cache invalidation
-                "KOLIBRI_VERSION": None,
                 # Cached plugin compatibility results
                 # Format: {plugin_name: {"compatible": bool, "requirement": str|None}}
                 "PLUGIN_COMPATIBILITY": {},
@@ -188,16 +186,9 @@ class ConfigDict(dict):
         """
         Determine if a plugin's compatibility needs to be rechecked.
         Returns True if:
-        - Kolibri version has changed since last check
         - Plugin was recently updated
         - Plugin has never been checked
         """
-        from kolibri import __version__ as kolibri_version
-
-        # Kolibri version changed - need to recheck all plugins
-        if self.get("KOLIBRI_VERSION") != kolibri_version:
-            return True
-
         # Plugin was updated - need to recheck this plugin
         if module_path in self.get("UPDATED_PLUGINS", set()):
             return True
@@ -221,17 +212,13 @@ class ConfigDict(dict):
         }
         self.save()
 
-    def update_kolibri_version(self):
+    def clear_compatibility_cache(self):
         """
-        Update stored Kolibri version and clear compatibility cache if changed.
-        Called once at startup.
+        Clear all cached plugin compatibility results.
+        Called when Kolibri version changes (detected by the upgrade system).
         """
-        from kolibri import __version__ as kolibri_version
-
-        if self.get("KOLIBRI_VERSION") != kolibri_version:
-            self["KOLIBRI_VERSION"] = kolibri_version
-            self["PLUGIN_COMPATIBILITY"] = {}  # Invalidate all cached checks
-            self.save()
+        self["PLUGIN_COMPATIBILITY"] = {}
+        self.save()
 
 
 #: Set defaults before updating the dict
