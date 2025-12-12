@@ -20,6 +20,7 @@ from kolibri.core.upgrade import matches_version
 from kolibri.core.upgrade import run_upgrades
 from kolibri.core.utils.cache import process_cache
 from kolibri.deployment.default.sqlite_db_names import ADDITIONAL_SQLITE_DATABASES
+from kolibri.plugins import config as plugin_config
 from kolibri.plugins.utils import autoremove_unavailable_plugins
 from kolibri.plugins.utils import check_plugin_config_file_location
 from kolibri.plugins.utils import enable_new_default_plugins
@@ -373,8 +374,6 @@ def update(old_version, new_version):
 
     # Clear plugin compatibility cache when Kolibri version changes
     # so plugins will be rechecked against the new version
-    from kolibri.plugins import config as plugin_config
-
     plugin_config.clear_compatibility_cache()
 
     with open(version_file(), "w") as f:
