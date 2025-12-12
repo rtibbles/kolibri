@@ -277,14 +277,43 @@
             {{ deviceString('newEnabledPluginsState') }}
           </p>
 
-          <KCheckbox
+          <div
             v-for="plugin in dataPlugins"
             :key="plugin.id"
-            :label="plugin.name"
-            :checked="plugin.enabled"
-            :disabled="!canRestart"
-            @change="plugin.enabled = $event"
-          />
+            class="plugin-item"
+          >
+            <div class="plugin-header">
+              <KCheckbox
+                :label="plugin.name"
+                :checked="plugin.enabled"
+                :disabled="!canRestart || (!plugin.can_manage_while_running && !plugin.enabled)"
+                @change="plugin.enabled = $event"
+              />
+              <span
+                v-if="!plugin.version_compatible"
+                class="incompatible-badge"
+                :style="{
+                  backgroundColor: $themeTokens.error,
+                  color: $themeTokens.textInverted,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  marginLeft: '8px',
+                }"
+              >
+                {{ $tr('incompatibleVersion') }}
+              </span>
+            </div>
+            <p
+              v-if="!plugin.version_compatible"
+              class="compatibility-warning"
+              :style="{ color: $themeTokens.error, marginLeft: '32px', marginTop: '4px' }"
+            >
+              {{ $tr('requiresKolibriVersion', {
+                requirement: plugin.version_requirement,
+              }) }}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -1176,6 +1205,14 @@
           'This Kolibri is not able to initiate a restart from the user interface - management of the enabled pages will have to happen from the command line, and Kolibri will have to be restarted manually.',
         context: 'Alert text that is provided if some plugins are disabled',
       },
+      incompatibleVersion: {
+        message: 'Incompatible version',
+        context: 'Badge shown on plugins that are not compatible with the current Kolibri version',
+      },
+      requiresKolibriVersion: {
+        message: 'This plugin requires Kolibri {requirement}. Consider disabling this plugin or updating it.',
+        context: 'Warning message explaining why a plugin is incompatible',
+      },
     },
   };
 
@@ -1277,6 +1314,25 @@
 
   /deep/ .ui-alert--type-warning .ui-alert__body {
     background-color: rgba(255, 253, 231, 1) !important;
+  }
+
+  .plugin-item {
+    margin-bottom: 12px;
+  }
+
+  .plugin-header {
+    display: flex;
+    align-items: center;
+  }
+
+  .incompatible-badge {
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .compatibility-warning {
+    margin: 0;
+    font-size: 14px;
   }
 
 </style>
