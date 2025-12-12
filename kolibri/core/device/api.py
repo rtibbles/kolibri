@@ -399,14 +399,17 @@ class PluginsViewSet(viewsets.ViewSet):
             "name": plugin.name(get_language()),
             "id": plugin.module_path.replace(".", "*"),
             "enabled": plugin.enabled,
+            "can_manage_while_running": plugin.can_manage_while_running,
             "version_compatible": plugin.version_compatible,
             "version_requirement": plugin.version_requirement,
+            "kolibri_version": kolibri.__version__,
         }
 
     def list(self, request):
         plugins = []
         for plugin in iterate_plugins():
-            if plugin.can_manage_while_running:
+            # Show if manageable OR if incompatible (so admin can disable it)
+            if plugin.can_manage_while_running or not plugin.version_compatible:
                 plugins.append(self._serialize(plugin))
 
         return Response(plugins)

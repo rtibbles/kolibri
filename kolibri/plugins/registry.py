@@ -158,6 +158,37 @@ class Registry(object):
                     self._apps[app] = None
 
 
+def _log_incompatible_plugins(registry):
+    """
+    Log warnings for any active plugins that are incompatible with
+    the current Kolibri version.
+    """
+    from kolibri.plugins.utils import get_plugin_compatibility
+    import kolibri
+
+    incompatible = []
+    for plugin in registry:
+        compatible, requirement = get_plugin_compatibility(plugin.module_path)
+        if not compatible:
+            incompatible.append((plugin.module_path, requirement))
+
+    if incompatible:
+        logger.warning(
+            "The following plugins may be incompatible with Kolibri %s:",
+            kolibri.__version__,
+        )
+        for module_path, requirement in incompatible:
+            logger.warning(
+                "  - %s (requires Kolibri %s)",
+                module_path,
+                requirement,
+            )
+        logger.warning(
+            "These plugins may cause errors. Consider disabling them via "
+            "'kolibri plugin <name> disable' or updating them."
+        )
+
+
 def __initialize():
     """
     Called once to register hook callbacks.
@@ -175,6 +206,10 @@ def __initialize():
     config.update_kolibri_version()
 
     registry.register_plugins(config.ACTIVE_PLUGINS)
+
+    # Log warnings for incompatible plugins
+    _log_incompatible_plugins(registry)
+
     __initialized = True
     return registry
 
