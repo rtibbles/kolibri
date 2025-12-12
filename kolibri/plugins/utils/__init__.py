@@ -10,6 +10,8 @@ from django.conf import settings as django_settings
 from django.core.exceptions import AppRegistryNotReady
 from django.core.management import call_command
 from django.urls import reverse
+from packaging.requirements import InvalidRequirement
+from packaging.requirements import Requirement
 from packaging.specifiers import InvalidSpecifier
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -319,21 +321,14 @@ def get_plugin_kolibri_requirement(plugin_name):
     try:
         dist = distribution(top_level_module)
         requires = dist.requires or []
-        for req in requires:
-            # Handle requirements like "kolibri>=1.0,<2.0" or "kolibri[extra]>=1.0"
-            req_lower = req.lower()
-            if req_lower.startswith("kolibri"):
-                # Extract the part after "kolibri", removing any extras like [dev]
-                remainder = req[7:]  # len("kolibri") == 7
-                # Remove extras specification if present
-                if remainder.startswith("["):
-                    bracket_end = remainder.find("]")
-                    if bracket_end != -1:
-                        remainder = remainder[bracket_end + 1 :]
-                # Remove environment markers (everything after ";")
-                specifier_str = remainder.split(";")[0].strip()
-                if specifier_str:
-                    return specifier_str
+        for req_string in requires:
+            try:
+                req = Requirement(req_string)
+                if req.name.lower() == "kolibri":
+                    return str(req.specifier) if req.specifier else None
+            except InvalidRequirement:
+                # Skip malformed requirements
+                continue
     except PackageNotFoundError:
         pass
     except Exception as e:
