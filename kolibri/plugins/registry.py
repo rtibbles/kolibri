@@ -34,9 +34,11 @@ from django.apps import AppConfig
 from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 
+import kolibri
 from kolibri.plugins import config
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import HookSingleInstanceError
+from kolibri.plugins.utils import get_plugin_compatibility
 from kolibri.plugins.utils import initialize_kolibri_plugin
 from kolibri.plugins.utils import is_plugin_updated
 from kolibri.plugins.utils import MultiplePlugins
@@ -163,9 +165,6 @@ def _log_incompatible_plugins(registry):
     Log warnings for any active plugins that are incompatible with
     the current Kolibri version.
     """
-    from kolibri.plugins.utils import get_plugin_compatibility
-    import kolibri
-
     incompatible = []
     for plugin in registry:
         compatible, requirement = get_plugin_compatibility(plugin.module_path)
