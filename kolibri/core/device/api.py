@@ -402,7 +402,6 @@ class PluginsViewSet(viewsets.ViewSet):
             "can_manage_while_running": plugin.can_manage_while_running,
             "version_compatible": plugin.version_compatible,
             "version_requirement": plugin.version_requirement,
-            "kolibri_version": kolibri.__version__,
         }
 
     def list(self, request):
