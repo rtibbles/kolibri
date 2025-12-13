@@ -1003,6 +1003,7 @@ class FacilityUser(AbstractBaseUser, KolibriBaseUserMixin, AbstractFacilityDataM
             "facility_id": self.facility_id,
             # Is this user a member of a facility that has been fully imported?
             "full_facility_import": self.full_facility_import,
+            "full_facility_on_my_own_setup": self.full_facility_on_my_own_setup,
         }
 
     @cached_property

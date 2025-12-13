@@ -21,7 +21,6 @@ from django.views.i18n import LANGUAGE_QUERY_PARAMETER
 from django.views.static import serve
 
 from kolibri.core.auth.constants import user_kinds
-from kolibri.core.auth.models import Role
 from kolibri.core.decorators import cache_no_user_data
 from kolibri.core.device.hooks import SetupHook
 from kolibri.core.device.translation import get_accept_headers_language
@@ -132,40 +131,46 @@ class RootURLRedirectView(View):
     def get(self, request):
         """
         Redirects user based on the highest role they have for which a redirect is defined.
+
+        For authenticated users, we read from the Django session rather than querying
+        the database. The session_data dict is stored in the session by
+        get_session_response() in kolibri/core/auth/api.py when the session endpoint
+        is called (at login and during polling). This avoids database queries under
+        load when many users hit the root URL simultaneously.
         """
         # If it has not been provisioned and we have something that can handle setup, redirect there.
         if not device_provisioned() and SetupHook.provision_url:
             return redirect(SetupHook.provision_url())
 
         if request.user.is_authenticated:
+            # Read from session to avoid DB queries - see docstring above
+            kind = set(request.session.get("kind", ()))
+            full_facility_import = request.session.get("full_facility_import", False)
+            on_my_own_device = request.session.get("full_facility_on_my_own_setup", False)
+
             url = None
-            if request.user.is_superuser:
+            if user_kinds.SUPERUSER in kind:
                 url = url or get_url_by_role(
                     user_kinds.SUPERUSER,
-                    full_facility_import=request.user.full_facility_import,
-                    on_my_own_device=request.user.full_facility_on_my_own_setup,
+                    full_facility_import=full_facility_import,
+                    on_my_own_device=on_my_own_device,
                 )
-            roles = set(
-                Role.objects.filter(user_id=request.user.id)
-                .values_list("kind", flat=True)
-                .distinct()
-            )
-            if user_kinds.ADMIN in roles:
+            if user_kinds.ADMIN in kind:
                 url = url or get_url_by_role(
                     user_kinds.ADMIN,
-                    full_facility_import=request.user.full_facility_import,
-                    on_my_own_device=request.user.full_facility_on_my_own_setup,
+                    full_facility_import=full_facility_import,
+                    on_my_own_device=on_my_own_device,
                 )
-            if user_kinds.COACH in roles or user_kinds.ASSIGNABLE_COACH in roles:
+            if user_kinds.COACH in kind or user_kinds.ASSIGNABLE_COACH in kind:
                 url = url or get_url_by_role(
                     user_kinds.COACH,
-                    full_facility_import=request.user.full_facility_import,
-                    on_my_own_device=request.user.full_facility_on_my_own_setup,
+                    full_facility_import=full_facility_import,
+                    on_my_own_device=on_my_own_device,
                 )
             url = url or get_url_by_role(
                 user_kinds.LEARNER,
-                full_facility_import=request.user.full_facility_import,
-                on_my_own_device=request.user.full_facility_on_my_own_setup,
+                full_facility_import=full_facility_import,
+                on_my_own_device=on_my_own_device,
             )
         else:
             url = get_url_by_role(user_kinds.ANONYMOUS)

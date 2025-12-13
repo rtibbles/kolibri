@@ -1349,7 +1349,8 @@ class SessionViewSet(viewsets.ViewSet):
         user = request.user
         session_key = "current"
         server_time = now()
-        session = user.session_data
+        session_data = user.session_data
+        session = session_data.copy()
         session.update(
             {
                 "id": session_key,
@@ -1372,6 +1373,12 @@ class SessionViewSet(viewsets.ViewSet):
         # Set last activity on session to the current time to prevent session timeout
         # Only do this for logged in users, as anonymous users cannot get logged out!
         request.session["last_session_request"] = int(time.time())
+        # Store session_data in the Django session to avoid extra DB queries during
+        # root URL redirect. The redirect view reads these instead of querying the
+        # user object.
+        # See: RootURLRedirectView in kolibri/core/views.py
+        for key, value in session_data.items():
+            request.session[key] = value
         # Default to active, only assume not active when explicitly set.
         active = request.data.get("active", False)
 
