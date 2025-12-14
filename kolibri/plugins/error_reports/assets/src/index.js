@@ -1,15 +1,24 @@
 import Vue from 'vue';
 import logging from 'kolibri-logging';
+import router from 'kolibri/router';
 import {
   report,
   VueErrorReport,
   JavascriptErrorReport,
   UnhandledRejectionErrorReport,
 } from './utils';
+import { initBreadcrumbs } from './breadcrumbs';
+import { initErrorQueue } from './errorQueue';
 
 const logger = logging.getLogger(__filename);
 
-// these shall be responsibe for catching runtime errors
+// Initialize breadcrumb collection with router for navigation tracking
+initBreadcrumbs(router);
+
+// Initialize error queue for offline support and deduplication
+initErrorQueue();
+
+// These shall be responsible for catching runtime errors
 Vue.config.errorHandler = function (err, vm) {
   logger.debug(`Unexpected Error: ${err}`);
   const error = new VueErrorReport(err, vm);

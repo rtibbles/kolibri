@@ -1,6 +1,7 @@
-import client from 'kolibri/client';
-import urls from 'kolibri/urls';
 import { browser, os, device, isTouchDevice } from 'kolibri/utils/browserInfo';
+import router from 'kolibri/router';
+import { getBreadcrumbs } from './breadcrumbs';
+import { report as queueAndReport } from './errorQueue';
 
 const SCROLL_BAR = 16;
 const widthBreakpoints = [
@@ -20,14 +21,12 @@ export function getWindowBreakpoint(width = window.innerWidth) {
   return widthBreakpoints[widthBreakpoints.length - 1];
 }
 
+/**
+ * Report an error - queues and attempts to send
+ */
 export function report(error) {
-  const url = urls['kolibri:kolibri.plugins.error_reports:report']();
   const data = error.getErrorReport();
-  return client({
-    url,
-    method: 'post',
-    data: data,
-  });
+  return queueAndReport(data);
 }
 
 class ErrorReport {
@@ -53,8 +52,28 @@ class ErrorReport {
         is_touch_device: isTouchDevice,
         screen_breakpoint: getWindowBreakpoint(),
       },
+      route: this._getRouteContext(),
+      page: {
+        url: window.location.href,
+        visible: document.visibilityState === 'visible',
+      },
+      breadcrumbs: getBreadcrumbs(),
       ...this.getExtraContext(),
     };
+  }
+
+  _getRouteContext() {
+    try {
+      const route = router.currentRoute;
+      if (!route) return null;
+      return {
+        name: route.name,
+        path: route.path,
+        params: route.params,
+      };
+    } catch {
+      return null;
+    }
   }
 
   getExtraContext() {
@@ -67,10 +86,42 @@ export class VueErrorReport extends ErrorReport {
     super(e);
     this.vm = vm;
   }
+
   getExtraContext() {
     return {
-      component: this.vm.$options.name || this.vm.$options._componentTag || 'Unknown Component',
+      component: {
+        name:
+          this.vm.$options.name || this.vm.$options._componentTag || 'Unknown Component',
+        parents: this._getParentChain(this.vm, 5),
+        props: this._sanitizeProps(this.vm.$props),
+      },
     };
+  }
+
+  _getParentChain(vm, maxDepth) {
+    const chain = [];
+    let current = vm.$parent;
+    while (current && chain.length < maxDepth) {
+      chain.push(
+        current.$options.name || current.$options._componentTag || 'Anonymous'
+      );
+      current = current.$parent;
+    }
+    return chain;
+  }
+
+  _sanitizeProps(props) {
+    if (!props) return {};
+    const sanitized = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (typeof value === 'function') continue;
+      if (typeof value === 'object' && value !== null) {
+        sanitized[key] = '[Object]';
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
   }
 }
 
