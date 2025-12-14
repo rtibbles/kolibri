@@ -45,7 +45,7 @@ context_backend_schema = {
                 "url": {"type": "string", "optional": True},
                 "method": {"type": "string", "optional": True},
                 "headers": {"type": "object", "optional": True},
-                "body": {"type": "string", "optional": True},
+                "body": {"type": ["string", "object", "null"], "optional": True},
                 "query_params": {"type": "object", "optional": True},
             },
         },

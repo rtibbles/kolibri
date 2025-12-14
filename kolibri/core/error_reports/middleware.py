@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 import traceback
@@ -16,30 +15,19 @@ from django.db import IntegrityError
 
 from .constants import BACKEND
 from .models import ErrorReport
+from .utils.request import extract_request_info
 
 from kolibri.plugins.error_reports.kolibri_plugin import ErrorReportsPlugin
-from kolibri.core.error_reports.utils.scrubber import scrub_data
 from kolibri.plugins.registry import registered_plugins
 
 
 def get_request_info(request):
-    context = {
-        "url": request.build_absolute_uri(),
-        "method": request.method,
-        "headers": dict(request.headers),
-        "query_params": dict(request.GET),
-        "body": None,
-    }
-
-    if request.headers.get("Content-Type", "").lower() == "application/json":
-        try:
-            # a json req body can have sensitive data, other types can have
-            context["body"] = json.loads(request.body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            pass
-
-    scrub_data(context)
-    return context
+    """
+    Extract request information for error reporting.
+    Delegates to extract_request_info which safely handles
+    RawPostDataException when the request body has already been consumed.
+    """
+    return extract_request_info(request)
 
 
 def get_server_info(request):
