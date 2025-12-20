@@ -659,3 +659,52 @@ class TestBackend:
         assert requeued_orm_job.priority == priority
         assert requeued_orm_job.repeat == repeat - 1
         assert requeued_orm_job.retry_interval == retry_interval
+
+    def test_schedule_sends_notification_sqlite(self, defaultbackend, simplejob):
+        """Verify SQLite notification is sent after scheduling."""
+        notifier = defaultbackend.get_notifier()
+
+        # Clear any pending notifications
+        notifier.wait_for_job(timeout=0.01)
+
+        # Schedule a job
+        defaultbackend.schedule(defaultbackend._now(), simplejob, queue=QUEUE)
+
+        # Should receive notification quickly
+        result = notifier.wait_for_job(timeout=0.1)
+        assert result is True
+
+    def test_get_notifier_returns_same_instance(self, defaultbackend):
+        """Verify get_notifier returns same instance on multiple calls."""
+        notifier1 = defaultbackend.get_notifier()
+        notifier2 = defaultbackend.get_notifier()
+        assert notifier1 is notifier2
+
+    def test_get_notifier_thread_safe(self, defaultbackend):
+        """Verify get_notifier returns same instance from multiple threads."""
+        import threading
+
+        notifiers = []
+
+        def get_it():
+            notifiers.append(defaultbackend.get_notifier())
+
+        threads = [threading.Thread(target=get_it) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All should be the same instance
+        assert all(n is notifiers[0] for n in notifiers)
+
+    def test_cleanup_notifier(self, defaultbackend):
+        """Verify cleanup_notifier properly cleans up."""
+        notifier = defaultbackend.get_notifier()
+        assert notifier is not None
+
+        defaultbackend.cleanup_notifier()
+
+        # After cleanup, getting notifier again should create a new instance
+        new_notifier = defaultbackend.get_notifier()
+        assert new_notifier is not notifier

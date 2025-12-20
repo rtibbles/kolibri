@@ -60,7 +60,9 @@ def execute_job_with_python_worker(job_id, log_queue=None):
 
 
 class Worker(object):
-    def __init__(self, connection, regular_workers=2, high_workers=1, log_queue=None):
+    def __init__(
+        self, connection=None, storage=None, regular_workers=2, high_workers=1, log_queue=None
+    ):
         # Internally, we use concurrent.future.Future to run and track
         # job executions. We need to keep track of which future maps to which
         # job they were made from, and we use the job_future_mapping dict to do
@@ -72,7 +74,16 @@ class Worker(object):
         # Key: job_id, Value: future object
         self.future_job_mapping = {}
 
-        self.storage = Storage(connection)
+        # Support both old (connection) and new (storage) initialization
+        if storage is not None:
+            self.storage = storage
+        elif connection is not None:
+            self.storage = Storage(connection)
+        else:
+            raise ValueError("Must provide either connection or storage")
+
+        # Get notifier for event-driven job processing
+        self.notifier = self.storage.get_notifier()
 
         self.requeue_stalled_jobs()
 
@@ -126,11 +137,19 @@ class Worker(object):
     def shutdown(self, wait=True):
         logger.info("Asking job schedulers to shut down.")
         self.job_checker.stop()
+
+        # Wake up the notifier so check_jobs can exit promptly
+        if hasattr(self.notifier, "notify"):
+            self.notifier.notify()
+
         # Wait for the job checker to finish
         # before attempting to pause any running jobs
         if wait:
             self.job_checker.join()
         self.shutdown_workers(wait=wait)
+
+        # Clean up notifier resources
+        self.storage.cleanup_notifier()
 
     def start_job_checker(self):
         """
@@ -139,22 +158,30 @@ class Worker(object):
         Returns: the Thread object.
         """
         t = InfiniteLoopThread(
-            self.check_jobs, thread_name="JOBCHECKER", wait_between_runs=0.2
+            self.check_jobs,
+            thread_name="JOBCHECKER",
+            wait_between_runs=0,  # Blocking happens inside check_jobs via notifier
         )
         t.start()
         return t
 
     def check_jobs(self):
         """
-        Checks for the next job to run and also checks for jobs that should be cancelled.
+        Waits for job notification, then checks for jobs to run and jobs to cancel.
 
         Returns: None
         """
+        # Block waiting for notification or timeout
+        # Process jobs regardless of whether we got a notification or timed out
+        self.notifier.wait_for_job(timeout=0.5)
+
+        # Start any available jobs
         job_to_start = self.get_next_job()
         while job_to_start:
             self.start_next_job(job_to_start)
             job_to_start = self.get_next_job()
 
+        # Handle cancellation requests
         for job in self.storage.get_canceling_jobs():
             job_id = job.job_id
             if job_id in self.future_job_mapping:

@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from datetime import timedelta
@@ -103,6 +104,9 @@ class Storage(object):
         self.Base.metadata.create_all(self.engine)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self._hooks = list(StorageHook.registered_hooks)
+        self._notifier = None
+        self._notifier_lock = threading.Lock()
+        self._notification_channel = "kolibri_job_queue"
 
     @contextmanager
     def session_scope(self):
@@ -115,6 +119,58 @@ class Storage(object):
             raise
         finally:
             session.close()
+
+    def get_notifier(self):
+        """
+        Get or create a notifier appropriate for the database backend.
+
+        Returns:
+            - PostgresNotifier for PostgreSQL (uses LISTEN/NOTIFY)
+            - ThreadNotifier for SQLite (uses threading.Event)
+            - PollingNotifier as fallback for other databases
+        """
+        with self._notifier_lock:
+            if self._notifier is not None:
+                return self._notifier
+
+            db_type = self.engine.dialect.name
+
+            if db_type == "postgresql":
+                from kolibri.core.tasks.notifiers import PostgresNotifier
+
+                try:
+                    raw_conn = self.engine.raw_connection()
+                    self._notifier = PostgresNotifier(
+                        raw_conn, channel=self._notification_channel
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to create PostgresNotifier, falling back to polling: {e}"
+                    )
+                    from kolibri.core.tasks.notifiers import PollingNotifier
+
+                    self._notifier = PollingNotifier()
+            elif db_type == "sqlite":
+                from kolibri.core.tasks.notifiers import ThreadNotifier
+
+                self._notifier = ThreadNotifier()
+            else:
+                from kolibri.core.tasks.notifiers import PollingNotifier
+
+                self._notifier = PollingNotifier()
+
+            return self._notifier
+
+    def cleanup_notifier(self):
+        """
+        Clean up notifier resources.
+
+        Should be called when the worker is shutting down.
+        """
+        with self._notifier_lock:
+            if self._notifier:
+                self._notifier.shutdown()
+                self._notifier = None
 
     def __len__(self):
         """
@@ -803,10 +859,19 @@ class Storage(object):
                 saved_job=job.to_json(),
             )
             session.merge(orm_job)
+
+            # Issue NOTIFY in same transaction as INSERT (PostgreSQL only)
+            if self.engine.dialect.name == "postgresql":
+                session.execute(text(f"NOTIFY {self._notification_channel}"))
+
             try:
                 session.commit()
             except Exception as e:
                 logger.error("Got an error running session.commit(): {}".format(e))
+
+            # Notify ThreadNotifier for SQLite (after commit since it's in-memory signaling)
+            if self.engine.dialect.name == "sqlite" and self._notifier:
+                self._notifier.notify()
 
             self._run_scheduled_hooks(orm_job)
 

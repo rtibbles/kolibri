@@ -28,7 +28,7 @@ job_storage = SimpleLazyObject(__job_storage)
 def initialize_workers(log_queue=None):
     logger.info("Starting async task workers.")
     return Worker(
-        connection=connection,
+        storage=job_storage,
         regular_workers=conf.OPTIONS["Tasks"]["REGULAR_PRIORITY_WORKERS"],
         high_workers=conf.OPTIONS["Tasks"]["HIGH_PRIORITY_WORKERS"],
         log_queue=log_queue,
