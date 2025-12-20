@@ -823,6 +823,31 @@ base_option_spec = {
                 The file to use for the job storage database. This is only used in the case that the database backend being used is SQLite.
             """,
         },
+        "SUPERVISOR_HEARTBEAT_INTERVAL": {
+            "type": "integer",
+            "default": 60,
+            "description": """
+                The interval in seconds between supervisor heartbeat updates. Each supervisor
+                process will update its last_seen timestamp at this interval to signal liveness.
+            """,
+        },
+        "SUPERVISOR_STALE_THRESHOLD": {
+            "type": "integer",
+            "default": 180,
+            "description": """
+                The time in seconds after which a supervisor is considered dead if it has not
+                updated its heartbeat. Jobs assigned to dead supervisors will be requeued.
+            """,
+        },
+        "JOB_STALE_THRESHOLD": {
+            "type": "integer",
+            "default": 300,
+            "description": """
+                The time in seconds after which a running job with no supervisor_id is considered
+                orphaned and will be requeued. This is a fallback for edge cases where a job
+                has no associated supervisor.
+            """,
+        },
     },
 }
 

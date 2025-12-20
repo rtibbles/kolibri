@@ -88,7 +88,30 @@ class ORMJob(Base):
     worker_thread = Column(String, nullable=True)
     worker_extra = Column(String, nullable=True)
 
+    # References the supervisor currently responsible for this job.
+    # No FK constraint to avoid complexity with supervisor cleanup.
+    supervisor_id = Column(String, nullable=True)
+
     __table_args__ = (Index("queue__scheduled_time", "queue", "scheduled_time"),)
+
+
+class ORMSupervisor(Base):
+    """
+    Registry of active supervisors for distributed job processing.
+    Used to detect dead supervisors and requeue their orphaned jobs.
+    """
+
+    __tablename__ = "supervisors"
+
+    id = Column(String, primary_key=True)  # UUID
+    host = Column(String, nullable=False)
+    process = Column(String, nullable=False)
+    thread = Column(String, nullable=False)
+    last_seen = Column(DateTime(timezone=True), server_default=sql_func.now())
+
+    __table_args__ = (
+        Index("supervisor_identity", "host", "process", "thread", unique=True),
+    )
 
 
 NO_VALUE = object()
@@ -262,6 +285,7 @@ class Storage(object):
         Mark the job as canceled. Does not actually try to cancel a running job.
         """
         self._update_job(job_id, State.CANCELED)
+        self._clear_job_supervisor(job_id)
 
     def mark_job_as_canceling(self, job_id):
         """
@@ -529,15 +553,19 @@ class Storage(object):
         """
         exception = type(exception).__name__
         self._update_job(job_id, State.FAILED, exception=exception, traceback=traceback)
+        self._clear_job_supervisor(job_id)
 
-    def mark_job_as_running(self, job_id):
+    def mark_job_as_running(self, job_id, supervisor_id=None):
         self._update_job(job_id, State.RUNNING)
+        if supervisor_id:
+            self.assign_job_to_supervisor(job_id, supervisor_id)
 
     def mark_job_as_queued(self, job_id):
         self._update_job(job_id, State.QUEUED)
 
     def complete_job(self, job_id, result=None):
         self._update_job(job_id, State.COMPLETED, result=result)
+        self._clear_job_supervisor(job_id)
 
     def save_job_meta(self, job):
         self._update_job(job.job_id, extra_metadata=job.extra_metadata)
@@ -819,3 +847,152 @@ class Storage(object):
 
     def _now(self):
         return local_now()
+
+    def register_supervisor(self, host, process, thread):
+        """
+        Register a supervisor in the registry. If a supervisor with the same
+        host/process/thread exists, update its last_seen and return existing id.
+        Otherwise create a new record.
+
+        Returns: supervisor_id (str)
+        """
+        import uuid
+
+        with self.session_scope() as session:
+            existing = session.query(ORMSupervisor).filter_by(
+                host=host, process=process, thread=thread
+            ).one_or_none()
+
+            if existing:
+                existing.last_seen = sql_func.now()
+                session.add(existing)
+                return existing.id
+
+            supervisor_id = uuid.uuid4().hex
+            supervisor = ORMSupervisor(
+                id=supervisor_id,
+                host=host,
+                process=process,
+                thread=thread,
+            )
+            session.add(supervisor)
+            return supervisor_id
+
+    def unregister_supervisor(self, supervisor_id):
+        """
+        Remove a supervisor from the registry.
+        """
+        with self.session_scope() as session:
+            session.query(ORMSupervisor).filter_by(id=supervisor_id).delete()
+
+    def heartbeat_supervisor(self, supervisor_id):
+        """
+        Update the last_seen timestamp for a supervisor.
+        """
+        with self.session_scope() as session:
+            session.execute(
+                update(ORMSupervisor)
+                .where(ORMSupervisor.id == supervisor_id)
+                .values(last_seen=sql_func.now())
+            )
+
+    def reconcile_stalled_jobs(self, supervisor_stale_threshold, job_stale_threshold):
+        """
+        Requeue jobs from dead supervisors and clean up supervisor registry.
+
+        1. Find supervisors where last_seen < now - supervisor_stale_threshold
+        2. Requeue all RUNNING jobs assigned to those supervisors
+        3. Delete stale supervisor records
+        4. Requeue RUNNING jobs with stale time_updated and no supervisor_id (edge case)
+
+        Args:
+            supervisor_stale_threshold: seconds before supervisor considered dead
+            job_stale_threshold: seconds before orphaned job considered stalled
+        """
+        from datetime import datetime, timedelta
+
+        now = datetime.utcnow()
+        supervisor_cutoff = now - timedelta(seconds=supervisor_stale_threshold)
+        job_cutoff = now - timedelta(seconds=job_stale_threshold)
+
+        with self.session_scope() as session:
+            # Find stale supervisors
+            stale_supervisors = session.query(ORMSupervisor).filter(
+                ORMSupervisor.last_seen < supervisor_cutoff
+            ).all()
+
+            stale_supervisor_ids = [s.id for s in stale_supervisors]
+
+            if stale_supervisor_ids:
+                logger.info(
+                    "Found {} stale supervisors".format(len(stale_supervisor_ids))
+                )
+
+                # Find and requeue jobs from stale supervisors
+                stale_jobs = session.query(ORMJob).filter(
+                    ORMJob.state == State.RUNNING,
+                    ORMJob.supervisor_id.in_(stale_supervisor_ids)
+                ).all()
+
+                for orm_job in stale_jobs:
+                    logger.info(
+                        "Requeuing job {} from dead supervisor {}".format(
+                            orm_job.id, orm_job.supervisor_id
+                        )
+                    )
+                    orm_job.state = State.QUEUED
+                    orm_job.supervisor_id = None
+                    session.add(orm_job)
+
+                # Delete stale supervisor records
+                session.query(ORMSupervisor).filter(
+                    ORMSupervisor.id.in_(stale_supervisor_ids)
+                ).delete(synchronize_session=False)
+
+            # Fallback: requeue orphaned jobs with no supervisor_id and stale time_updated
+            orphaned_jobs = session.query(ORMJob).filter(
+                ORMJob.state == State.RUNNING,
+                ORMJob.supervisor_id == None,  # noqa E711
+                ORMJob.time_updated < job_cutoff
+            ).all()
+
+            for orm_job in orphaned_jobs:
+                logger.info(
+                    "Requeuing orphaned job {} with stale timestamp".format(orm_job.id)
+                )
+                orm_job.state = State.QUEUED
+                session.add(orm_job)
+
+    def _touch_job(self, job_id):
+        """
+        Update time_updated for a job to signal liveness.
+        Used by jobs that don't report progress.
+        """
+        with self.session_scope() as session:
+            session.execute(
+                update(ORMJob)
+                .where(ORMJob.id == job_id)
+                .values(time_updated=sql_func.now())
+            )
+
+    def assign_job_to_supervisor(self, job_id, supervisor_id):
+        """
+        Set the supervisor_id on a job when it starts running.
+        """
+        with self.session_scope() as session:
+            session.execute(
+                update(ORMJob)
+                .where(ORMJob.id == job_id)
+                .values(supervisor_id=supervisor_id)
+            )
+
+    def _clear_job_supervisor(self, job_id):
+        """
+        Clear the supervisor_id on a job when it finishes.
+        """
+        with self.session_scope() as session:
+            session.execute(
+                update(ORMJob)
+                .where(ORMJob.id == job_id)
+                .values(supervisor_id=None)
+            )

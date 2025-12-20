@@ -1,4 +1,7 @@
 import logging
+import os
+import socket
+import threading
 from concurrent.futures import CancelledError
 
 from django.db import connection as django_connection
@@ -7,6 +10,7 @@ from kolibri.core.tasks.constants import Priority
 from kolibri.core.tasks.storage import Storage
 from kolibri.core.tasks.utils import db_connection
 from kolibri.core.tasks.utils import InfiniteLoopThread
+from kolibri.utils.conf import OPTIONS
 from kolibri.utils.multiprocessing_compat import PoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -59,7 +63,7 @@ def execute_job_with_python_worker(job_id, log_queue=None):
     )
 
 
-class Worker(object):
+class WorkerSupervisor(object):
     def __init__(self, connection, regular_workers=2, high_workers=1, log_queue=None):
         # Internally, we use concurrent.future.Future to run and track
         # job executions. We need to keep track of which future maps to which
@@ -74,7 +78,18 @@ class Worker(object):
 
         self.storage = Storage(connection)
 
-        self.requeue_stalled_jobs()
+        # Register this supervisor
+        self.supervisor_id = self.storage.register_supervisor(
+            host=socket.gethostname(),
+            process=str(os.getpid()),
+            thread=str(threading.get_ident()),
+        )
+
+        # Reconcile stalled jobs from dead supervisors
+        self.storage.reconcile_stalled_jobs(
+            supervisor_stale_threshold=OPTIONS["Tasks"]["SUPERVISOR_STALE_THRESHOLD"],
+            job_stale_threshold=OPTIONS["Tasks"]["JOB_STALE_THRESHOLD"],
+        )
 
         # Regular workers run both 'high' and 'regular' priority jobs.
         # High workers run only 'high' priority jobs.
@@ -86,11 +101,29 @@ class Worker(object):
         self.workers = self.start_workers()
         self.job_checker = self.start_job_checker()
 
-    def requeue_stalled_jobs(self):
-        logger.info("Requeuing stalled jobs.")
-        for job in self.storage.get_running_jobs():
-            logger.info("Requeuing job id {}.".format(job.job_id))
-            self.storage.mark_job_as_queued(job.job_id)
+        # Start supervisor heartbeat loop
+        self.supervisor_heartbeat = self.start_supervisor_heartbeat()
+
+    def start_supervisor_heartbeat(self):
+        """
+        Start a thread that periodically updates this supervisor's last_seen timestamp.
+        """
+        t = InfiniteLoopThread(
+            self._do_supervisor_heartbeat,
+            thread_name="SUPERVISORHEARTBEAT",
+            wait_between_runs=OPTIONS["Tasks"]["SUPERVISOR_HEARTBEAT_INTERVAL"],
+        )
+        t.start()
+        return t
+
+    def _do_supervisor_heartbeat(self):
+        """
+        Update this supervisor's last_seen timestamp.
+        """
+        try:
+            self.storage.heartbeat_supervisor(self.supervisor_id)
+        except Exception as e:
+            logger.error("Failed to heartbeat supervisor: {}".format(e))
 
     def shutdown_workers(self, wait=True):
         # First cancel all running jobs
@@ -126,11 +159,14 @@ class Worker(object):
     def shutdown(self, wait=True):
         logger.info("Asking job schedulers to shut down.")
         self.job_checker.stop()
-        # Wait for the job checker to finish
+        self.supervisor_heartbeat.stop()
+        # Wait for the job checker and supervisor heartbeat to finish
         # before attempting to pause any running jobs
         if wait:
             self.job_checker.join()
+            self.supervisor_heartbeat.join()
         self.shutdown_workers(wait=wait)
+        self.storage.unregister_supervisor(self.supervisor_id)
 
     def start_job_checker(self):
         """
@@ -196,6 +232,9 @@ class Worker(object):
 
         :return future:
         """
+        # Mark as running with this supervisor's ID before dispatching
+        self.storage.mark_job_as_running(job.job_id, supervisor_id=self.supervisor_id)
+
         future = self.workers.submit(
             execute_job_with_python_worker,
             job_id=job.job_id,
@@ -231,3 +270,7 @@ class Worker(object):
             is_future_cancelled = True
 
         return is_future_cancelled
+
+
+# Backward compatibility alias
+Worker = WorkerSupervisor

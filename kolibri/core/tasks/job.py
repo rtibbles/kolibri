@@ -322,6 +322,14 @@ class Job(object):
         self.cancellable = cancellable
         self.storage.save_job_as_cancellable(self.job_id, cancellable=cancellable)
 
+    def heartbeat(self):
+        """
+        Signal that this job is still alive.
+        Call periodically for long-running jobs that don't report progress.
+        """
+        if self._storage:
+            self._storage._touch_job(self.job_id)
+
     def retry_in(self, dt, **kwargs):
         if getattr(current_state_tracker, "job", None) is not self:
             raise JobNotRunning(
@@ -351,7 +359,9 @@ class Job(object):
     def execute(self):
         self._check_storage_attached()
 
-        self.storage.mark_job_as_running(self.job_id)
+        # Note: mark_job_as_running is now called by WorkerSupervisor before
+        # dispatching the job to the executor, so we don't call it here anymore.
+        # This allows the supervisor to set the supervisor_id on the job.
 
         setattr(current_state_tracker, "job", self)
 
