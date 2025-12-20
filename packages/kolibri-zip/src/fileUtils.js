@@ -1,5 +1,14 @@
 import flatten from 'lodash/flatten';
 
+// Feature detection for lookbehind support
+let supportsLookbehind;
+try {
+  new RegExp('(?<!a)b');
+  supportsLookbehind = true;
+} catch (e) {
+  supportsLookbehind = false;
+}
+
 export function getAbsoluteFilePath(baseFilePath, relativeFilePath) {
   // Construct a URL with a dummy base so that we can concatenate the
   // dependency URL with the URL relative to the dependency
@@ -31,7 +40,14 @@ export class Mapper {
 }
 
 // Looks for any URLs referenced inside url()
-const cssPathRegex = /url\((['"]?)(.*?)(?<!\\)(\1)\)/g;
+// Modern version with lookbehind (Safari 16.4+, Chrome 62+, Firefox 78+)
+const cssPathRegexModern = /url\((['"]?)(.*?)(?<!\\)(\1)\)/g;
+
+// Legacy version without lookbehind for older browsers
+// Uses alternation: quoted URLs with proper escape handling OR unquoted URLs
+// - Quoted: url('...') or url("...") where content can have escaped chars like \'
+// - Unquoted: url(...) where content has no quotes or whitespace
+const cssPathRegexLegacy = /url\((['"])((?:\\.|[^\\])*?)\1\)|url\(([^'"\s)]*)\)/g;
 
 const unescapePathRegex = /\\(.)/g;
 
@@ -39,8 +55,8 @@ function unescapeCssString(str) {
   return str.replace(unescapePathRegex, '$1');
 }
 
-export function getCSSPaths(fileContents) {
-  return Array.from(fileContents.matchAll(cssPathRegex), ([, , p2]) =>
+function getCSSPathsModern(fileContents) {
+  return Array.from(fileContents.matchAll(cssPathRegexModern), ([, , p2]) =>
     p2
       ? // Split first before decoding, in case ? is encoded in the URL
         decodeURIComponent(unescapeCssString(p2.split('?')[0]))
@@ -48,8 +64,21 @@ export function getCSSPaths(fileContents) {
   );
 }
 
-export function replaceCSSPaths(fileContents, packageFiles) {
-  return fileContents.replace(cssPathRegex, function (match, start, path, end) {
+function getCSSPathsLegacy(fileContents) {
+  return Array.from(fileContents.matchAll(cssPathRegexLegacy)).map(
+    ([, quote, quotedPath, unquotedPath]) => {
+      // For quoted URLs, use quotedPath (group 2); for unquoted, use unquotedPath (group 3)
+      const path = quote ? quotedPath : unquotedPath;
+      return path
+        ? // Split first before decoding, in case ? is encoded in the URL
+          decodeURIComponent(unescapeCssString(path.split('?')[0]))
+        : '';
+    },
+  );
+}
+
+function replaceCSSPathsModern(fileContents, packageFiles) {
+  return fileContents.replace(cssPathRegexModern, function (match, start, path, end) {
     try {
       // Split off any query parameter
       path = unescapeCssString(path.split('?')[0]);
@@ -67,6 +96,37 @@ export function replaceCSSPaths(fileContents, packageFiles) {
     return match;
   });
 }
+
+function replaceCSSPathsLegacy(fileContents, packageFiles) {
+  return fileContents.replace(
+    cssPathRegexLegacy,
+    function (match, quote, quotedPath, unquotedPath) {
+      // For quoted URLs, use quotedPath (group 2); for unquoted, use unquotedPath (group 3)
+      const path = quote ? quotedPath : unquotedPath;
+      const quoteChar = quote || '';
+
+      try {
+        // Split off any query parameter
+        const cleanPath = unescapeCssString(path.split('?')[0]);
+        // Look to see if there is a URL in our packageFiles mapping that
+        // that has this as the source path.
+        const newUrl = packageFiles[decodeURIComponent(cleanPath)];
+        if (newUrl) {
+          // If so, replace the instance with the new URL.
+          return `url(${quoteChar}${newUrl}${quoteChar})`;
+        }
+      } catch (e) {
+        console.debug('Error during URL handling', e); // eslint-disable-line no-console
+      }
+      // Otherwise just return the match so that it is unchanged.
+      return match;
+    },
+  );
+}
+
+// Conditional exports based on lookbehind support
+export const getCSSPaths = supportsLookbehind ? getCSSPathsModern : getCSSPathsLegacy;
+export const replaceCSSPaths = supportsLookbehind ? replaceCSSPathsModern : replaceCSSPathsLegacy;
 
 class CSSMapper extends Mapper {
   getPaths() {
@@ -210,4 +270,13 @@ export const defaultFilePathMappers = {
   htm: DOMMapper,
   xhtml: DOMMapper,
   xml: DOMMapper,
+};
+
+// Internal exports for testing both implementations
+export const _internal = {
+  getCSSPathsModern,
+  getCSSPathsLegacy,
+  replaceCSSPathsModern,
+  replaceCSSPathsLegacy,
+  supportsLookbehind,
 };
