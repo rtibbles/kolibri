@@ -2,7 +2,7 @@
 
   <CoreFullscreen
     ref="fullscreenRef"
-    class="sandboxed-content-renderer"
+    class="sandboxed-content-viewer"
     @changeFullscreen="isFullscreen = $event"
   >
     <div
@@ -59,7 +59,7 @@
   const FRAME_TOPBAR_HEIGHT = '37px';
 
   export default {
-    name: 'SandboxedContentRenderer',
+    name: 'SandboxedContentViewer',
 
     components: {
       CoreFullscreen,
@@ -162,7 +162,7 @@
   @import '~kolibri-design-system/lib/styles/definitions';
   $frame-topbar-height: 37px;
 
-  .sandboxed-content-renderer {
+  .sandboxed-content-viewer {
     position: relative;
     text-align: center;
   }
