@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/mainClient.js",
     "./SandboxHandler": "./src/SandboxHandler.js",
-    "./SandboxShim": "./src/SandboxShim.js"
+    "./SandboxShim": "./src/SandboxShim.js",
+    "./base": "./src/base.js",
+    "./mediator": "./src/mediator.js"
   },
   "scripts": {
     "build-base": "webpack --config ./webpack.config.js",
