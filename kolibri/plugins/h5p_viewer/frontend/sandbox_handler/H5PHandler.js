@@ -1,11 +1,8 @@
 /**
  * H5P Handler for sandboxed content.
  *
- * Handles H5P_ZIP content type.
+ * Handles H5P_ZIP content type using H5PRunner for content loading.
  * Provides xAPI shim for learning record storage.
- *
- * Note: This handler currently delegates to the legacy H5P loading mechanism
- * in kolibri-sandbox. A future refactor will move the H5PRunner code here.
  */
 import { SandboxHandler } from 'kolibri-sandbox';
 import xAPIShim from './xAPIShim';
@@ -23,42 +20,37 @@ export default class H5PHandler extends SandboxHandler {
    * @param {HTMLIFrameElement} iframe - The content iframe
    * @param {string} startUrl - URL to the H5P file
    * @param {Object} options - Initialization options
-   * @param {string} options.contentNamespace - Namespace for content storage
    * @returns {Promise<void>}
    */
   async init(iframe, startUrl, options) {
-    // H5P loading is handled by the existing H5PRunner mechanism
-    // which is loaded from the legacy H5P/H5PInterface.
-    // This handler provides the xAPI shim and will be expanded
-    // in a future refactor to include the H5PRunner code.
+    // Dynamically import H5PRunner to reduce initial bundle size
+    const { default: H5PRunner } = await import(
+      /* webpackChunkName: "H5PRunner" */ './H5PRunner'
+    );
 
     return new Promise((resolve, reject) => {
-      iframe.onload = () => {
-        const error = iframe.contentDocument?.head?.querySelector('meta[name="sandbox-error"]');
-        if (error) {
-          reject(new Error(error.getAttribute('content')));
-        } else {
-          resolve();
-        }
-      };
-
-      iframe.onerror = () => {
-        reject(new Error('Failed to load H5P content'));
-      };
-
-      // Navigate to the content URL
-      iframe.src = startUrl;
+      this.runner = new H5PRunner(this.shims.xAPI);
+      this.runner.init(iframe, startUrl, resolve, reject);
     });
   }
 
   /**
-   * Get progress from the xAPI shim if available.
-   * @returns {number|null}
+   * Clean up resources when content is unloaded.
    */
-  getProgress() {
-    if (this.shims.xAPI) {
-      return this.shims.xAPI.getProgress();
+  destroy() {
+    this.runner = null;
+  }
+
+  /**
+   * Called by sandbox to initialize shims on the content window.
+   * H5P has special initialization via shimH5PIntegration.
+   * @param {Window} contentWindow - The iframe's content window
+   * @private
+   */
+  _initializeShims(contentWindow) {
+    super._initializeShims(contentWindow);
+    if (this.runner) {
+      this.runner.shimH5PIntegration(contentWindow);
     }
-    return null;
   }
 }

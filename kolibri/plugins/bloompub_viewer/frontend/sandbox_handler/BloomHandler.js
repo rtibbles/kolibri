@@ -1,11 +1,8 @@
 /**
  * Bloompub Handler for sandboxed content.
  *
- * Handles BLOOMPUB content type.
+ * Handles BLOOMPUB content type using BloomRunner for content loading.
  * Provides BloomShim for progress tracking.
- *
- * Note: This handler currently delegates to the legacy Bloom loading mechanism
- * in kolibri-sandbox. A future refactor will move the BloomRunner code here.
  */
 import { SandboxHandler } from 'kolibri-sandbox';
 import BloomShim from './BloomShim';
@@ -23,37 +20,27 @@ export default class BloomHandler extends SandboxHandler {
    * @param {HTMLIFrameElement} iframe - The content iframe
    * @param {string} startUrl - URL to the Bloompub file
    * @param {Object} options - Initialization options
-   * @param {string} options.contentNamespace - Namespace for content storage
    * @returns {Promise<void>}
    */
   async init(iframe, startUrl, options) {
+    // Dynamically import BloomRunner to reduce initial bundle size
+    const { default: BloomRunner } = await import(
+      /* webpackChunkName: "BloomRunner" */ './BloomRunner'
+    );
+
     return new Promise((resolve, reject) => {
-      iframe.onload = () => {
-        const error = iframe.contentDocument?.head?.querySelector('meta[name="sandbox-error"]');
-        if (error) {
-          reject(new Error(error.getAttribute('content')));
-        } else {
-          resolve();
-        }
-      };
-
-      iframe.onerror = () => {
-        reject(new Error('Failed to load Bloompub content'));
-      };
-
-      // Navigate to the content URL
-      iframe.src = startUrl;
+      this.runner = new BloomRunner(this.shims.BloomPlayer);
+      this.runner.init(iframe, startUrl, resolve, reject);
     });
   }
 
   /**
-   * Get progress from the BloomShim if available.
-   * @returns {number|null}
+   * Clean up resources when content is unloaded.
    */
-  getProgress() {
-    if (this.shims.BloomPlayer) {
-      return this.shims.BloomPlayer.getProgress();
-    }
-    return null;
+  destroy() {
+    this.runner = null;
   }
+
+  // Note: Bloom Player gets its configuration via URL parameters,
+  // not from global objects like H5P. No _initializeShims override needed.
 }
