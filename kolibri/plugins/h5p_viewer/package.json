@@ -1,0 +1,14 @@
+{
+  "name": "kolibri-h5p-viewer-plugin",
+  "description": "H5P Viewer Plugin for Kolibri",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build-h5p": "node ./h5p_build/downloadH5PVendor.js && webpack --config ./h5p_build/webpack.config.h5p.js --mode=production"
+  },
+  "devDependencies": {
+    "html-webpack-plugin": "5.6.5",
+    "jszip": "^3.10.1",
+    "purgecss": "^6.0.0"
+  }
+}

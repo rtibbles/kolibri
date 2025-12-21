@@ -1,7 +1,6 @@
 import Mediator from './mediator';
 import LocalStorage from './localStorage';
 import Cookie from './cookie';
-import H5P from './H5P/H5PInterface';
 import SCORM from './SCORM';
 import xAPI from './xAPI/xAPIInterface';
 import { events, nameSpace, DataTypes } from './base';
@@ -23,7 +22,6 @@ export default class MainClient {
     this.storage = {
       localStorage: new LocalStorage(this.mediator),
       cookie: new Cookie(this.mediator),
-      H5P: new H5P(this.mediator),
       SCORM: new SCORM(this.mediator),
       xAPI: new xAPI(this.mediator),
     };

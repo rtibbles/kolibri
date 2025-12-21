@@ -6,6 +6,7 @@
  */
 import { SandboxHandler } from 'kolibri-sandbox';
 import BloomShim from './BloomShim';
+import BloomRunner from './BloomRunner';
 
 export default class BloomHandler extends SandboxHandler {
   /**
@@ -22,12 +23,7 @@ export default class BloomHandler extends SandboxHandler {
    * @param {Object} options - Initialization options
    * @returns {Promise<void>}
    */
-  async init(iframe, startUrl, options) {
-    // Dynamically import BloomRunner to reduce initial bundle size
-    const { default: BloomRunner } = await import(
-      /* webpackChunkName: "BloomRunner" */ './BloomRunner'
-    );
-
+  init(iframe, startUrl, options) {
     return new Promise((resolve, reject) => {
       this.runner = new BloomRunner(this.shims.BloomPlayer);
       this.runner.init(iframe, startUrl, resolve, reject);

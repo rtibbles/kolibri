@@ -6,6 +6,7 @@
  */
 import { SandboxHandler } from 'kolibri-sandbox';
 import xAPIShim from './xAPIShim';
+import H5PRunner from './H5PRunner';
 
 export default class H5PHandler extends SandboxHandler {
   /**
@@ -22,12 +23,7 @@ export default class H5PHandler extends SandboxHandler {
    * @param {Object} options - Initialization options
    * @returns {Promise<void>}
    */
-  async init(iframe, startUrl, options) {
-    // Dynamically import H5PRunner to reduce initial bundle size
-    const { default: H5PRunner } = await import(
-      /* webpackChunkName: "H5PRunner" */ './H5PRunner'
-    );
-
+  init(iframe, startUrl, options) {
     return new Promise((resolve, reject) => {
       this.runner = new H5PRunner(this.shims.xAPI);
       this.runner.init(iframe, startUrl, resolve, reject);

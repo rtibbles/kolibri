@@ -6,9 +6,7 @@ import SCORM from './SCORM';
 import Kolibri from './kolibri';
 import patchIndexedDB from './patchIndexedDB';
 import { events, nameSpace } from './base';
-import H5P from './H5P/H5PInterface';
 import xAPI from './xAPI/xAPIInterface';
-import Bloom from './Bloom/BloomInterface';
 import { loadHandler } from './handlerLoader';
 
 const logging = console; //eslint-disable-line no-console
@@ -20,10 +18,8 @@ const logging = console; //eslint-disable-line no-console
  * via window.postMessage, to allow for persistence between sessions
  * without violating Same-Origin policies.
  *
- * Supports two modes:
- * 1. Handler mode: A handler script is loaded from a URL and takes control
- *    of content initialization. Used for H5P, Bloom, etc.
- * 2. Legacy mode: Built-in handling based on file extension (backward compatible)
+ * Content-type specific handling (H5P, Bloom, etc.) is done via pluggable
+ * handlers loaded dynamically based on content type.
  */
 export default class SandboxEnvironment {
   constructor() {
@@ -40,10 +36,6 @@ export default class SandboxEnvironment {
     this.kolibri = new Kolibri(this.mediator);
 
     this.SCORM = new SCORM(this.mediator);
-
-    this.H5P = new H5P(this.mediator);
-
-    this.Bloom = new Bloom(this.mediator);
 
     this.xAPI = new xAPI(this.mediator);
 
@@ -111,7 +103,6 @@ export default class SandboxEnvironment {
         this.sessionStorage.iframeInitialize(this.iframe.contentWindow);
         this.cookie.iframeInitialize(this.iframe.contentWindow);
         this.kolibri.iframeInitialize(this.iframe.contentWindow);
-        this.H5P.iframeInitialize(this.iframe.contentWindow);
         this.xAPI.iframeInitialize(this.iframe.contentWindow);
         patchIndexedDB(this.contentNamespace, this.iframe.contentWindow);
       } catch (e) {
@@ -141,7 +132,6 @@ export default class SandboxEnvironment {
     this.iframe.style.width = '100%';
     this.iframe.height = '100%';
     document.body.appendChild(this.iframe);
-    const baseUrl = startUrl.split('?')[0];
     this.mediator.sendMessage({ nameSpace, event: events.LOADING, data: true });
 
     // Handler mode: load handler script and delegate to it
@@ -173,25 +163,20 @@ export default class SandboxEnvironment {
       return;
     }
 
-    // Legacy mode: built-in handling based on file extension
-    if (baseUrl.endsWith('.h5p')) {
-      this.H5P.init(this.iframe, startUrl);
-    } else if (baseUrl.endsWith('bloompub') || baseUrl.endsWith('bloomd')) {
-      this.Bloom.init(this.iframe, startUrl);
-    } else {
-      this.iframe.onload = () => {
-        const error = this.iframe.contentDocument.head.querySelector('meta[name="sandbox-error"]');
-        if (error) {
-          this.mediator.sendMessage({
-            nameSpace,
-            event: events.ERROR,
-            data: { message: error.getAttribute('content'), error: 'LOADING_ERROR' },
-          });
-        } else {
-          this.mediator.sendMessage({ nameSpace, event: events.LOADING, data: false });
-        }
-      };
-      this.iframe.src = startUrl;
-    }
+    // Default mode: load content directly (HTML5, etc.)
+    this.iframe.onload = () => {
+      this.initializeIframe(this.iframe.contentWindow);
+      const error = this.iframe.contentDocument.head.querySelector('meta[name="sandbox-error"]');
+      if (error) {
+        this.mediator.sendMessage({
+          nameSpace,
+          event: events.ERROR,
+          data: { message: error.getAttribute('content'), error: 'LOADING_ERROR' },
+        });
+      } else {
+        this.mediator.sendMessage({ nameSpace, event: events.LOADING, data: false });
+      }
+    };
+    this.iframe.src = startUrl;
   }
 }
