@@ -9,6 +9,7 @@ import { events, nameSpace } from './base';
 import H5P from './H5P/H5PInterface';
 import xAPI from './xAPI/xAPIInterface';
 import Bloom from './Bloom/BloomInterface';
+import { loadHandler } from './handlerLoader';
 
 const logging = console; //eslint-disable-line no-console
 
@@ -18,6 +19,11 @@ const logging = console; //eslint-disable-line no-console
  * inside a sandboxed iframe context, and communicates persistent data
  * via window.postMessage, to allow for persistence between sessions
  * without violating Same-Origin policies.
+ *
+ * Supports two modes:
+ * 1. Handler mode: A handler script is loaded from a URL and takes control
+ *    of content initialization. Used for H5P, Bloom, etc.
+ * 2. Legacy mode: Built-in handling based on file extension (backward compatible)
  */
 export default class SandboxEnvironment {
   constructor() {
@@ -42,6 +48,13 @@ export default class SandboxEnvironment {
     this.xAPI = new xAPI(this.mediator);
 
     this.lastSentHeight = null;
+
+    // Handler state for pluggable handler system
+    this.handler = null;
+    this._handlerRegistrationResolver = null;
+
+    // Expose self globally for handler self-registration
+    window.SandboxEnvironment = this;
 
     // We initialize SCORM here, as the usual place for SCORM
     // to look for its API is window.parent.
@@ -73,6 +86,21 @@ export default class SandboxEnvironment {
     this.mediator.sendMessage({ nameSpace, event: events.IFRAMEREADY, data: true });
   }
 
+  /**
+   * Called by SandboxHandler constructor to register itself.
+   * @param {SandboxHandler} handler
+   * @private
+   */
+  _registerHandler(handler) {
+    this.handler = handler;
+
+    // Resolve any pending registration promise from loadHandler
+    if (this._handlerRegistrationResolver) {
+      this._handlerRegistrationResolver();
+      this._handlerRegistrationResolver = null;
+    }
+  }
+
   initializeIframe(contentWindow) {
     // Only do anything if the contentWindow is the contentWindow of our
     // iframe - this is to prevent other generated iframes from doing anything here.
@@ -100,7 +128,7 @@ export default class SandboxEnvironment {
     this.lastSentHeight = null;
   }
 
-  createIframe({ contentNamespace, startUrl = '' } = {}) {
+  async createIframe({ contentNamespace, startUrl = '', handlerUrl = null } = {}) {
     if (this.iframe) {
       this.clearIframe(this.iframe);
     }
@@ -115,6 +143,37 @@ export default class SandboxEnvironment {
     document.body.appendChild(this.iframe);
     const baseUrl = startUrl.split('?')[0];
     this.mediator.sendMessage({ nameSpace, event: events.LOADING, data: true });
+
+    // Handler mode: load handler script and delegate to it
+    if (handlerUrl) {
+      try {
+        await loadHandler(handlerUrl, this);
+
+        if (!this.handler) {
+          throw new Error('Handler script loaded but did not register');
+        }
+
+        // Set up iframe load handler to initialize shims
+        this.iframe.onload = () => {
+          this.initializeIframe(this.iframe.contentWindow);
+          this.handler._initializeShims(this.iframe.contentWindow);
+        };
+
+        // Delegate content initialization to the handler
+        await this.handler.init(this.iframe, startUrl, { contentNamespace });
+        this.mediator.sendMessage({ nameSpace, event: events.LOADING, data: false });
+      } catch (e) {
+        logging.error('Handler loading/initialization failed:', e);
+        this.mediator.sendMessage({
+          nameSpace,
+          event: events.ERROR,
+          data: { message: e.message, error: 'HANDLER_ERROR' },
+        });
+      }
+      return;
+    }
+
+    // Legacy mode: built-in handling based on file extension
     if (baseUrl.endsWith('.h5p')) {
       this.H5P.init(this.iframe, startUrl);
     } else if (baseUrl.endsWith('bloompub') || baseUrl.endsWith('bloomd')) {

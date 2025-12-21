@@ -32,9 +32,22 @@ export default class MainClient {
     this.ready = false;
     this.contentNamespace = null;
     this.startUrl = null;
+    this.handlerUrl = null;
     this.__setData = this.__setData.bind(this);
   }
-  initialize(contentState, userData, startUrl, contentNamespace) {
+
+  /**
+   * Initialize content in the sandbox.
+   *
+   * @param {Object} contentState - Initial content state for storage shims
+   * @param {Object} userData - User data object with userId, userFullName, progress, etc.
+   * @param {string} startUrl - URL to the content entry point
+   * @param {string} contentNamespace - Namespace for content storage (usually file checksum)
+   * @param {Object} options - Additional options
+   * @param {string} [options.handlerUrl] - URL to a sandbox handler script for pluggable handlers
+   */
+  initialize(contentState, userData, startUrl, contentNamespace, options = {}) {
+    const { handlerUrl = null } = options;
     /*
      * userData should be an object with the following keys, all optional:
      * userId: <user ID>,
@@ -49,6 +62,7 @@ export default class MainClient {
 
     this.contentNamespace = contentNamespace;
     this.startUrl = startUrl;
+    this.handlerUrl = handlerUrl;
 
     this.iframe.style.width = '100%';
 
@@ -67,6 +81,7 @@ export default class MainClient {
         data: {
           contentNamespace,
           startUrl,
+          handlerUrl,
         },
       });
     });

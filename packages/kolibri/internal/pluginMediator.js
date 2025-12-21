@@ -23,6 +23,7 @@ const publicMethods = [
   'registerLanguageAssets',
   'registerContentViewer',
   'loadDirectionalCSS',
+  'getSandboxHandlerUrl',
   'ready',
 ];
 
@@ -77,6 +78,10 @@ export default function pluginMediatorFactory(facade) {
      * Keep track of urls for content viewers.
      */
     _contentViewerUrls: {},
+    /**
+     * Keep track of full viewer data including sandbox handler URLs.
+     */
+    _contentViewerData: {},
     /**
      * Public ready method - called when plugins can start operating
      */
@@ -309,9 +314,11 @@ export default function pluginMediatorFactory(facade) {
      * @param  {String[]} kolibriModuleUrls the URLs of the Javascript
      * files that constitute the kolibriModule
      * @param  {String[]} contentPresets the names of presets this content viewer can render
+     * @param  {Object} viewerData additional data about the viewer (e.g., sandboxHandlerUrl)
      */
-    registerContentViewer(kolibriModuleName, kolibriModuleUrls, contentPresets) {
+    registerContentViewer(kolibriModuleName, kolibriModuleUrls, contentPresets, viewerData = {}) {
       this._contentViewerUrls[kolibriModuleName] = kolibriModuleUrls;
+      this._contentViewerData[kolibriModuleName] = viewerData;
       contentPresets.forEach(preset => {
         if (this._contentViewerRegistry[preset]) {
           logger.warn(`Kolibri Modules: Two content viewers are registering for ${preset}`);
@@ -350,11 +357,26 @@ export default function pluginMediatorFactory(facade) {
           const data = JSON.parse(decodeMarkedSafeText(element.innerHTML.trim()));
           const presets = data.presets;
           const urls = data.urls;
-          this.registerContentViewer(moduleName, urls, presets);
+          // Pass the full data object to store sandboxHandlerUrl if present
+          this.registerContentViewer(moduleName, urls, presets, data);
         } catch (e) {
           logger.error(`Error parsing content viewer for ${moduleName}`);
         }
       }
+    },
+
+    /**
+     * Get the sandbox handler URL for a given preset.
+     * @param {String} preset - The content preset
+     * @returns {String|null} - The sandbox handler URL or null if not available
+     */
+    getSandboxHandlerUrl(preset) {
+      const kolibriModuleName = this._contentViewerRegistry[preset];
+      if (!kolibriModuleName) {
+        return null;
+      }
+      const viewerData = this._contentViewerData[kolibriModuleName];
+      return viewerData?.sandboxHandlerUrl || null;
     },
 
     /**

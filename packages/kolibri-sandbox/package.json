@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "A library for providing a secure sandbox environment for Kolibri.",
   "main": "src/mainClient.js",
+  "exports": {
+    ".": "./src/mainClient.js",
+    "./SandboxHandler": "./src/SandboxHandler.js",
+    "./SandboxShim": "./src/SandboxShim.js"
+  },
   "scripts": {
     "build-base": "webpack --config ./webpack.config.js",
     "build": "yarn run build-base --mode=production",

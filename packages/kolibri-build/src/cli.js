@@ -13,6 +13,7 @@ const version = require('../package.json');
 
 const readWebpackJson = require('./read_webpack_json');
 const webpackConfig = require('./webpack.config.plugin');
+const webpackConfigSandbox = require('./webpack.config.sandbox');
 const clean = require('./clean');
 const compressFile = require('./compress');
 
@@ -34,6 +35,7 @@ function createWebpackCompiler(bundleData, options) {
   const buildOptions = {
     hot: options.hot,
     port: options.port,
+    address: options.host,
     mode: options.development ? 'development' : 'production',
     cache: options.cache,
     transpile: options.transpile,
@@ -43,7 +45,14 @@ function createWebpackCompiler(bundleData, options) {
     setDevServerPublicPath: !options.writeToDisk,
   };
 
-  const webpackArray = bundleData.map(bundle => webpackConfig(bundle, buildOptions));
+  // Use appropriate webpack config based on bundle type
+  const webpackArray = bundleData.map(bundle => {
+    if (bundle.sandbox_handler) {
+      // Sandbox handlers use isolated config with no externals
+      return webpackConfigSandbox(bundle, buildOptions);
+    }
+    return webpackConfig(bundle, buildOptions);
+  }).filter(Boolean);
 
   if (options.parallel) {
     webpackArray.parallelism = options.parallel;
