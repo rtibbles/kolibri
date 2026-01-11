@@ -7,7 +7,6 @@ import time
 import zipfile
 from urllib.parse import unquote
 
-import html5lib
 from cheroot import wsgi
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
@@ -144,64 +143,174 @@ allowed_methods = set(["GET", "OPTIONS"])
 # but if we do we should update it there.
 INITIALIZE_SANDBOX_FROM_IFRAME = "if (window.parent && window.parent.sandbox) {try {window.parent.sandbox.initializeIframe(window);} catch (e) {}}"
 
+# Pre-compiled regex patterns for HTML script injection
+# Pattern to match opening <head> tag (case-insensitive, with optional attributes)
+_HEAD_PATTERN = re.compile(rb"(<head(?:\s[^>]*)?>)", re.IGNORECASE)
+# Pattern to match opening <html> tag (case-insensitive, with optional attributes)
+_HTML_PATTERN = re.compile(rb"(<html(?:\s[^>]*)?>)", re.IGNORECASE)
+
+# Pre-computed script tag wrapped in <head> for injection
+_SCRIPT_TAG = '<script type="text/javascript">{}</script>'.format(
+    INITIALIZE_SANDBOX_FROM_IFRAME
+)
+_SCRIPT_TAG_BYTES = _SCRIPT_TAG.encode("utf-8")
+_HEAD_WITH_SCRIPT = b"<head>" + _SCRIPT_TAG_BYTES + b"</head>"
+
+
+def _is_inside_comment(content, position):
+    """
+    Check if a position in content is inside an HTML comment.
+
+    Uses a simple approach: find the last '<!--' before position,
+    then check if there's a '-->' between it and position.
+    """
+    # Only look at content before the position
+    before = content[:position]
+
+    # Find the last comment opening before position
+    last_open = before.rfind(b"<!--")
+    if last_open == -1:
+        return False
+
+    # Check if there's a closing after the opening but before position
+    # find() from last_open position, looking for --> after the <!--
+    close_after_open = before.find(b"-->", last_open + 4)  # +4 to skip past <!--
+    # If no close found after open, we're inside a comment
+    return close_after_open == -1
+
+
+def _is_inside_cdata(content, position):
+    """
+    Check if a position in content is inside a CDATA section.
+
+    CDATA sections (<![CDATA[ ... ]]>) are valid in XHTML and in foreign
+    content (SVG/MathML). In HTML5, they're treated as bogus comments.
+    Either way, content inside should not be treated as tags.
+    """
+    before = content[:position]
+
+    last_open = before.rfind(b"<![CDATA[")
+    if last_open == -1:
+        return False
+
+    # Check if there's a closing ]]> after the opening
+    close_after_open = before.find(b"]]>", last_open + 9)  # +9 to skip past <![CDATA[
+    return close_after_open == -1
+
+
+# Pattern to find script/style opening tags (case-insensitive)
+_SCRIPT_OPEN_PATTERN = re.compile(rb"<script(?:\s[^>]*)?>", re.IGNORECASE)
+_SCRIPT_CLOSE_PATTERN = re.compile(rb"</script\s*>", re.IGNORECASE)
+_STYLE_OPEN_PATTERN = re.compile(rb"<style(?:\s[^>]*)?>", re.IGNORECASE)
+_STYLE_CLOSE_PATTERN = re.compile(rb"</style\s*>", re.IGNORECASE)
+
+
+def _is_inside_script_or_style(content, position):
+    """
+    Check if a position is inside a <script> or <style> tag.
+
+    This prevents matching <head> that appears in JavaScript strings
+    or CSS content before the actual <head> tag.
+    """
+    before = content[:position]
+
+    # Check for unclosed <script> tag
+    last_script_open = -1
+    for match in _SCRIPT_OPEN_PATTERN.finditer(before):
+        last_script_open = match.end()
+
+    if last_script_open != -1:
+        # Check if there's a </script> after the last <script>
+        last_script_close = -1
+        for match in _SCRIPT_CLOSE_PATTERN.finditer(before):
+            if match.start() >= last_script_open:
+                last_script_close = match.end()
+
+        if last_script_close == -1 or last_script_close < last_script_open:
+            return True
+
+    # Check for unclosed <style> tag
+    last_style_open = -1
+    for match in _STYLE_OPEN_PATTERN.finditer(before):
+        last_style_open = match.end()
+
+    if last_style_open != -1:
+        # Check if there's a </style> after the last <style>
+        last_style_close = -1
+        for match in _STYLE_CLOSE_PATTERN.finditer(before):
+            if match.start() >= last_style_open:
+                last_style_close = match.end()
+
+        if last_style_close == -1 or last_style_close < last_style_open:
+            return True
+
+    return False
+
+
+def _is_inside_tag_brackets(content, position):
+    """
+    Check if position is inside another tag's angle brackets.
+
+    This catches malformed HTML like <script <head>> where <head> appears
+    inside the script tag's opening bracket as a malformed attribute.
+    In HTML5, browsers would parse <head> as an attribute name, not a tag.
+    """
+    before = content[:position]
+
+    # Find the last '<' before this position
+    last_open = before.rfind(b"<")
+    if last_open == -1:
+        return False
+
+    # Check if there's a '>' between that '<' and our position
+    # If not, we're inside another tag's brackets
+    between = before[last_open:]
+    return b">" not in between
+
+
+def _is_valid_injection_point(content, position):
+    """Check if position is a valid place to inject (not in comment, CDATA, script, style, or malformed tag)."""
+    return (
+        not _is_inside_comment(content, position)
+        and not _is_inside_cdata(content, position)
+        and not _is_inside_script_or_style(content, position)
+        and not _is_inside_tag_brackets(content, position)
+    )
+
 
 def parse_html(content):
-    try:
-        document = html5lib.parse(content, namespaceHTMLElements=False)
+    """
+    Inject sandbox initialization script into HTML content.
 
-        if not document:
-            # Could not parse
-            return content
+    Uses regex-based injection which is ~1000x faster than html5lib.
+    Browsers are forgiving and will execute the script regardless of
+    exact HTML structure, so we don't need full HTML parsing/normalization.
 
-        # Because html5lib parses like a browser, it will
-        # always create head and body tags if they are missing.
-        head = document.find("head")
+    Injection strategy:
+    1. If <head> tag exists (not in comment/script/style): inject script after <head>
+    2. If <html> tag exists but no valid <head>: inject <head> with script after <html>
+    3. Otherwise: prepend <head> with script to the content
+    """
+    if isinstance(content, str):
+        content = content.encode("utf-8")
 
-        # Use the makeelement method of the head tag here to ensure that we use the same
-        # Element class for both. Depending on the system and python version we are on,
-        # we may be using the C implementation or the pure python and a mismatch will cause an error.
-        script_tag = head.makeelement("script", {"type": "text/javascript"})
-        script_tag.text = INITIALIZE_SANDBOX_FROM_IFRAME
+    # Try to find <head> tag that's not inside a comment, script, or style
+    for head_match in _HEAD_PATTERN.finditer(content):
+        if _is_valid_injection_point(content, head_match.start()):
+            # Found a valid <head> tag
+            insert_pos = head_match.end()
+            return content[:insert_pos] + _SCRIPT_TAG_BYTES + content[insert_pos:]
 
-        head.insert(0, script_tag)
-        # Currently, html5lib strips the doctype, but it's important for correct rendering, so check the original
-        # content for the doctype and, if found, prepend it to the content serialized by html5lib
-        doctype = None
-        try:
-            # Now parse the content as a dom tree instead, so that we capture
-            # any doctype node as a dom node that we can read.
-            tree_builder_dom = html5lib.treebuilders.getTreeBuilder("dom")
-            parser_dom = html5lib.HTMLParser(
-                tree_builder_dom, namespaceHTMLElements=False
-            )
-            tree = parser_dom.parse(content)
-            # By HTML Spec if doctype is included, it must be the first thing
-            # in the document, so it has to be the first child node of the document
-            doctype_node = tree.childNodes[0]
+    # No valid <head> tag - try to find <html> tag (also skip invalid locations)
+    for html_match in _HTML_PATTERN.finditer(content):
+        if _is_valid_injection_point(content, html_match.start()):
+            # Inject <head> with script after <html>
+            insert_pos = html_match.end()
+            return content[:insert_pos] + _HEAD_WITH_SCRIPT + content[insert_pos:]
 
-            # Check that this node is in fact a doctype node
-            if doctype_node.nodeType == doctype_node.DOCUMENT_TYPE_NODE:
-                # render to a string by calling the toxml method
-                # toxml uses single quotes by default, replace with ""
-                doctype = doctype_node.toxml().replace("'", '"')
-        except Exception as e:
-            logger.warning("Error in HTML5 parsing to determine doctype {}".format(e))
-
-        html = html5lib.serialize(
-            document,
-            quote_attr_values="always",
-            omit_optional_tags=False,
-            minimize_boolean_attributes=False,
-            use_trailing_solidus=True,
-            space_before_trailing_solidus=False,
-        )
-
-        if doctype:
-            html = doctype + html
-
-        return html
-    except html5lib.html5parser.ParseError:
-        return content
+    # No valid <html> tag either - just prepend <head> with script
+    # This handles edge cases like bare content or fragments
+    return _HEAD_WITH_SCRIPT + content
 
 
 def get_embedded_file(

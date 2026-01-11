@@ -20,7 +20,6 @@ sqlalchemy==1.4.52
 semver==2.13.0
 django-redis-cache==3.0.1
 redis==3.5.3
-html5lib==1.1
 zeroconf-py2compat==0.19.17
 Click==8.0.4
 # Windows-only transitive dependency of Click and colorlog. The dist is built on
