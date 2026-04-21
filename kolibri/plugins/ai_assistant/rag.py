@@ -30,10 +30,11 @@ class RAGIndex:
         # Load ONNX model + tokenizer
         self._load_model(data_dir / "model")
 
-        # Load document embeddings (float16 -> float32 for dot product)
+        # Load document embeddings (keep as float16 to save memory on
+        # shared-memory systems like Jetson where GPU needs the headroom)
         self.doc_embeddings = np.load(
             data_dir / "doc_embeddings.npy"
-        ).astype(np.float32)
+        ).astype(np.float16)
         self.doc_metadata = json.loads(
             (data_dir / "doc_metadata.json").read_text()
         )
@@ -41,7 +42,7 @@ class RAGIndex:
         # Load sub-chunk embeddings
         self.chunk_embeddings = np.load(
             data_dir / "chunk_embeddings.npy"
-        ).astype(np.float32)
+        ).astype(np.float16)
         self.chunk_index = json.loads(
             (data_dir / "chunk_index.json").read_text()
         )
@@ -128,7 +129,7 @@ class RAGIndex:
 
         # L2 normalize
         norms = np.linalg.norm(pooled, axis=1, keepdims=True).clip(min=1e-9)
-        return (pooled / norms).astype(np.float32)
+        return (pooled / norms).astype(np.float16)
 
     def search(self, query, top_docs=3, sub_chunks=2):
         """Search for relevant content and assemble context.
@@ -145,6 +146,8 @@ class RAGIndex:
 
         # Embed query
         query_vec = self.embed([query])[0]
+        t_embed = time.perf_counter()
+        logger.info("RAG embed query in %.1fms: %r", (t_embed - t0) * 1000, query[:80])
 
         # Document-level search (numpy dot product)
         doc_scores = self.doc_embeddings @ query_vec
@@ -155,6 +158,15 @@ class RAGIndex:
             ]
         else:
             top_indices = np.argsort(doc_scores)[::-1]
+
+        t_docsearch = time.perf_counter()
+        logger.info(
+            "RAG doc-level search in %.1fms: scored %d docs, top %d scores: %s",
+            (t_docsearch - t_embed) * 1000,
+            len(doc_scores),
+            min(top_docs, len(top_indices)),
+            ", ".join("%.4f" % doc_scores[i] for i in top_indices[:top_docs]),
+        )
 
         results = []
         for doc_idx in top_indices:
@@ -170,17 +182,27 @@ class RAGIndex:
                     "content_id": cid,
                     "node_id": meta["node_id"],
                     "channel_id": meta["channel_id"],
+                    "title": meta.get("title", ""),
+                    "description": meta.get("description", ""),
+                    "kind": meta.get("kind", ""),
                     "score": round(score, 4),
                     "context": context,
                 }
             )
 
+            logger.info(
+                "RAG result: content_id=%s, score=%.4f, title=%s, context_len=%d",
+                cid[:8], score,
+                meta.get("title", "?"),
+                len(context),
+            )
+
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        logger.debug(
-            "RAG search: %.1fms for %d docs (%s)",
+        logger.info(
+            "RAG search complete in %.1fms: %d results for %r",
             elapsed_ms,
-            top_docs,
-            query[:50],
+            len(results),
+            query[:80],
         )
         return results
 
