@@ -311,7 +311,11 @@ class Command(BaseCommand):
         def _shutdown(signum, frame):
             self.stdout.write("\nShutting down...")
             _remove_pid_file()
-            server.shutdown()
+            # Don't call server.shutdown() from the signal handler -- it
+            # deadlocks because shutdown() waits for serve_forever() which
+            # is blocked in the same thread.  Raising SystemExit unwinds
+            # serve_forever() and falls through to the finally block.
+            raise SystemExit(0)
 
         signal.signal(signal.SIGTERM, _shutdown)
         signal.signal(signal.SIGINT, _shutdown)
