@@ -7,6 +7,7 @@ from functools import reduce
 from random import sample
 from uuid import UUID
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db.models import Exists
@@ -158,6 +159,10 @@ def metadata_cache(view_func, cache_key_func=get_cache_key):
 
 
 def get_remote_cache_key(request, *args, **kwargs):
+    if (request.GET.get("search") or request.GET.get("keywords")) and getattr(settings, "DEBUG", False):
+        # In dev mode, don't cache search results so that changes to
+        # AI prompts and models take effect immediately.
+        return None
     if REMOTE_URL_PARAM in request.GET:
         return cache.get(REMOTE_ETAG_CACHE_KEY.format(request.GET[REMOTE_URL_PARAM]))
     return get_cache_key(*args, **kwargs)

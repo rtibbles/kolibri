@@ -3,6 +3,7 @@ import json
 import logging
 import operator
 import os
+import re
 from functools import reduce
 
 import requests
@@ -49,7 +50,28 @@ def robust_json_parser(json_str):
     elif len(json_str_1) < len(json_str_2):
         json_str = json_str_2
 
-    return json.loads(json_str)
+    # LLM responses often contain LaTeX with unescaped backslashes
+    # (e.g. \frac, \sqrt, \text, \times) that are invalid JSON escapes.
+    # Some collide with valid JSON escapes (\t = tab, \n = newline,
+    # \r = CR, \f = form feed, \b = backspace) but in LLM output
+    # these are almost always LaTeX commands (\text, \theta, \nabla,
+    # \frac, \beta, etc.). We distinguish by checking if the escape
+    # char is followed by a letter: \t + letter = LaTeX, \t + non-letter
+    # = JSON tab. \f and \b are always treated as LaTeX since form feed
+    # and backspace never appear in LLM text.
+    # The first alternative (\\\\) consumes already-escaped backslash
+    # pairs so they are kept as-is; the second alternative catches
+    # lone backslashes that need escaping.
+    fixed = re.sub(
+        r'\\\\|(\\)(?!["\\/]|[nrt](?![a-zA-Z])|u[0-9a-fA-F]{4})',
+        lambda m: '\\\\' if m.group(1) else m.group(),
+        json_str,
+    )
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        # Fall back to the original string in case our escaping broke it
+        return json.loads(json_str)
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +281,7 @@ You will receive the student's question or search terms along with relevant exce
 
 Guidelines:
 - Answer in plain language appropriate for the student's level.
+- Use LaTeX notation (e.g. $y = mx + b$) for any mathematical expressions.
 - Keep your response to one short paragraph (2-4 sentences).
 - Base your answer on the provided resources. If the resources are helpful, use them. If they are not relevant or insufficient, answer from your own knowledge but note that you are less certain.
 - Do NOT mention "the context", "the excerpts", or "the passage". You can refer to the resources by title, however, where appropriate.
@@ -279,7 +302,7 @@ Answer the question using the resources above. Respond as JSON.""".strip()
 
 FALLBACK_SYSTEM_PROMPT = """You are "Kolippy", an AI assistant for Kolibri, an offline educational platform preloaded with educational content.
 Your role is to assist users with questions about educational content, provide brief explanations, and help them find the most relevant resources.
-You should keep your responses concise, informative, plaintext, max one paragraph, and focused on educational content. Along with answering the question,
+You should keep your responses concise, informative, max one paragraph, and focused on educational content. Use LaTeX notation (e.g. $y = mx + b$) for any mathematical expressions. Along with answering the question,
 you can provide a list of up to 5 simple search terms (as minimalist as possible, e.g. each a single word or simple term, as Kolibri's search is very strict)
 that we will use to find potentially relevant learning resources in Kolibri. Do not mention anything about Kolibri in your response.
 
@@ -368,14 +391,21 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             setattr(request, "messages", ["I couldn't find any relevant resources for your question."])
             return queryset.none()
 
-        # Filter RAG results to only content that is available and non-coach
+        # Filter RAG results to only content that is available and non-coach,
+        # and enrich with title/kind from the DB (not stored in RAG metadata).
         all_content_ids = [r["content_id"] for r in rag_results]
-        available_ids = set(
-            queryset.filter(content_id__in=all_content_ids)
+        content_info = {
+            row["content_id"]: row
+            for row in queryset.filter(content_id__in=all_content_ids)
             .exclude(coach_content=True)
-            .values_list("content_id", flat=True)
-        )
-        rag_results = [r for r in rag_results if r["content_id"] in available_ids]
+            .values("content_id", "title", "kind")
+        }
+        for r in rag_results:
+            info = content_info.get(r["content_id"])
+            if info:
+                r["title"] = info["title"]
+                r["kind"] = info["kind"]
+        rag_results = [r for r in rag_results if r["content_id"] in content_info]
         logger.info("RAG results after availability filter: %d of %d", len(rag_results), len(all_content_ids))
 
         if not rag_results:

@@ -2,7 +2,7 @@
 
   <div
     v-if="messages.length && !messagesDismissed"
-    class="search-messages"
+    class="search-messages tex2jax_ignore"
     :style="{
       backgroundColor: $themePalette.grey.v_100,
     }"
@@ -26,8 +26,8 @@
         color: $themeTokens.text,
       }"
     >
-      <p class="search-message-text">
-        {{ message }}
+      <!-- eslint-disable-next-line vue/no-v-html -->
+      <p class="search-message-text" v-html="renderMath(message)">
       </p>
     </div>
   </div>
@@ -38,6 +38,7 @@
 <script>
 
   import { ref, watch } from 'vue';
+  import katex from 'katex';
   import { injectBaseSearch } from '../composables/useBaseSearch';
 
   export default {
@@ -54,6 +55,66 @@
       }
       return { messages, messagesDismissed, dismissMessages };
     },
+    methods: {
+      renderKatex(latex) {
+        try {
+          return katex.renderToString(latex, { throwOnError: false });
+        } catch (e) {
+          return null;
+        }
+      },
+      renderMath(text) {
+        // Escape HTML, then parse for math delimiters.
+        // Supports \(...\) and $...$ with tight-delimiter rules:
+        //   - opening $ must be followed by a non-space character
+        //   - closing $ must be preceded by a non-space character
+        // This prevents currency like "$3 per gallon" from being
+        // matched as math. Inside $...$, \$ is kept as-is for KaTeX
+        // (renders as literal $). Outside math, \$ becomes plain $.
+        const s = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        let result = '';
+        let i = 0;
+        while (i < s.length) {
+          // \(...\) delimiters
+          if (s[i] === '\\' && s[i + 1] === '(') {
+            const end = s.indexOf('\\)', i + 2);
+            if (end !== -1) {
+              const html = this.renderKatex(s.substring(i + 2, end));
+              if (html) { result += html; i = end + 2; continue; }
+            }
+          }
+          // $...$ delimiters (tight: non-space after open, non-space before close)
+          if (s[i] === '$' && i + 1 < s.length && s[i + 1] !== ' ' && s[i + 1] !== '$') {
+            let j = i + 1;
+            let math = '';
+            let found = false;
+            while (j < s.length) {
+              if (s[j] === '\\' && s[j + 1] === '$') {
+                math += '\\$'; j += 2;
+              } else if (s[j] === '$') {
+                if (s[j - 1] !== ' ') { found = true; }
+                break;
+              } else {
+                math += s[j]; j++;
+              }
+            }
+            if (found) {
+              const html = this.renderKatex(math);
+              if (html) { result += html; i = j + 1; continue; }
+            }
+          }
+          // \$ outside math becomes plain $
+          if (s[i] === '\\' && s[i + 1] === '$') {
+            result += '$'; i += 2; continue;
+          }
+          result += s[i]; i++;
+        }
+        return result;
+      },
+    },
     $trs: {
       dismissMessages: {
         message: 'Dismiss messages',
@@ -63,6 +124,11 @@
   };
 
 </script>
+
+
+<style>
+  @import '~katex/dist/katex.min.css';
+</style>
 
 
 <style scoped>
