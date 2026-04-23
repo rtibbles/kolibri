@@ -27,8 +27,8 @@
       }"
     >
       <!-- eslint-disable-next-line vue/no-v-html -->
-      <p class="search-message-text" v-html="renderMath(message)">
-      </p>
+      <div class="search-message-text" v-html="renderMessage(message)">
+      </div>
     </div>
   </div>
 
@@ -114,6 +114,52 @@
         }
         return result;
       },
+      renderMessage(text) {
+        return this.renderMarkdown(this.renderMath(text));
+      },
+      renderMarkdown(html) {
+        // Bold: **text** → <strong>text</strong>
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Italic: *text* → <em>text</em> (multi-char content)
+        html = html.replace(/(?<!\*)\*([^\s*][^*]*?[^\s*])\*(?!\*)/g, '<em>$1</em>');
+        // Italic: *x* → <em>x</em> (single char content)
+        html = html.replace(/(?<!\*)\*([^\s*])\*(?!\*)/g, '<em>$1</em>');
+
+        const lines = html.split('\n');
+        let result = '';
+        let inOl = false;
+        let inUl = false;
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed === '') {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (inUl) { result += '</ul>'; inUl = false; }
+            result += '<br>';
+            continue;
+          }
+          const olMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+          const ulMatch = trimmed.match(/^[-*]\s+(.*)/);
+
+          if (olMatch) {
+            if (inUl) { result += '</ul>'; inUl = false; }
+            if (!inOl) { result += '<ol>'; inOl = true; }
+            result += '<li>' + olMatch[2] + '</li>';
+          } else if (ulMatch) {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (!inUl) { result += '<ul>'; inUl = true; }
+            result += '<li>' + ulMatch[1] + '</li>';
+          } else {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (inUl) { result += '</ul>'; inUl = false; }
+            result += trimmed + '<br>';
+          }
+        }
+        if (inOl) result += '</ol>';
+        if (inUl) result += '</ul>';
+
+        return result.replace(/(<br>)+$/, '');
+      },
     },
     $trs: {
       dismissMessages: {
@@ -128,6 +174,16 @@
 
 <style>
   @import '~katex/dist/katex.min.css';
+
+  .search-message-text ol,
+  .search-message-text ul {
+    margin: 4px 0;
+    padding-left: 24px;
+  }
+
+  .search-message-text li {
+    margin: 2px 0;
+  }
 </style>
 
 
