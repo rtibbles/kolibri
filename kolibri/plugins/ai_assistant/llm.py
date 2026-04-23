@@ -211,7 +211,7 @@ def _anthropic_request(messages, model, api_key, max_tokens=2000, temperature=0.
 # Unified query interface
 # ---------------------------------------------------------------------------
 
-def query_ai(prompt, system_prompt=None, parse_json=True):
+def query_ai(prompt, system_prompt=None, parse_json=True, max_tokens=2000):
     api_key, provider, model_name = get_ai_chat_settings()
 
     messages = []
@@ -225,22 +225,22 @@ def query_ai(prompt, system_prompt=None, parse_json=True):
             if not server_url:
                 return {"error": "AI inference server is not running. Start it with: kolibri manage serve_ai_models"}
             response_text = _openai_compatible_request(
-                messages, model_name, base_url=server_url,
+                messages, model_name, base_url=server_url, max_tokens=max_tokens,
             )
 
         elif provider == "openai":
             response_text = _openai_compatible_request(
-                messages, model_name, api_key=api_key,
+                messages, model_name, api_key=api_key, max_tokens=max_tokens,
             )
 
         elif provider == "ollama":
             response_text = _openai_compatible_request(
-                messages, model_name, base_url="http://localhost:11434",
+                messages, model_name, base_url="http://localhost:11434", max_tokens=max_tokens,
             )
 
         elif provider == "anthropic":
             response_text = _anthropic_request(
-                messages, model_name, api_key=api_key,
+                messages, model_name, api_key=api_key, max_tokens=max_tokens,
             )
 
         else:
