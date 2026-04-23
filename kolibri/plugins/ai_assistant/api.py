@@ -75,7 +75,16 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         if not content_ids:
             return queryset.none()
 
-        return queryset.filter(content_id__in=content_ids).distinct()
+        # Use a subquery to pick one node per content_id, avoiding
+        # duplicates when the same content exists in multiple channels.
+        from django.db.models import Min
+        deduped_pks = (
+            queryset.filter(content_id__in=content_ids)
+            .values("content_id")
+            .annotate(pk=Min("id"))
+            .values_list("pk", flat=True)
+        )
+        return queryset.filter(id__in=deduped_pks)
 
     def _filter_with_keywords(self, request, queryset, view, message):
         """Fallback: keyword-based search with two LLM calls (original flow)."""
