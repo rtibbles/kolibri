@@ -9,8 +9,9 @@ from django.db import models
 from kolibri.core.content.api import ContentNodeSearchFilter
 from kolibri.core.content.api import ContentNodeViewset
 
-from .llm import _rag_search
+from .llm import _rag_pipeline
 from .llm import get_ai_chat_settings  # noqa: F401 – re-exported for kolibri_plugin
+from .llm import _get_inference_server_url
 from .llm import load_prompt
 from .llm import query_ai
 
@@ -39,92 +40,42 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         if not message:
             return super().filter_queryset(request, queryset, view)
 
-        rag_results = _rag_search(message)
-        if rag_results is not None:
-            return self._filter_with_rag(request, queryset, message, rag_results)
+        if _get_inference_server_url():
+            return self._filter_with_rag(request, queryset, message)
         else:
             return self._filter_with_keywords(request, queryset, view, message)
 
-    def _filter_with_rag(self, request, queryset, message, rag_results):
-        """RAG-based search: use pre-fetched results, ask LLM with context."""
+    def _filter_with_rag(self, request, queryset, message):
+        """RAG pipeline search: enrichment, scoring, filtering, synthesis."""
+
+        # Collect per-request overrides from query params
+        overrides = {}
+        for key in ("enrich", "score", "synthesize", "top_docs", "sub_chunks"):
+            val = request.query_params.get(key)
+            if val is not None:
+                overrides[key] = val
+
+        pipeline_result = _rag_pipeline(message, overrides=overrides)
+
+        if pipeline_result is None:
+            logger.warning("RAG pipeline unavailable, falling back to keyword search")
+            return queryset.none()
+
+        content_ids = pipeline_result.get("content_ids", [])
+        messages = pipeline_result.get("messages", [])
+        timing = pipeline_result.get("timing", {})
 
         logger.info(
-            "RAG search returned %d results: %s",
-            len(rag_results),
-            ", ".join(
-                "{cid} (score={score})".format(cid=r["content_id"][:8], score=r["score"])
-                for r in rag_results
-            ),
+            "RAG pipeline: %d results, timing=%s",
+            len(content_ids), timing,
         )
 
-        if not rag_results:
-            logger.info("RAG search found no results for query: %r", message)
-            setattr(request, "messages", ["I couldn't find any relevant resources for your question."])
-            return queryset.none()
-
-        # Filter RAG results to only content that is available and non-coach,
-        # and enrich with title/kind from the DB (not stored in RAG metadata).
-        all_content_ids = [r["content_id"] for r in rag_results]
-        content_info = {
-            row["content_id"]: row
-            for row in queryset.filter(content_id__in=all_content_ids)
-            .exclude(coach_content=True)
-            .values("content_id", "title", "kind")
-        }
-        for r in rag_results:
-            info = content_info.get(r["content_id"])
-            if info:
-                r["title"] = info["title"]
-                r["kind"] = info["kind"]
-        rag_results = [r for r in rag_results if r["content_id"] in content_info]
-        logger.info("RAG results after availability filter: %d of %d", len(rag_results), len(all_content_ids))
-
-        if not rag_results:
-            setattr(request, "messages", ["I couldn't find any relevant resources for your question."])
-            return queryset.none()
-
-        # Build context from filtered results, staying within token budget
-        max_context_chars = 7500
-        context_items = []
-        context_chars = 0
-        for result in rag_results:
-            item = {
-                "title": result.get("title", ""),
-                "kind": result.get("kind", ""),
-                "excerpt": result.get("context", ""),
-            }
-            item_chars = len(item["title"]) + len(item["kind"]) + len(item["excerpt"])
-            if context_chars + item_chars > max_context_chars and context_items:
-                break
-            context_items.append(item)
-            context_chars += item_chars
-
-        context_text = json.dumps(context_items, indent=2)
-        logger.info("RAG assembled context from %d of %d resources (%d chars)", len(context_items), len(rag_results), len(context_text))
-
-        user_prompt = load_prompt("rag_user.txt").format(
-            question=message,
-            context=context_text,
-        )
-
-        response_text = query_ai(
-            prompt=user_prompt,
-            system_prompt=load_prompt("rag_system.txt"),
-            parse_json=False,
-        )
-
-        logger.info("RAG LLM response (%d chars): %r", len(response_text), response_text[:300])
-
-        messages = []
-        if response_text:
-            messages.append(response_text)
         setattr(request, "messages", messages)
 
-        content_ids = [r["content_id"] for r in rag_results]
-        filtered = queryset.filter(content_id__in=content_ids).exclude(coach_content=True).distinct()
-        logger.info("RAG returning %d content nodes for query: %r", filtered.count(), message)
+        if not content_ids:
+            return queryset.none()
 
-        return filtered
+        return queryset.filter(content_id__in=content_ids).distinct()
 
     def _filter_with_keywords(self, request, queryset, view, message):
         """Fallback: keyword-based search with two LLM calls (original flow)."""
