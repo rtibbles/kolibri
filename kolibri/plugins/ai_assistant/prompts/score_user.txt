@@ -1,0 +1,7 @@
+Student's query: {query}
+
+Search interpretations:
+{enriched_queries}
+
+Resources to score:
+{resources}
