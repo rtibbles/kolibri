@@ -234,18 +234,18 @@ def make_handler(engine, rag_index, model_name):
                 _send_json(self, {"error": "invalid JSON body"}, 400)
                 return
 
-            query = body.get("query", "")
-            if not query:
-                _send_json(self, {"error": "missing 'query'"}, 400)
+            queries = body.get("queries", [])
+            if not queries or not isinstance(queries, list):
+                _send_json(self, {"error": "missing or invalid 'queries' (expected list of strings)"}, 400)
                 return
 
-            top_docs = body.get("top_docs", 5)
+            top_docs = body.get("top_docs", 6)
             sub_chunks = body.get("sub_chunks", 2)
 
             try:
-                results = rag_index.search(query, top_docs=top_docs, sub_chunks=sub_chunks)
+                results = rag_index.search_batch(queries, top_docs=top_docs, sub_chunks=sub_chunks)
             except Exception:
-                logger.exception("RAG search failed")
+                logger.exception("RAG batch search failed")
                 _send_json(self, {"error": "RAG search failed"}, 500)
                 return
 
