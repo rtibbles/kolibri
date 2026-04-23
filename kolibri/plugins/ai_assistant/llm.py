@@ -267,26 +267,24 @@ def query_ai(prompt, system_prompt=None, parse_json=True, max_tokens=2000):
 
 
 # ---------------------------------------------------------------------------
-# RAG search (via inference server)
+# RAG pipeline (via inference server)
 # ---------------------------------------------------------------------------
 
-def _rag_search(query, top_docs=5, sub_chunks=2):
-    """Call the inference server's RAG search endpoint.
+def _rag_pipeline(query, overrides=None):
+    """Call the RAG pipeline, returning the full pipeline result dict or None.
 
-    Returns a list of result dicts, or None if the server is unavailable.
+    Args:
+        query: the user's search query string.
+        overrides: optional dict of pipeline config overrides
+            (enrich, score, synthesize, top_docs, sub_chunks).
+
+    Returns:
+        dict with content_ids, messages, results, enriched_queries,
+        stages_run, timing. Or None if the inference server is unavailable.
     """
     server_url = _get_inference_server_url()
     if not server_url:
         return None
 
-    try:
-        resp = requests.post(
-            "{}/v1/rag/search".format(server_url.rstrip("/")),
-            json={"query": query, "top_docs": top_docs, "sub_chunks": sub_chunks},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json().get("results", [])
-    except requests.RequestException:
-        logger.exception("RAG search request failed")
-        return None
+    from .rag_pipeline import run_pipeline
+    return run_pipeline(query, server_url, overrides=overrides)

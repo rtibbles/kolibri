@@ -188,3 +188,218 @@ def _select_results(candidates, available_cids, top_docs):
     # Return in score-descending order
     result_list = sorted(selected.values(), key=lambda r: r["score"], reverse=True)
     return result_list
+
+
+def _rag_search(queries, server_url, top_docs, sub_chunks):
+    """Call the inference server's RAG search endpoint."""
+    import requests
+
+    resp = requests.post(
+        "{}/v1/rag/search".format(server_url.rstrip("/")),
+        json={"queries": queries, "top_docs": top_docs, "sub_chunks": sub_chunks},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("results", [])
+
+
+def run_pipeline(query, server_url, overrides=None):
+    """Run the multi-stage RAG pipeline.
+
+    Args:
+        query: the user's raw search query.
+        server_url: base URL of the inference server.
+        overrides: optional dict of config overrides.
+
+    Returns:
+        dict with content_ids, messages, results, enriched_queries,
+        stages_run, timing.
+    """
+    from kolibri.core.content.models import ContentNode
+
+    config = _get_pipeline_config(overrides)
+    timing = {}
+    stages_run = []
+    t_total = time.perf_counter()
+
+    top_docs = int((overrides or {}).get("top_docs", 6))
+    sub_chunks = int((overrides or {}).get("sub_chunks", 2))
+
+    # ---- Stage 1: Query Enrichment ----
+    if config["enrich"]:
+        t0 = time.perf_counter()
+        stages_run.append("enrich")
+        enrich_response = query_ai(
+            prompt=query,
+            system_prompt=load_prompt("enrich_system.txt"),
+            parse_json=False,
+            max_tokens=64,
+        )
+        enriched_queries = _parse_enriched_queries(enrich_response, query)
+        timing["enrich_ms"] = round((time.perf_counter() - t0) * 1000)
+        logger.info(
+            "Pipeline enrich (%dms): %r -> %s",
+            timing["enrich_ms"], query, enriched_queries,
+        )
+    else:
+        enriched_queries = [query]
+
+    # ---- Stage 2: Embedding Search ----
+    t0 = time.perf_counter()
+    stages_run.append("search")
+    # Over-sample to have enough candidates after DB filtering
+    oversample = top_docs * 3
+    try:
+        candidates = _rag_search(enriched_queries, server_url, oversample, sub_chunks)
+    except Exception:
+        logger.exception("RAG search request failed")
+        return {
+            "content_ids": [],
+            "messages": ["I couldn't search for resources right now."],
+            "results": [],
+            "enriched_queries": enriched_queries,
+            "stages_run": stages_run,
+            "timing": timing,
+        }
+    timing["search_ms"] = round((time.perf_counter() - t0) * 1000)
+    logger.info("Pipeline search (%dms): %d candidates", timing["search_ms"], len(candidates))
+
+    # ---- Stage 3: DB Filter + Selection ----
+    t0 = time.perf_counter()
+    stages_run.append("db_filter")
+    candidate_cids = list({c["content_id"] for c in candidates})
+    available_info = {
+        row["content_id"]: row
+        for row in ContentNode.objects.filter(content_id__in=candidate_cids)
+        .exclude(coach_content=True)
+        .filter(available=True)
+        .values("content_id", "title", "kind")
+    }
+    selected = _select_results(candidates, set(available_info.keys()), top_docs)
+
+    # Enrich with DB metadata
+    for r in selected:
+        info = available_info.get(r["content_id"], {})
+        r["title"] = info.get("title", "")
+        r["kind"] = info.get("kind", "")
+
+    timing["db_filter_ms"] = round((time.perf_counter() - t0) * 1000)
+    logger.info(
+        "Pipeline db_filter (%dms): %d available of %d candidates, %d selected",
+        timing["db_filter_ms"], len(available_info), len(candidate_cids), len(selected),
+    )
+
+    if not selected:
+        timing["total_ms"] = round((time.perf_counter() - t_total) * 1000)
+        return {
+            "content_ids": [],
+            "messages": ["I couldn't find any relevant resources for your question."],
+            "results": [],
+            "enriched_queries": enriched_queries,
+            "stages_run": stages_run,
+            "timing": timing,
+        }
+
+    # ---- Stage 4: LLM Scoring ----
+    if config["score"]:
+        t0 = time.perf_counter()
+        stages_run.append("score")
+
+        resources_text = "\n".join(
+            "{i}. [{kind}] {title}\n   {excerpt}".format(
+                i=i + 1,
+                kind=r.get("kind", ""),
+                title=r.get("title", ""),
+                excerpt=r.get("context", "")[:500],
+            )
+            for i, r in enumerate(selected)
+        )
+        score_prompt = load_prompt("score_user.txt").format(
+            query=query,
+            enriched_queries="\n".join("- " + q for q in enriched_queries),
+            resources=resources_text,
+        )
+        score_response = query_ai(
+            prompt=score_prompt,
+            system_prompt=load_prompt("score_system.txt"),
+            parse_json=False,
+            max_tokens=256,
+        )
+        scored = _parse_scores(score_response, selected, config["hard_min"])
+        if scored is not None:
+            selected = scored
+        else:
+            logger.warning("Scoring parse failed entirely; keeping results unscored")
+
+        timing["score_ms"] = round((time.perf_counter() - t0) * 1000)
+        logger.info(
+            "Pipeline score (%dms): %s",
+            timing["score_ms"],
+            ", ".join("{t}={s}".format(t=r.get("title", "?")[:20], s=r.get("score", "?")) for r in selected),
+        )
+
+    # ---- Stage 5: Threshold Filter ----
+    if config["score"]:
+        stages_run.append("threshold")
+        before_count = len(selected)
+        selected = _threshold_filter(selected, config["hard_min"], config["ideal_min"])
+        logger.info("Pipeline threshold: %d -> %d results", before_count, len(selected))
+
+    if not selected:
+        timing["total_ms"] = round((time.perf_counter() - t_total) * 1000)
+        return {
+            "content_ids": [],
+            "messages": ["I couldn't find any relevant resources for your question."],
+            "results": [],
+            "enriched_queries": enriched_queries,
+            "stages_run": stages_run,
+            "timing": timing,
+        }
+
+    # ---- Stage 6: Synthesis ----
+    messages = []
+    if config["synthesize"]:
+        t0 = time.perf_counter()
+        stages_run.append("synthesize")
+
+        context_items = []
+        for r in selected:
+            item = {"title": r.get("title", ""), "kind": r.get("kind", "")}
+            if r.get("context_note"):
+                item["relevance"] = r["context_note"]
+            if r.get("context"):
+                item["excerpt"] = r["context"][:300]
+            context_items.append(item)
+
+        synth_prompt = load_prompt("rag_user.txt").format(
+            question=query,
+            context=json.dumps(context_items, indent=2),
+        )
+        synth_response = query_ai(
+            prompt=synth_prompt,
+            system_prompt=load_prompt("rag_system.txt"),
+            parse_json=False,
+            max_tokens=256,
+        )
+        if synth_response and synth_response.strip():
+            messages.append(synth_response.strip())
+        else:
+            logger.warning("Synthesis returned empty output")
+
+        timing["synthesize_ms"] = round((time.perf_counter() - t0) * 1000)
+        logger.info("Pipeline synthesize (%dms): %d chars", timing["synthesize_ms"], len(messages[0]) if messages else 0)
+
+    timing["total_ms"] = round((time.perf_counter() - t_total) * 1000)
+    logger.info(
+        "Pipeline complete (%dms): %d results, stages=%s, timing=%s",
+        timing["total_ms"], len(selected), stages_run, timing,
+    )
+
+    return {
+        "content_ids": [r["content_id"] for r in selected],
+        "messages": messages,
+        "results": selected,
+        "enriched_queries": enriched_queries,
+        "stages_run": stages_run,
+        "timing": timing,
+    }
