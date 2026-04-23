@@ -357,7 +357,8 @@ def run_pipeline(query, server_url, overrides=None):
         )
         score_prompt = load_prompt("score_user.txt").format(
             query=query,
-            enriched_queries="\n".join("- " + q for q in enriched_queries),
+            enriched_queries=", ".join(enriched_queries),
+            num_resources=len(selected),
             resources=resources_text,
         )
         score_response = query_ai(
