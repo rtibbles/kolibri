@@ -21,27 +21,27 @@ option_spec = {
             "description": "Path to precomputed RAG index directory (containing doc_embeddings.npy, model/, etc.)",
         },
         "AI_ASSISTANT_RAG_QUERY_ENRICHMENT": {
-            "type": "bool",
+            "type": "boolean",
             "default": True,
             "description": "Enable LLM-based query enrichment stage in RAG pipeline",
         },
         "AI_ASSISTANT_RAG_LLM_SCORING": {
-            "type": "bool",
+            "type": "boolean",
             "default": True,
             "description": "Enable LLM-based scoring and contextualization of RAG results",
         },
         "AI_ASSISTANT_RAG_SYNTHESIS": {
-            "type": "bool",
+            "type": "boolean",
             "default": True,
             "description": "Enable LLM synthesis of introductory message for RAG results",
         },
         "AI_ASSISTANT_RAG_SCORE_HARD_MIN": {
-            "type": "int",
+            "type": "integer",
             "default": 3,
             "description": "Minimum LLM relevance score (1-5) to include a result. Results below this are always excluded.",
         },
         "AI_ASSISTANT_RAG_SCORE_IDEAL_MIN": {
-            "type": "int",
+            "type": "integer",
             "default": 4,
             "description": "Preferred minimum score. Applied per enriched query: if any result for a given query meets this threshold, lower-scoring results from that query are excluded. Across queries, the best result is always kept down to SCORE_HARD_MIN.",
         },
