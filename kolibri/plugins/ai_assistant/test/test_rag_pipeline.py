@@ -177,8 +177,23 @@ class TestParseScores:
         assert scored[1]["score"] == 5
         assert scored[1]["context_note"] == "step by step guide"
 
-    def test_missing_tab_uses_hard_min(self):
-        raw = "no tab here\nvalid note\t4"
+    def test_space_separated_trailing_digit(self):
+        raw = "covers basic concepts 3\nstep by step guide 5"
+        results = [{"content_id": "a"}, {"content_id": "b"}]
+        scored = _parse_scores(raw, results, hard_min=3)
+        assert scored[0]["score"] == 3
+        assert scored[0]["context_note"] == "covers basic concepts"
+        assert scored[1]["score"] == 5
+
+    def test_numbered_lines_stripped(self):
+        raw = "1. covers basics\t3\n2. step by step\t5"
+        results = [{"content_id": "a"}, {"content_id": "b"}]
+        scored = _parse_scores(raw, results, hard_min=3)
+        assert scored[0]["score"] == 3
+        assert scored[0]["context_note"] == "covers basics"
+
+    def test_no_score_at_all_uses_hard_min(self):
+        raw = "just a note with no score\nvalid note\t4"
         results = [{"content_id": "a"}, {"content_id": "b"}]
         scored = _parse_scores(raw, results, hard_min=3)
         assert scored[0]["score"] == 3

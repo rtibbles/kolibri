@@ -59,8 +59,46 @@ def _parse_enriched_queries(raw_text, original_query):
     return queries
 
 
+def _parse_score_line(line):
+    """Try to extract (context_note, score) from a single LLM output line.
+
+    Tries in order:
+    1. Tab-separated: "context note\\t4"
+    2. Trailing digit after whitespace: "context note 4"
+    Returns (context_note, score) or None on failure.
+    """
+    import re
+
+    # Strip leading numbering like "1. " or "1 - " or "1) "
+    line = re.sub(r"^\d+[\.\)\-]\s*", "", line).strip()
+    if not line:
+        return None
+
+    # Try tab separator first
+    parts = line.rsplit("\t", 1)
+    if len(parts) == 2:
+        try:
+            return parts[0].strip(), int(parts[1].strip())
+        except ValueError:
+            pass
+
+    # Try trailing digit after whitespace/punctuation
+    m = re.search(r"[\s\t]+(\d)\s*$", line)
+    if m:
+        score = int(m.group(1))
+        note = line[:m.start()].strip().rstrip(":-")
+        if note:
+            return note, score
+
+    # No score found
+    return None
+
+
 def _parse_scores(raw_text, results, hard_min):
-    """Parse tab-separated scoring output from LLM.
+    """Parse scoring output from LLM.
+
+    Expects one line per result with a context note and a score (1-5).
+    Handles tab-separated and space-separated formats, strips numbering.
 
     Returns list of results with 'score' and 'context_note' added,
     or None if the entire output is unparseable.
@@ -71,26 +109,29 @@ def _parse_scores(raw_text, results, hard_min):
 
     lines = [line for line in raw_text.strip().split("\n") if line.strip()]
     scored = []
+    parse_failures = 0
     for i, result in enumerate(results):
         r = dict(result)
         if i < len(lines):
-            parts = lines[i].rsplit("\t", 1)
-            if len(parts) == 2:
-                context_note = parts[0].strip()
-                try:
-                    score = max(1, min(5, int(parts[1].strip())))
-                    r["score"] = score
-                    r["context_note"] = context_note
-                    scored.append(r)
-                    continue
-                except ValueError:
-                    logger.warning("Non-integer score in line %d: %r", i, lines[i])
+            parsed = _parse_score_line(lines[i])
+            if parsed is not None:
+                context_note, score = parsed
+                r["score"] = max(1, min(5, score))
+                r["context_note"] = context_note
+                scored.append(r)
+                continue
             else:
-                logger.warning("Missing tab separator in score line %d: %r", i, lines[i])
+                logger.warning("Could not parse score from line %d: %r", i, lines[i])
+                parse_failures += 1
         # Fallback for missing/malformed lines
         r["score"] = hard_min
         r["context_note"] = ""
         scored.append(r)
+
+    if parse_failures == len(lines):
+        logger.warning("All %d score lines failed to parse", parse_failures)
+        return None
+
     return scored
 
 

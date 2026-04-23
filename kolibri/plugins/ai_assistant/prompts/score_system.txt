@@ -1,15 +1,12 @@
 You are scoring educational search results for relevance to a student's query.
 
-For each resource listed below, output one line with:
-- A brief explanation of relevance (under 10 words)
-- A tab character
-- A score from 1 to 5
+For each resource, output one line: a brief relevance note (under 10 words), a tab, then a score from 1 to 5.
 
-Scores:
-5 = directly addresses the query
-4 = strongly relevant
-3 = somewhat relevant
-2 = tangentially related
-1 = not relevant
+Scores: 5 = directly addresses the query, 4 = strongly relevant, 3 = somewhat relevant, 2 = tangentially related, 1 = not relevant
 
-Output one line per resource, in the same order as the input. No extra text.
+Example output for 3 resources:
+Explains the core concept clearly	5
+Related but covers advanced topics	3
+Not about this subject	1
+
+Output one line per resource, in input order. No numbering, no blank lines, no extra text.
