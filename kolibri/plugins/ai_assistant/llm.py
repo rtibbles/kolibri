@@ -270,21 +270,23 @@ def query_ai(prompt, system_prompt=None, parse_json=True, max_tokens=2000):
 # RAG pipeline (via inference server)
 # ---------------------------------------------------------------------------
 
-def _rag_pipeline(query, overrides=None):
+def _rag_pipeline(query, overrides=None, queryset=None):
     """Call the RAG pipeline, returning the full pipeline result dict or None.
 
     Args:
         query: the user's search query string.
         overrides: optional dict of pipeline config overrides
             (enrich, score, synthesize, top_docs, sub_chunks).
+        queryset: optional base ContentNode queryset for keyword search.
 
     Returns:
         dict with content_ids, messages, results, enriched_queries,
-        stages_run, timing. Or None if the inference server is unavailable.
+        query_type, activity_filter, stages_run, timing.
+        Or None if the inference server is unavailable.
     """
     server_url = _get_inference_server_url()
     if not server_url:
         return None
 
     from .rag_pipeline import run_pipeline
-    return run_pipeline(query, server_url, overrides=overrides)
+    return run_pipeline(query, server_url, overrides=overrides, queryset=queryset)

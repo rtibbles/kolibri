@@ -114,6 +114,7 @@ from unittest.mock import patch
 from kolibri.plugins.ai_assistant.rag_pipeline import _threshold_filter
 from kolibri.plugins.ai_assistant.rag_pipeline import _parse_scores
 from kolibri.plugins.ai_assistant.rag_pipeline import _parse_enriched_queries
+from kolibri.plugins.ai_assistant.rag_pipeline import _parse_enrichment
 from kolibri.plugins.ai_assistant.rag_pipeline import _get_pipeline_config
 from kolibri.plugins.ai_assistant.rag_pipeline import _select_results
 
@@ -247,6 +248,71 @@ class TestParseEnrichedQueries:
         raw = "query one\n\n\nquery two\n"
         result = _parse_enriched_queries(raw, "original")
         assert result == ["query one", "query two"]
+
+
+class TestParseEnrichment:
+
+    def test_complex_with_no_activity(self):
+        raw = "complex\n\nfraction concepts\nfraction arithmetic"
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "complex"
+        assert result["activity_filter"] == ""
+        assert result["queries"] == ["fraction concepts", "fraction arithmetic"]
+
+    def test_keywords_with_activity(self):
+        raw = "keywords\npractice\nfractions"
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "keywords"
+        assert result["activity_filter"] == "practice"
+        assert result["queries"] == ["fractions"]
+
+    def test_keywords_no_activity(self):
+        raw = "keywords\n\nphotosynthesis"
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "keywords"
+        assert result["activity_filter"] == ""
+        assert result["queries"] == ["photosynthesis"]
+
+    def test_fallback_on_empty(self):
+        result = _parse_enrichment("", "original query")
+        assert result["query_type"] == "complex"
+        assert result["activity_filter"] == ""
+        assert result["queries"] == ["original query"]
+
+    def test_fallback_on_missing_type(self):
+        """If LLM returns old format (just queries), treat as complex."""
+        raw = "fraction concepts\nfraction arithmetic"
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "complex"
+        assert result["queries"] == ["fraction concepts", "fraction arithmetic"]
+
+    def test_invalid_activity_ignored(self):
+        raw = "keywords\nmusic\nrock songs"
+        result = _parse_enrichment(raw, "original query")
+        assert result["activity_filter"] == ""
+        assert result["queries"] == ["rock songs"]
+
+    def test_watch_activity(self):
+        raw = "keywords\nwatch\nnature wildlife"
+        result = _parse_enrichment(raw, "original query")
+        assert result["activity_filter"] == "watch"
+
+    def test_strips_whitespace(self):
+        raw = "  complex  \n  \n  fraction concepts  \n  "
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "complex"
+        assert result["queries"] == ["fraction concepts"]
+
+    def test_capitalized_type(self):
+        raw = "KEYWORDS\nPRACTICE\nfractions"
+        result = _parse_enrichment(raw, "original query")
+        assert result["query_type"] == "keywords"
+        assert result["activity_filter"] == "practice"
+
+    def test_zero_queries_falls_back_to_original(self):
+        raw = "keywords\npractice\n"
+        result = _parse_enrichment(raw, "original query")
+        assert result["queries"] == ["original query"]
 
 
 class TestGetPipelineConfig:
@@ -423,3 +489,54 @@ class TestRunPipeline:
         assert result["content_ids"] == ["cid_a"]
         assert result["messages"] == []
         assert "enrich" not in result["stages_run"]
+        assert result["query_type"] == "complex"
+        assert result["activity_filter"] == ""
+
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline.query_ai")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._rag_search")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._keyword_search")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._get_pipeline_config")
+    def test_keyword_path_skips_scoring_and_synthesis(self, mock_config, mock_kw_search, mock_search, mock_query_ai):
+        """Keyword queries skip scoring and synthesis, return no messages."""
+        mock_config.return_value = {
+            "enrich": True, "score": True, "synthesize": True,
+            "hard_min": 3, "ideal_min": 4,
+        }
+        # Enrichment returns keyword classification
+        mock_query_ai.return_value = "keywords\npractice\nfractions"
+        # Keyword search returns results
+        mock_kw_search.return_value = ["cid_kw1", "cid_kw2"]
+        # Embedding supplement returns some candidates
+        mock_search.return_value = [
+            {"query_index": 0, "content_id": "cid_emb", "score": 0.8, "context": ""},
+        ]
+
+        mock_cn = MagicMock()
+        # For embedding supplement DB filter
+        mock_cn.objects.filter.return_value.exclude.return_value.filter.return_value.values.return_value = [
+            {"content_id": "cid_emb", "title": "Emb Result", "kind": "exercise"},
+        ]
+        mock_cn.objects.filter.return_value.exclude.return_value.filter.return_value.filter.return_value.values.return_value = [
+            {"content_id": "cid_emb", "title": "Emb Result", "kind": "exercise"},
+        ]
+
+        mock_models = MagicMock()
+        mock_models.ContentNode = mock_cn
+        mock_qs = MagicMock()
+        with patch.dict("sys.modules", {"kolibri.core.content.models": mock_models}):
+            result = run_pipeline(
+                "practice fractions", "http://localhost:8765",
+                queryset=mock_qs,
+            )
+
+        assert result["query_type"] == "keywords"
+        assert result["activity_filter"] == "practice"
+        assert result["messages"] == []
+        # query_ai called only once (enrichment), not for scoring or synthesis
+        assert mock_query_ai.call_count == 1
+        assert "score" not in result["stages_run"]
+        assert "synthesize" not in result["stages_run"]
+        assert "keyword_search" in result["stages_run"]
+        assert "embedding_supplement" in result["stages_run"]
+        # Keyword results come first
+        assert result["content_ids"][:2] == ["cid_kw1", "cid_kw2"]

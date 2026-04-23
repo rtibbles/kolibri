@@ -6,6 +6,10 @@ search and LLM completions, uses Django ORM for content filtering.
 import json
 import logging
 import time
+from functools import reduce
+from operator import and_
+
+from django.db.models import Q
 
 from kolibri.utils.conf import OPTIONS
 
@@ -15,6 +19,15 @@ from .llm import query_ai
 
 
 logger = logging.getLogger(__name__)
+
+VALID_ACTIVITY_FILTERS = {"practice", "watch", "read", "explore"}
+
+ACTIVITY_FILTER_CODES = {
+    "practice": "VwRCom7G",  # learning_activities.PRACTICE
+    "watch": "UD5UGM0z",  # learning_activities.WATCH
+    "read": "wA01urpi",  # learning_activities.READ
+    "explore": "#j8L0eq3",  # learning_activities.EXPLORE
+}
 
 
 def _get_pipeline_config(overrides=None):
@@ -44,19 +57,78 @@ def _get_pipeline_config(overrides=None):
     return config
 
 
+def _parse_enrichment(raw_text, original_query):
+    """Parse the structured enrichment response from LLM.
+
+    Expected format:
+        Line 1: query_type ("complex" or "keywords")
+        Line 2: activity_filter ("practice", "watch", "read", "explore", or blank)
+        Lines 3+: enriched/corrected queries
+
+    Returns dict with query_type, activity_filter, queries.
+    Falls back to complex path with original query on parse failure.
+    """
+    fallback = {
+        "query_type": "complex",
+        "activity_filter": "",
+        "queries": [original_query],
+    }
+
+    if not raw_text or not raw_text.strip():
+        logger.warning("Enrichment returned empty output, falling back to complex with original query")
+        return fallback
+
+    lines = raw_text.strip().split("\n")
+
+    # Check if first line is a valid query type
+    first = lines[0].strip().lower()
+    if first not in ("complex", "keywords"):
+        # Old format (just queries) or malformed; treat as complex
+        queries = [l.strip() for l in lines if l.strip()]
+        if not queries:
+            return fallback
+        logger.info("Enrichment missing type line, treating as complex")
+        return {
+            "query_type": "complex",
+            "activity_filter": "",
+            "queries": queries,
+        }
+
+    query_type = first
+
+    # Line 2: activity filter
+    activity_filter = ""
+    if len(lines) > 1:
+        candidate = lines[1].strip().lower()
+        if candidate in VALID_ACTIVITY_FILTERS:
+            activity_filter = candidate
+
+    # Lines 3+: queries
+    query_lines = lines[2:] if len(lines) > 2 else []
+    queries = [l.strip() for l in query_lines if l.strip()]
+
+    if not queries:
+        logger.warning("Enrichment parsed to zero queries from: %r", raw_text)
+        return {
+            "query_type": query_type,
+            "activity_filter": activity_filter,
+            "queries": [original_query],
+        }
+
+    return {
+        "query_type": query_type,
+        "activity_filter": activity_filter,
+        "queries": queries,
+    }
+
+
 def _parse_enriched_queries(raw_text, original_query):
     """Parse newline-delimited enriched queries from LLM output.
 
-    Returns the original query as a singleton list on failure.
+    Legacy wrapper; new code should use _parse_enrichment().
     """
-    if not raw_text or not raw_text.strip():
-        logger.warning("Query enrichment returned empty output, falling back to original query")
-        return [original_query]
-    queries = [line.strip() for line in raw_text.strip().split("\n") if line.strip()]
-    if not queries:
-        logger.warning("Query enrichment parsed to zero queries from: %r", raw_text)
-        return [original_query]
-    return queries
+    result = _parse_enrichment(raw_text, original_query)
+    return result["queries"]
 
 
 def _parse_score_line(line):
@@ -244,17 +316,143 @@ def _rag_search(queries, server_url, top_docs, sub_chunks):
     return resp.json().get("results", [])
 
 
-def run_pipeline(query, server_url, overrides=None):
+def _keyword_search(queries, queryset, activity_filter="", max_per_query=10):
+    """Run keyword search against ContentNode queryset.
+
+    Uses the same term-splitting and stopword logic as Kolibri's
+    ContentNodeSearchFilter: each query is split into terms (via
+    search_smart_split), stopwords removed, then terms are ANDed
+    across title/description fields (matching DRF SearchFilter behavior).
+
+    Args:
+        queries: list of corrected keyword strings from enrichment.
+        queryset: base ContentNode queryset (already filtered for availability).
+        activity_filter: activity filter label (e.g., "practice") or "".
+        max_per_query: max results per keyword query.
+
+    Returns:
+        list of content_id strings, in order, deduplicated.
+    """
+    from kolibri.core.content.api import search_smart_split
+    from kolibri.core.content.utils.stopwords import stopwords_set
+
+    qs = queryset.exclude(coach_content=True).exclude(kind="topic")
+    if activity_filter and activity_filter in ACTIVITY_FILTER_CODES:
+        qs = qs.filter(learning_activities__contains=ACTIVITY_FILTER_CODES[activity_filter])
+
+    seen = set()
+    results = []
+    for query_text in queries:
+        terms = search_smart_split(query_text)
+        terms = [t for t in terms if t not in stopwords_set] or terms
+        if not terms:
+            continue
+
+        # AND across terms, OR across fields (same as DRF SearchFilter)
+        conditions = []
+        for term in terms:
+            conditions.append(Q(title__icontains=term) | Q(description__icontains=term))
+        combined = reduce(and_, conditions)
+
+        matches = qs.filter(combined).values_list("content_id", flat=True)[:max_per_query]
+        for cid in matches:
+            if cid not in seen:
+                seen.add(cid)
+                results.append(cid)
+    return results
+
+
+def _run_keyword_path(query, enriched_queries, activity_filter,
+                      server_url, queryset, top_docs, sub_chunks,
+                      stages_run, timing, t_total):
+    """Execute the keyword search path: keyword search + embedding supplement."""
+    from kolibri.core.content.models import ContentNode
+
+    if queryset is None:
+        queryset = ContentNode.objects.filter(available=True)
+
+    # Keyword search
+    t0 = time.perf_counter()
+    stages_run.append("keyword_search")
+    keyword_cids = _keyword_search(enriched_queries, queryset, activity_filter)
+    timing["keyword_search_ms"] = round((time.perf_counter() - t0) * 1000)
+    logger.info(
+        "Pipeline keyword_search (%dms): %d results for %s (activity=%s)",
+        timing["keyword_search_ms"], len(keyword_cids), enriched_queries, activity_filter,
+    )
+
+    # Embedding supplement
+    t0 = time.perf_counter()
+    stages_run.append("embedding_supplement")
+    oversample = top_docs * 3
+    try:
+        candidates = _rag_search(enriched_queries, server_url, oversample, sub_chunks)
+    except Exception:
+        logger.exception("Embedding supplement search failed")
+        candidates = []
+
+    # Filter and select embedding results, excluding keyword hits
+    keyword_cid_set = set(keyword_cids)
+    candidate_cids = list({c["content_id"] for c in candidates} - keyword_cid_set)
+
+    supplement_cids = []
+    if candidate_cids:
+        supplement_qs = ContentNode.objects.filter(content_id__in=candidate_cids) \
+            .exclude(coach_content=True) \
+            .filter(available=True)
+        if activity_filter and activity_filter in ACTIVITY_FILTER_CODES:
+            supplement_qs = supplement_qs.filter(
+                learning_activities__contains=ACTIVITY_FILTER_CODES[activity_filter]
+            )
+        available_info = {
+            row["content_id"]: row
+            for row in supplement_qs.values("content_id", "title", "kind")
+        }
+
+        supplement_slots = max(0, top_docs - len(keyword_cids))
+        if supplement_slots > 0 and available_info:
+            supplement = _select_results(candidates, set(available_info.keys()), supplement_slots)
+            supplement_cids = [r["content_id"] for r in supplement]
+
+    timing["embedding_supplement_ms"] = round((time.perf_counter() - t0) * 1000)
+    logger.info(
+        "Pipeline embedding_supplement (%dms): %d supplement results",
+        timing["embedding_supplement_ms"], len(supplement_cids),
+    )
+
+    # Merge: keyword results first, then embedding supplements
+    all_cids = keyword_cids + supplement_cids
+
+    timing["total_ms"] = round((time.perf_counter() - t_total) * 1000)
+    logger.info(
+        "Pipeline keyword path complete (%dms): %d keyword + %d supplement = %d results, stages=%s",
+        timing["total_ms"], len(keyword_cids), len(supplement_cids), len(all_cids), stages_run,
+    )
+
+    return {
+        "content_ids": all_cids,
+        "messages": [],
+        "results": [],
+        "enriched_queries": enriched_queries,
+        "query_type": "keywords",
+        "activity_filter": activity_filter,
+        "stages_run": stages_run,
+        "timing": timing,
+    }
+
+
+def run_pipeline(query, server_url, overrides=None, queryset=None):
     """Run the multi-stage RAG pipeline.
 
     Args:
         query: the user's raw search query.
         server_url: base URL of the inference server.
         overrides: optional dict of config overrides.
+        queryset: optional base ContentNode queryset for keyword search.
 
     Returns:
         dict with content_ids, messages, results, enriched_queries,
-        stages_run, timing.
+        query_type, activity_filter, stages_run, timing.
     """
     from kolibri.core.content.models import ContentNode
 
@@ -274,16 +472,29 @@ def run_pipeline(query, server_url, overrides=None):
             prompt=query,
             system_prompt=load_prompt("enrich_system.txt"),
             parse_json=False,
-            max_tokens=64,
+            max_tokens=96,
         )
-        enriched_queries = _parse_enriched_queries(enrich_response, query)
+        enrichment = _parse_enrichment(enrich_response, query)
+        enriched_queries = enrichment["queries"]
+        query_type = enrichment["query_type"]
+        activity_filter = enrichment["activity_filter"]
         timing["enrich_ms"] = round((time.perf_counter() - t0) * 1000)
         logger.info(
-            "Pipeline enrich (%dms): %r -> %s",
-            timing["enrich_ms"], query, enriched_queries,
+            "Pipeline enrich (%dms): %r -> type=%s, activity=%s, queries=%s",
+            timing["enrich_ms"], query, query_type, activity_filter, enriched_queries,
         )
     else:
         enriched_queries = [query]
+        query_type = "complex"
+        activity_filter = ""
+
+    # ---- Keyword path: corrected keyword search + embedding supplement ----
+    if query_type == "keywords":
+        return _run_keyword_path(
+            query, enriched_queries, activity_filter,
+            server_url, queryset, top_docs, sub_chunks,
+            stages_run, timing, t_total,
+        )
 
     # ---- Stage 2: Embedding Search ----
     t0 = time.perf_counter()
@@ -299,6 +510,8 @@ def run_pipeline(query, server_url, overrides=None):
             "messages": ["I couldn't search for resources right now."],
             "results": [],
             "enriched_queries": enriched_queries,
+            "query_type": query_type,
+            "activity_filter": activity_filter,
             "stages_run": stages_run,
             "timing": timing,
         }
@@ -309,12 +522,14 @@ def run_pipeline(query, server_url, overrides=None):
     t0 = time.perf_counter()
     stages_run.append("db_filter")
     candidate_cids = list({c["content_id"] for c in candidates})
+    db_qs = ContentNode.objects.filter(content_id__in=candidate_cids) \
+        .exclude(coach_content=True) \
+        .filter(available=True)
+    if activity_filter and activity_filter in ACTIVITY_FILTER_CODES:
+        db_qs = db_qs.filter(learning_activities__contains=ACTIVITY_FILTER_CODES[activity_filter])
     available_info = {
         row["content_id"]: row
-        for row in ContentNode.objects.filter(content_id__in=candidate_cids)
-        .exclude(coach_content=True)
-        .filter(available=True)
-        .values("content_id", "title", "kind")
+        for row in db_qs.values("content_id", "title", "kind")
     }
     selected = _select_results(candidates, set(available_info.keys()), top_docs)
 
@@ -337,6 +552,8 @@ def run_pipeline(query, server_url, overrides=None):
             "messages": ["I couldn't find any relevant resources for your question."],
             "results": [],
             "enriched_queries": enriched_queries,
+            "query_type": query_type,
+            "activity_filter": activity_filter,
             "stages_run": stages_run,
             "timing": timing,
         }
@@ -394,6 +611,8 @@ def run_pipeline(query, server_url, overrides=None):
             "messages": ["I couldn't find any relevant resources for your question."],
             "results": [],
             "enriched_queries": enriched_queries,
+            "query_type": query_type,
+            "activity_filter": activity_filter,
             "stages_run": stages_run,
             "timing": timing,
         }
@@ -442,6 +661,8 @@ def run_pipeline(query, server_url, overrides=None):
         "messages": messages,
         "results": selected,
         "enriched_queries": enriched_queries,
+        "query_type": query_type,
+        "activity_filter": activity_filter,
         "stages_run": stages_run,
         "timing": timing,
     }

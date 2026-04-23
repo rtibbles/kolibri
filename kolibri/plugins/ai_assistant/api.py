@@ -55,7 +55,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             if val is not None:
                 overrides[key] = val
 
-        pipeline_result = _rag_pipeline(message, overrides=overrides)
+        pipeline_result = _rag_pipeline(message, overrides=overrides, queryset=queryset)
 
         if pipeline_result is None:
             logger.warning("RAG pipeline unavailable, falling back to keyword search")
@@ -77,14 +77,28 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
 
         # Use a subquery to pick one node per content_id, avoiding
         # duplicates when the same content exists in multiple channels.
+        from django.db.models import Case
+        from django.db.models import IntegerField
         from django.db.models import Min
+        from django.db.models import When
+
         deduped_pks = (
             queryset.filter(content_id__in=content_ids)
             .values("content_id")
             .annotate(pk=Min("id"))
             .values_list("pk", flat=True)
         )
-        return queryset.filter(id__in=deduped_pks)
+
+        # Preserve pipeline result ordering (keyword results first,
+        # then embedding supplements; or score-ranked for complex path)
+        ordering = Case(
+            *[When(content_id=cid, then=pos) for pos, cid in enumerate(content_ids)],
+            default=len(content_ids),
+            output_field=IntegerField(),
+        )
+        return queryset.filter(id__in=deduped_pks).annotate(
+            _pipeline_order=ordering
+        ).order_by("_pipeline_order")
 
     def _filter_with_keywords(self, request, queryset, view, message):
         """Fallback: keyword-based search with two LLM calls (original flow)."""
