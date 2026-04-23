@@ -329,3 +329,82 @@ class TestSelectResults:
         selected = _select_results(candidates, available, top_docs=2)
         doc_a = [r for r in selected if r["content_id"] == "doc_a"][0]
         assert doc_a["best_query_index"] == 1
+
+
+from unittest.mock import MagicMock
+from kolibri.plugins.ai_assistant.rag_pipeline import run_pipeline
+
+
+class TestRunPipeline:
+
+    def _mock_content_node():
+        """Create a mock ContentNode module for lazy import."""
+        mock_cn = MagicMock()
+        return mock_cn
+
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline.query_ai")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._rag_search")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._get_pipeline_config")
+    def test_all_stages_enabled(self, mock_config, mock_search, mock_query_ai):
+        """Full pipeline with all stages enabled."""
+        mock_config.return_value = {
+            "enrich": True,
+            "score": True,
+            "synthesize": True,
+            "hard_min": 3,
+            "ideal_min": 4,
+        }
+        mock_query_ai.side_effect = [
+            "fraction basics\nadding fractions",  # enrichment
+            "covers basics\t4\nstep by step\t5",  # scoring
+            "Here are some great resources about fractions!",  # synthesis
+        ]
+        mock_search.return_value = [
+            {"query_index": 0, "content_id": "cid_a", "score": 0.9, "context": "excerpt a"},
+            {"query_index": 1, "content_id": "cid_b", "score": 0.8, "context": "excerpt b"},
+        ]
+        mock_cn = MagicMock()
+        mock_cn.objects.filter.return_value.exclude.return_value.filter.return_value.values.return_value = [
+            {"content_id": "cid_a", "title": "Fraction Basics", "kind": "video"},
+            {"content_id": "cid_b", "title": "Adding Fractions", "kind": "exercise"},
+        ]
+        mock_models = MagicMock()
+        mock_models.ContentNode = mock_cn
+        with patch.dict("sys.modules", {"kolibri.core.content.models": mock_models}):
+            result = run_pipeline("I don't get fractions", "http://localhost:8765")
+
+        assert "enrich" in result["stages_run"]
+        assert "score" in result["stages_run"]
+        assert "synthesize" in result["stages_run"]
+        assert len(result["content_ids"]) == 2
+        assert result["messages"] == ["Here are some great resources about fractions!"]
+        assert "total_ms" in result["timing"]
+
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline.query_ai")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._rag_search")
+    @patch("kolibri.plugins.ai_assistant.rag_pipeline._get_pipeline_config")
+    def test_all_stages_disabled(self, mock_config, mock_search, mock_query_ai):
+        """Pipeline with all LLM stages disabled: just embedding search + DB filter."""
+        mock_config.return_value = {
+            "enrich": False,
+            "score": False,
+            "synthesize": False,
+            "hard_min": 3,
+            "ideal_min": 4,
+        }
+        mock_search.return_value = [
+            {"query_index": 0, "content_id": "cid_a", "score": 0.9, "context": "excerpt"},
+        ]
+        mock_cn = MagicMock()
+        mock_cn.objects.filter.return_value.exclude.return_value.filter.return_value.values.return_value = [
+            {"content_id": "cid_a", "title": "Test", "kind": "video"},
+        ]
+        mock_models = MagicMock()
+        mock_models.ContentNode = mock_cn
+        with patch.dict("sys.modules", {"kolibri.core.content.models": mock_models}):
+            result = run_pipeline("test query", "http://localhost:8765")
+
+        mock_query_ai.assert_not_called()
+        assert result["content_ids"] == ["cid_a"]
+        assert result["messages"] == []
+        assert "enrich" not in result["stages_run"]
