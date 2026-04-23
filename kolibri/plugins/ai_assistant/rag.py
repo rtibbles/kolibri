@@ -206,6 +206,62 @@ class RAGIndex:
         )
         return results
 
+    def search_batch(self, queries, top_docs=6, sub_chunks=2):
+        """Search with multiple queries, returning per-query ranked results.
+
+        Args:
+            queries: list of query strings.
+            top_docs: number of top documents to return per query.
+            sub_chunks: number of sub-chunks to select per document.
+
+        Returns:
+            list of dicts, each with query_index, content_id, score, context.
+        """
+        t0 = time.perf_counter()
+
+        # Batch embed all queries in one call
+        query_vecs = self.embed(queries)
+        t_embed = time.perf_counter()
+        logger.info(
+            "RAG batch embed %d queries in %.1fms",
+            len(queries), (t_embed - t0) * 1000,
+        )
+
+        results = []
+        for qi, query_vec in enumerate(query_vecs):
+            # Document-level search
+            doc_scores = self.doc_embeddings @ query_vec
+            if top_docs < len(doc_scores):
+                top_indices = np.argpartition(doc_scores, -top_docs)[-top_docs:]
+                top_indices = top_indices[
+                    np.argsort(doc_scores[top_indices])[::-1]
+                ]
+            else:
+                top_indices = np.argsort(doc_scores)[::-1]
+
+            for doc_idx in top_indices[:top_docs]:
+                meta = self.doc_metadata[doc_idx]
+                cid = meta["content_id"]
+                score = float(doc_scores[doc_idx])
+
+                context = ""
+                if sub_chunks > 0:
+                    context = self._select_sub_chunks(cid, query_vec, sub_chunks)
+
+                results.append({
+                    "query_index": qi,
+                    "content_id": cid,
+                    "score": round(score, 4),
+                    "context": context,
+                })
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.info(
+            "RAG batch search complete in %.1fms: %d queries, %d results",
+            elapsed_ms, len(queries), len(results),
+        )
+        return results
+
     def _select_sub_chunks(self, content_id, query_vec, n):
         """Select best sub-chunks from a document, formatted with [...] gaps."""
         idx_info = self.chunk_index.get(content_id)
