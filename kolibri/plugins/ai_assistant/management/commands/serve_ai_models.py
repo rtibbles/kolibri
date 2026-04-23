@@ -188,13 +188,18 @@ def make_handler(engine, rag_index, model_name):
                     "content": [{"type": "text", "text": "\n\n".join(system_parts)}],
                 })
 
+            logger.info("LLM prompt:\n--- SYSTEM ---\n%s\n--- USER ---\n%s\n--- END PROMPT ---",
+                        "\n\n".join(system_parts) if system_parts else "(none)",
+                        user_prompt)
+
             try:
                 t0 = time.perf_counter()
                 with engine.create_conversation(messages=litert_messages) as conversation:
                     response = conversation.send_message(user_prompt)
                 elapsed = time.perf_counter() - t0
                 text = response["content"][0]["text"]
-                logger.info("LLM inference in %.1fs (%d chars)", elapsed, len(text))
+                logger.info("LLM response (%.1fs, %d chars):\n--- RESPONSE ---\n%s\n--- END RESPONSE ---",
+                            elapsed, len(text), text)
             except Exception:
                 logger.exception("LLM inference failed")
                 _send_json(self, {"error": "LLM inference failed"}, 500)
