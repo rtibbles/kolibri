@@ -61,6 +61,7 @@
   import camelCase from 'lodash/camelCase';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import { injectBaseSearch } from 'kolibri-common/composables/useBaseSearch';
+  import { getCategoryIcon } from 'kolibri-common/utils/categoryIcon';
 
   export default {
     name: 'CategorySearchOptions',
@@ -140,26 +141,7 @@
       camelCase(val) {
         return camelCase(val);
       },
-      icon(key) {
-        // 'language' icon is already in use and it doesn't follow the
-        // same naming pattern for category resources, so set separate
-        // case to return the correct icon
-        if (camelCase(key) === 'languageLearning') {
-          return 'language';
-        } else if (
-          camelCase(key) === 'technicalAndVocationalTraining' ||
-          camelCase(key) === 'professionalSkills'
-        ) {
-          // similarly, 'skills' icon is used for both of these resources
-          // and doesn't follow same pattern
-          return 'skillsResource';
-        } else if (camelCase(key) === 'foundationsLogicAndCriticalThinking') {
-          // naming mismatch
-          return 'logicCriticalThinkingResource';
-        } else {
-          return `${camelCase(key)}Resource`;
-        }
-      },
+      icon: getCategoryIcon,
     },
   };
 

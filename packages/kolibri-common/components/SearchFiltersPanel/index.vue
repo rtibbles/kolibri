@@ -27,17 +27,19 @@
           class="linear-loader"
         />
         <!-- search by keyword -->
-        <h2 class="title">
-          {{ $tr('keywords') }}
-        </h2>
-        <SearchBox
-          key="channel-search"
-          ref="searchBox"
-          :placeholder="coreString('findSomethingToLearn')"
-          :disabled="searchLoading"
-          :value="value.keywords || ''"
-          @change="val => $emit('input', { ...value, keywords: val })"
-        />
+        <template v-if="!hideKeywords">
+          <h2 class="title">
+            {{ $tr('keywords') }}
+          </h2>
+          <SearchBox
+            key="channel-search"
+            ref="searchBox"
+            :placeholder="coreString('findSomethingToLearn')"
+            :disabled="searchLoading"
+            :value="value.keywords || ''"
+            @change="val => $emit('input', { ...value, keywords: val })"
+          />
+        </template>
         <div v-if="Object.keys(availableLibraryCategories).length">
           <h2 class="section title">
             {{ $tr('categories') }}
@@ -119,18 +121,20 @@
       </div>
       <div v-if="accordion && !currentCategory">
         <!-- search by keyword -->
-        <h2 class="title">
-          {{ title || $tr('keywords') }}
-        </h2>
-        <SearchBox
-          key="channel-search"
-          ref="searchBox"
-          style="margin-bottom: 1em"
-          :disabled="searchLoading"
-          :placeholder="coreString('searchByKeyword')"
-          :value="value.keywords || ''"
-          @change="val => $emit('input', { ...value, keywords: val })"
-        />
+        <template v-if="!hideKeywords">
+          <h2 class="title">
+            {{ title || $tr('keywords') }}
+          </h2>
+          <SearchBox
+            key="channel-search"
+            ref="searchBox"
+            style="margin-bottom: 1em"
+            :disabled="searchLoading"
+            :placeholder="coreString('searchByKeyword')"
+            :value="value.keywords || ''"
+            @change="val => $emit('input', { ...value, keywords: val })"
+          />
+        </template>
 
         <ActivityButtonsGroup
           v-if="showActivities"
@@ -259,6 +263,10 @@
       showActivities: {
         type: Boolean,
         default: true,
+      },
+      hideKeywords: {
+        type: Boolean,
+        default: false,
       },
       title: {
         type: String,

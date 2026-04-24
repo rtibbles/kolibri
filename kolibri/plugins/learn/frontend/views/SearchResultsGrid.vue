@@ -1,8 +1,14 @@
 <template>
 
   <div v-if="!searchLoading">
-    <!-- First section is the results title and the various display buttons  -->
-    <!-- for interacting or updating the results   -->
+    <!-- AI response section - replaces SearchMessages for Learn plugin -->
+    <AIResponseSection
+      :messages="messages"
+      :categoryChips="categoryChips"
+      @selectCategory="$emit('selectCategory', $event)"
+    />
+
+    <!-- Results count and search chips -->
     <h2
       class="results-title"
       data-test="search-results-title"
@@ -18,7 +24,8 @@
       @removeItem="removeFilterTag"
       @clearSearch="clearSearch"
     />
-    <SearchMessages />
+
+    <!-- Toggle view buttons -->
     <div
       v-if="!windowIsSmall && results.length && !hideCardViewToggle"
       class="toggle-view-buttons"
@@ -41,7 +48,8 @@
         @click="toggleCardView('card')"
       />
     </div>
-    <!-- Grid of search results  -->
+
+    <!-- Grid of search results -->
     <LibraryAndChannelBrowserMainContent
       :contents="results"
       :allowDownloads="allowDownloads"
@@ -51,7 +59,8 @@
       @openCopiesModal="copies => (displayedCopies = copies)"
       @toggleInfoPanel="$emit('setSidePanelMetadataContent', $event)"
     />
-    <!-- conditionally displayed button if there are additional results -->
+
+    <!-- Load more button -->
     <KButton
       v-if="more"
       :text="coreString('viewMoreAction')"
@@ -61,6 +70,15 @@
       data-test="more-results-button"
       @click="searchMore"
     />
+
+    <!-- Related questions from AI response -->
+    <RelatedQuestionsSection
+      :questions="relatedQuestions"
+      @selectQuestion="$emit('searchQuestion', $event)"
+    />
+
+    <!-- More to explore - results grouped by category -->
+    <MoreToExploreSection :groups="exploreGroups" />
 
     <CopiesModal
       v-if="displayedCopies.length"
@@ -77,9 +95,11 @@
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import SearchChips from 'kolibri-common/components/SearchChips';
-  import SearchMessages from 'kolibri-common/components/SearchMessages';
   import CopiesModal from './CopiesModal';
   import LibraryAndChannelBrowserMainContent from './LibraryAndChannelBrowserMainContent';
+  import AIResponseSection from './SearchResultsGrid/AIResponseSection';
+  import RelatedQuestionsSection from './SearchResultsGrid/RelatedQuestionsSection';
+  import MoreToExploreSection from './SearchResultsGrid/MoreToExploreSection';
 
   export default {
     name: 'SearchResultsGrid',
@@ -87,13 +107,16 @@
       CopiesModal,
       LibraryAndChannelBrowserMainContent,
       SearchChips,
-      SearchMessages,
+      AIResponseSection,
+      RelatedQuestionsSection,
+      MoreToExploreSection,
     },
     mixins: [commonCoreStrings],
     setup() {
-      const { windowIsSmall } = useKResponsiveWindow();
+      const { windowIsSmall, windowBreakpoint } = useKResponsiveWindow();
       return {
         windowIsSmall,
+        windowBreakpoint,
       };
     },
     props: {
@@ -140,6 +163,22 @@
       searchTerms: {
         type: Object,
         default: () => {},
+      },
+      messages: {
+        type: Array,
+        default: () => [],
+      },
+      categoryChips: {
+        type: Array,
+        default: () => [],
+      },
+      relatedQuestions: {
+        type: Array,
+        default: () => [],
+      },
+      exploreGroups: {
+        type: Array,
+        default: () => [],
       },
     },
     data() {
@@ -190,7 +229,7 @@
   .filter-action-button {
     display: inline-block;
     margin: 4px;
-    margin-left: 8px;
+    margin-inline-start: 8px;
   }
 
 </style>

@@ -1,7 +1,6 @@
-import { get, useMemoize, set } from '@vueuse/core';
+import { get, set } from '@vueuse/core';
 import invert from 'lodash/invert';
 import isEqual from 'lodash/isEqual';
-// import uFuzzy from '@leeoniya/ufuzzy';
 import logger from 'kolibri-logging';
 import { computed, getCurrentInstance, inject, provide, ref, watch } from 'vue';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
@@ -19,10 +18,9 @@ import useUser from 'kolibri/composables/useUser';
 
 import Modalities from 'kolibri-constants/Modalities';
 import { deduplicateResources } from '../utils/contentNode';
+import useFuzzyMetadataSearch from './useFuzzyMetadataSearch';
 
 export const logging = logger.getLogger(__filename);
-
-// const fuzzySearch = new uFuzzy({});
 
 const activitiesLookup = invert(LearningActivities);
 
@@ -286,7 +284,7 @@ export default function useBaseSearch({
       }
     }
     if (terms.keywords) {
-      getParams.keywords = terms.keywords;
+      getParams.question = terms.keywords;
     }
     return getParams;
   }
@@ -348,28 +346,41 @@ export default function useBaseSearch({
     }
   }
 
-  const _memoizedSearchBankFetch = useMemoize(getParams => {
-    return ContentNodeResource.fetchCollection({ getParams }).then(data => {
-      const results = data.results || data;
-      return {
-        results,
-        haystack: results.map(r => r.title),
-      };
-    });
-  });
+  let _autocompleteDebounceTimer = null;
 
   const keyWordAutoCompleteHandler = async keywordsValue => {
-    if (keywordsValue && keywordsValue.length > 2) {
-      // Fetch the autocomplete suggestions
-      const getParams = createBaseSearchGetParams();
-      // Only fetch resources for autocomplete suggestions
-      getParams.kind = 'content';
-      // eslint-disable-next-line no-unused-vars
-      const { results, haystack } = await _memoizedSearchBankFetch(getParams);
-      const suggestionIndices = []; // fuzzySearch.filter(haystack, keywordsValue);
-      const suggestions = suggestionIndices.map(i => results[i]);
-      set(autoCompleteSuggestions, suggestions);
+    if (!keywordsValue || keywordsValue.length < 2) {
+      set(autoCompleteSuggestions, []);
+      return;
     }
+
+    // 1. Client-side: instant fuzzy match against translated metadata labels
+    const metadataMatches = fuzzyMetadataSearch.search(keywordsValue);
+
+    // 2. Server-side: debounced search query to backend for content matches
+    if (_autocompleteDebounceTimer) {
+      clearTimeout(_autocompleteDebounceTimer);
+    }
+
+    // Show metadata matches immediately
+    set(autoCompleteSuggestions, [...metadataMatches]);
+
+    _autocompleteDebounceTimer = setTimeout(async () => {
+      try {
+        const getParams = createBaseSearchGetParams();
+        getParams.search = keywordsValue;
+        getParams.max_results = 3;
+        getParams.kind = 'content';
+        const data = await ContentNodeResource.fetchCollection({ getParams });
+        const contentResults = data.results || data;
+        const contentMatches = contentResults.map(r => ({ ...r, type: 'content' }));
+
+        // Combine: metadata first, then content
+        set(autoCompleteSuggestions, [...metadataMatches, ...contentMatches]);
+      } catch (err) {
+        logging.error('Failed to fetch autocomplete content results', err);
+      }
+    }, 300);
   };
 
   function removeFilterTag({ value, key }) {
@@ -458,6 +469,9 @@ export default function useBaseSearch({
     watch(baseurl, ensureGlobalLabels);
   }
 
+  // Initialize fuzzy metadata search with globalLabels
+  const fuzzyMetadataSearch = useFuzzyMetadataSearch(globalLabels);
+
   function _getGlobalLabels(name, defaultValue) {
     const lookup = get(globalLabels);
     if (lookup) {
@@ -519,6 +533,7 @@ export default function useBaseSearch({
     search,
     searchMore,
     removeFilterTag,
+    removeMatchedWords: fuzzyMetadataSearch.removeMatchedWords,
     clearSearch,
   };
 }

@@ -78,6 +78,12 @@ async function makeWrapper({ options, fullMount = false } = {}) {
 describe('LibraryPage', () => {
   beforeEach(() => {
     // reset back to defaults
+    useKResponsiveWindow.mockImplementation(() => ({
+      windowBreakpoint: 4,
+      windowIsLarge: true,
+      windowIsMedium: false,
+      windowIsSmall: false,
+    }));
     useChannels.mockImplementation(() =>
       useChannelsMock({
         channelsMap: {
@@ -90,53 +96,28 @@ describe('LibraryPage', () => {
       Promise.resolve([{ id: 'test', title: 'test', channel_id: CHANNEL_ID }]),
     );
   });
-  describe('filters button', () => {
-    it('is visible when the page is not large and channels are available', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: false,
-      }));
+  describe('search bar', () => {
+    it('is visible when channels are available', async () => {
       const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="filter-button"').element).toBeTruthy();
+      expect(wrapper.find('[data-test="library-search-bar"').element).toBeTruthy();
     });
-    it('is hidden when the page is not large and channels not are available', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: false,
-      }));
+    it('is hidden when library is empty and no deviceId', async () => {
       const wrapper = await makeWrapper({ rootNodes: [] });
       await wrapper.setData({ isLocalLibraryEmpty: true });
-      expect(wrapper.find('[data-test="filter-button"').element).toBeFalsy();
-    });
-    it('is hidden when the page is large and channels not are available', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: true,
-      }));
-      const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="filter-button"').element).toBeFalsy();
-    });
-    it('is hidden when the page is large and channels are available', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: true,
-      }));
-      const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="filter-button"').element).toBeFalsy();
+      expect(wrapper.find('[data-test="library-search-bar"').element).toBeFalsy();
     });
   });
 
-  describe('when user clicks the filters button', () => {
-    it('displays the filters side panel, which is not displayed by default', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: false,
-      }));
-      // mount to ensure we can click the button
-      const wrapper = await makeWrapper({
-        fullMount: true,
-        options: { stubs: ['SidePanelModal'] },
-      });
-      // not displayed by default
-      expect(wrapper.find('[data-test="side-panel"]').element).toBeUndefined();
-      wrapper.find('[data-test="filter-button"]').trigger('click');
-      await wrapper.vm.$nextTick();
-      expect(wrapper.findComponent({ name: 'SearchFiltersPanel' }).element).toBeTruthy();
+  describe('filter modal', () => {
+    it('filter modal is not displayed by default', async () => {
+      const wrapper = await makeWrapper();
+      expect(wrapper.find('[data-test="filter-modal"]').element).toBeFalsy();
+    });
+    it('displays filter modal when showFilterModal is true', async () => {
+      const wrapper = await makeWrapper();
+      await wrapper.setData({ showFilterModal: true });
+      expect(wrapper.find('[data-test="filter-modal"]').element).toBeTruthy();
+      expect(wrapper.find('[data-test="filter-panel"]').element).toBeTruthy();
     });
   });
 
@@ -356,13 +337,13 @@ describe('LibraryPage', () => {
     });
   });
 
-  describe('SidePanel', () => {
-    it('display side panel if local libraries are available', async () => {
-      useKResponsiveWindow.mockImplementation(() => ({
-        windowIsLarge: true,
-      }));
+  describe('HorizontalFilterPills', () => {
+    beforeAll(() => {
+      useBaseSearch.mockImplementation(() => useBaseSearchMock({ displayingSearchResults: false }));
+    });
+    it('displays horizontal filter pills when not searching and library not empty', async () => {
       const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="side-panel-local"').element).toBeTruthy();
+      expect(wrapper.find('[data-test="horizontal-filter-pills"').element).toBeTruthy();
     });
   });
 

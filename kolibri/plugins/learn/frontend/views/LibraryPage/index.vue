@@ -19,20 +19,49 @@
       :deviceId="deviceId"
       :route="back"
     >
-      <main
-        class="main-grid"
-        :style="gridOffset"
-      >
-        <div v-if="!windowIsLarge && (!isLocalLibraryEmpty || deviceId)">
-          <KButton
-            icon="filter"
-            data-test="filter-button"
-            class="filter-button"
-            :text="coreString('filter')"
-            :primary="false"
-            @click="toggleSidePanelVisibility"
-          />
+      <main class="main-grid">
+        <!-- Search bar at top of content area -->
+        <LibrarySearchBar
+          v-if="!isLocalLibraryEmpty || deviceId"
+          data-test="library-search-bar"
+          :value="keywordsInput"
+          @input="handleSearchInput"
+          @search="handleSearch"
+          @clear="handleClearSearch"
+          @openFilters="showFilterModal = true"
+          @selectContent="handleSelectContent"
+          @selectFilter="handleSelectFilter"
+        />
+
+        <!-- AI info banner -->
+        <div
+          v-if="messages && messages.length && !rootNodesLoading && !displayingSearchResults"
+          class="ai-info-banner"
+          data-test="ai-info-banner"
+          :style="{ backgroundColor: $themePalette.yellow.v_100 }"
+        >
+          <p
+            v-for="(message, idx) in messages"
+            :key="idx"
+            class="ai-info-message"
+          >
+            {{ message }}
+          </p>
         </div>
+
+        <!-- Suggested questions and filter pills shown when not searching -->
+        <SuggestedQuestionChips
+          v-if="!displayingSearchResults && !rootNodesLoading"
+          data-test="suggested-questions"
+          :questions="suggestedQuestions"
+          @selectQuestion="handleSelectQuestion"
+        />
+        <HorizontalFilterPills
+          v-if="!displayingSearchResults && !rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
+          data-test="horizontal-filter-pills"
+          @toggleFilter="handleToggleFilter"
+        />
+
         <!--
           - If search is loading, show loader.
           - If there are no search results, show channels and resumable
@@ -113,34 +142,32 @@
           :searchTerms="searchTerms"
           :searchLoading="searchLoading"
           :more="more"
+          :messages="messages"
+          :relatedQuestions="relatedQuestions"
+          :exploreGroups="exploreGroups"
+          :categoryChips="categoryChips"
           @setCardStyle="style => (currentCardViewStyle = style)"
           @setSidePanelMetadataContent="content => (metadataSidePanelContent = content)"
+          @searchQuestion="handleSelectQuestion"
         />
       </main>
 
-      <!-- Side Panels for filtering and searching  -->
-      <div v-if="(!isLocalLibraryEmpty || deviceId) && windowIsLarge && !rootNodesLoading">
-        <SearchFiltersPanel
-          ref="sidePanel"
-          v-model="searchTerms"
-          :class="windowIsLarge ? 'side-panel' : ''"
-          data-test="side-panel-local"
-          :width="`${sidePanelWidth}px`"
-        />
-      </div>
-
-      <SidePanelModal
-        v-else-if="mobileSidePanelIsOpen && !windowIsLarge"
-        alignment="left"
-        @closePanel="toggleSidePanelVisibility"
+      <!-- Filter modal replaces sidebar -->
+      <KModal
+        v-if="showFilterModal"
+        data-test="filter-modal"
+        :title="$tr('allFilters')"
+        :cancelText="coreString('closeAction')"
+        size="large"
+        @cancel="showFilterModal = false"
       >
         <SearchFiltersPanel
-          ref="sidePanel"
+          ref="filterPanel"
           v-model="searchTerms"
-          data-test="side-panel"
-          :width="`${sidePanelWidth}px`"
+          data-test="filter-panel"
+          :hideKeywords="true"
         />
-      </SidePanelModal>
+      </KModal>
 
       <!-- Side Panel for metadata -->
       <SidePanelModal
@@ -212,6 +239,9 @@
   import SidePanelModal from 'kolibri-common/components/SidePanelModal';
   import SearchFiltersPanel from 'kolibri-common/components/SearchFiltersPanel';
   import useChannels from 'kolibri-common/composables/useChannels';
+  import LibrarySearchBar from './LibrarySearchBar';
+  import SuggestedQuestionChips from './SuggestedQuestionChips';
+  import HorizontalFilterPills from './HorizontalFilterPills';
   import TooltipTour from 'kolibri/components/onboarding/TooltipTour';
   import useTour from 'kolibri/composables/useTour';
   import { KolibriStudioId, PageNames } from '../../constants';
@@ -259,6 +289,9 @@
       PostSetupModalGroup,
       NoResourcePage,
       TooltipTour,
+      LibrarySearchBar,
+      SuggestedQuestionChips,
+      HorizontalFilterPills,
     },
     mixins: [commonLearnStrings, commonCoreStrings],
     setup(props) {
@@ -279,8 +312,10 @@
         search,
         searchMore,
         removeFilterTag,
+        removeMatchedWords,
         clearSearch,
         currentRoute,
+        messages,
       } = useSearch();
       search();
       const { fetchResumableContentNodes } = useLearnerResources();
@@ -289,19 +324,21 @@
         useKResponsiveWindow();
       const { canAddDownloads, canDownloadExternally } = useCoreLearn();
       const { currentCardViewStyle } = useCardViewStyle();
-      const { back } = useContentLink();
+      const { back, genContentLinkBackLinkCurrentPage } = useContentLink();
       const { deviceName } = currentDeviceData();
       const { fetchChannels } = useChannels();
 
       onMounted(() => {
         const keywords = currentRoute().query.keywords;
         if (keywords && keywords.length) {
+          set(keywordsInput, keywords);
           search(keywords);
         }
       });
 
       const rootNodes = ref([]);
       const rootNodesLoading = ref(false);
+      const keywordsInput = ref('');
 
       function _showChannels(channels, baseurl) {
         if (get(isUserLoggedIn) && !baseurl) {
@@ -414,8 +451,10 @@
         moreLoading,
         results,
         more,
+        search,
         searchMore,
         removeFilterTag,
+        removeMatchedWords,
         clearSearch,
         windowBreakpoint,
         windowIsLarge,
@@ -435,6 +474,8 @@
         resumeTour,
         userId: user_id,
         messages,
+        keywordsInput,
+        genContentLinkBackLinkCurrentPage,
       };
     },
     props: {
@@ -447,10 +488,11 @@
       return {
         isLocalLibraryEmpty: false,
         metadataSidePanelContent: null,
-        mobileSidePanelIsOpen: false,
+        showFilterModal: false,
         usingMeteredConnection: true,
         isNetworkLibraryAvailable: true,
         isLoadingNetworkLibraries: true,
+        suggestedQuestions: [],
       };
     },
     computed: {
@@ -493,30 +535,49 @@
           return this.coreString('yourLibrary');
         }
       },
-      gridOffset() {
-        const paddingTop = this.deviceId ? (this.windowIsLarge ? '64px' : '32px') : null;
-        return this.isRtl
-          ? { paddingRight: `${this.sidePanelWidth + 24}px`, paddingTop }
-          : { paddingLeft: `${this.sidePanelWidth + 24}px`, paddingTop };
-      },
-      sidePanelWidth() {
-        if (
-          this.windowIsSmall ||
-          this.windowIsMedium ||
-          (this.isLocalLibraryEmpty && !this.deviceId)
-        ) {
-          return 0;
-        } else if (this.windowBreakpoint < 5) {
-          return 234;
-        } else {
-          return 346;
-        }
-      },
       studioId() {
         return KolibriStudioId;
       },
       loading() {
         return this.$store.state.core.loading;
+      },
+      relatedQuestions() {
+        // Will be populated from AI response `related_questions` field once backend is extended
+        return [];
+      },
+      exploreGroups() {
+        // Group results by category metadata for "More to explore" section
+        if (!this.results || !this.results.length) return [];
+        const groups = {};
+        for (const result of this.results) {
+          if (result.categories && result.categories.length) {
+            for (const cat of result.categories) {
+              if (!groups[cat]) {
+                groups[cat] = { label: this.coreString(cat), count: 0, items: [] };
+              }
+              groups[cat].count += 1;
+              groups[cat].items.push(result);
+            }
+          }
+        }
+        return Object.values(groups);
+      },
+      categoryChips() {
+        // Derive category chips from result metadata
+        if (!this.results || !this.results.length) return [];
+        const seen = {};
+        const chips = [];
+        for (const result of this.results) {
+          if (result.categories && result.categories.length) {
+            for (const cat of result.categories) {
+              if (!seen[cat]) {
+                seen[cat] = true;
+                chips.push({ label: this.coreString(cat), value: cat });
+              }
+            }
+          }
+        }
+        return chips;
       },
     },
     watch: {
@@ -524,22 +585,7 @@
         this.isLocalLibraryEmpty = !newNodes.length;
       },
       searchTerms() {
-        this.mobileSidePanelIsOpen = false;
-      },
-      windowIsLarge(newVal) {
-        // Be sure we set the side panel closed if the screen size changes
-        // otherwise the watcher on mobileSidePanelIsOpen will leave the
-        // document stuck in `position: fixed;` so we won't see the scrollbar
-        if (newVal) {
-          this.mobileSidePanelIsOpen = false;
-        }
-      },
-      mobileSidePanelIsOpen() {
-        if (this.mobileSidePanelIsOpen) {
-          document.documentElement.style.position = 'fixed';
-          return;
-        }
-        document.documentElement.style.position = '';
+        this.showFilterModal = false;
       },
       loading(newVal, oldVal) {
         if (oldVal && !newVal) {
@@ -580,8 +626,55 @@
       findFirstEl() {
         this.$refs.resourcePanel.focusFirstEl();
       },
-      toggleSidePanelVisibility() {
-        this.mobileSidePanelIsOpen = !this.mobileSidePanelIsOpen;
+      handleSearchInput(value) {
+        this.keywordsInput = value;
+      },
+      handleSearch(value) {
+        this.keywordsInput = value;
+        this.searchTerms = { ...this.searchTerms, keywords: value };
+      },
+      handleClearSearch() {
+        this.keywordsInput = '';
+        this.searchTerms = { ...this.searchTerms, keywords: '' };
+      },
+      handleSelectQuestion(question) {
+        this.keywordsInput = question;
+        this.searchTerms = { ...this.searchTerms, keywords: question };
+      },
+      handleSelectContent(item) {
+        const link = this.genContentLinkBackLinkCurrentPage(item.id, true);
+        if (link) {
+          this.$router.push(link);
+        }
+      },
+      handleSelectFilter(filter) {
+        if (filter.filterKey && filter.filterValue) {
+          const current = { ...(this.searchTerms[filter.filterKey] || {}) };
+          current[filter.filterValue] = true;
+          const updatedKeywords = this.removeMatchedWords(this.keywordsInput, filter);
+          this.keywordsInput = updatedKeywords;
+          this.searchTerms = {
+            ...this.searchTerms,
+            [filter.filterKey]: current,
+            keywords: updatedKeywords,
+          };
+        }
+      },
+      handleToggleFilter({ key, value }) {
+        const validKeys = [
+          'learning_activities', 'categories', 'learner_needs',
+          'accessibility_labels', 'languages', 'grade_levels',
+        ];
+        if (!validKeys.includes(key)) {
+          return;
+        }
+        const current = { ...(this.searchTerms[key] || {}) };
+        if (current[value]) {
+          delete current[value];
+        } else {
+          current[value] = true;
+        }
+        this.searchTerms = { ...this.searchTerms, [key]: current };
       },
       injecttr(...args) {
         return this.$tr(...args);
@@ -594,6 +687,10 @@
       },
     },
     $trs: {
+      allFilters: {
+        message: 'All filters',
+        context: 'Title of the modal dialog that shows all available search filters',
+      },
       libraryOf: {
         message: 'Library of {device}',
         context: 'A header for a device Library',
@@ -662,13 +759,8 @@
     }
   }
 
-  .filter-button {
-    margin-top: 35px;
-  }
-
   .main-grid {
-    padding-right: 24px;
-    padding-bottom: 96px;
+    padding: 0 24px 96px;
   }
 
   .channels-label {
@@ -697,25 +789,16 @@
     margin-left: 8px;
   }
 
-  .side-panel {
-    @extend %dropshadow-2dp;
-
-    position: fixed;
-    top: 60px;
-    left: 0;
-    height: 100%;
-    padding: 24px 24px 0;
-    overflow-y: scroll;
-    font-size: 14px;
+  .ai-info-banner {
+    padding: 12px 16px;
+    margin: 8px 0;
+    border-radius: 8px;
   }
 
-  /*
-* Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=1417667
-*/
-  .side-panel::after {
-    display: block;
-    padding-bottom: 70px;
-    content: '';
+  .ai-info-message {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
   }
 
 </style>

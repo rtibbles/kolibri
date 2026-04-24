@@ -188,6 +188,7 @@
   import camelCase from 'lodash/camelCase';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import { injectBaseSearch } from 'kolibri-common/composables/useBaseSearch';
+  import { getCategoryIcon } from 'kolibri-common/utils/categoryIcon';
 
   export default {
     name: 'AccordionSelectGroup',
@@ -345,17 +346,7 @@
         // Takes the dot separated category value and checks if it is active
         return this.activeCategories.some(k => k.includes(categoryValue));
       },
-      categoryIcon(category) {
-        if (category === 'WORK') {
-          return 'skillsResource';
-        } else if (category === 'FOUNDATIONS') {
-          return 'basicSkillsResource';
-        }
-        // for those with a clearer 1:1 match with the category and icon
-        else {
-          return camelCase(category) + 'Resource';
-        }
-      },
+      categoryIcon: getCategoryIcon,
     },
     $trs: {
       categoryLabel: {
