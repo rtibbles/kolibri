@@ -1,0 +1,4 @@
+Student's query: {question}
+
+Relevant resources found on this device:
+{context}

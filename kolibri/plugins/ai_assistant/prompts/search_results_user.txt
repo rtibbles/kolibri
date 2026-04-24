@@ -1,0 +1,11 @@
+
+The user's query was:
+<message>{message}</message>
+
+The original response you provided was:
+<ai_response>{original_response}</ai_response>
+
+And the following resources were found:
+<candidate_content>{resources}</candidate_content>
+
+Please filter these resources down to the most relevant ones, order them from most to least relevant, and adapt your response to reference the resources found, or to note in your response if no relevant resources were found. Only include the list of indices of the resources in your response, not the full details.

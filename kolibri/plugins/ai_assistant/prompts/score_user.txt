@@ -1,0 +1,5 @@
+Student's query: {query}
+(Search interpretations: {enriched_queries})
+
+Score each of these {num_resources} resources (output exactly {num_resources} lines):
+{resources}

@@ -21,8 +21,8 @@ class AiAssistantSearchFilterHook(ContentNodeSearchFilterHook):
     @property
     def filter_backend(self):
         try:
-            from .api import get_ai_chat_settings
             from .api import LLMContentNodeSearchFilter
+            from .llm import get_ai_chat_settings
 
             # Ensure settings are valid
             get_ai_chat_settings()

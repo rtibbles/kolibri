@@ -1,6 +1,7 @@
 import { get, set } from '@vueuse/core';
 import invert from 'lodash/invert';
 import isEqual from 'lodash/isEqual';
+// import uFuzzy from '@leeoniya/ufuzzy';
 import logger from 'kolibri-logging';
 import { computed, getCurrentInstance, inject, provide, ref, watch } from 'vue';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
@@ -21,6 +22,8 @@ import { deduplicateResources } from '../utils/contentNode';
 import useFuzzyMetadataSearch from './useFuzzyMetadataSearch';
 
 export const logging = logger.getLogger(__filename);
+
+// const fuzzySearch = new uFuzzy({});
 
 const activitiesLookup = invert(LearningActivities);
 

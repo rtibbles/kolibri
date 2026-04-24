@@ -1,0 +1,14 @@
+# Dependencies for the AI inference server (serve_ai_models command).
+# These are only needed by the inference server process, not the main
+# Kolibri web server (which communicates via HTTP).
+
+# LiteRT-LM (local on-device LLM inference)
+litert-lm
+litert-lm-api
+
+# RAG embedding model
+onnxruntime
+tokenizers
+
+# numpy is already a base dep but pin a minimum for float16 support
+numpy>=1.21
