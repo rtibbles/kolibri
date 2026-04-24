@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import mock
 from django.conf import settings
+from django.contrib.auth import SESSION_KEY
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +19,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 import kolibri
+from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.test.helpers import clear_process_cache
 from kolibri.core.auth.test.helpers import create_superuser
 from kolibri.core.auth.test.helpers import provision_device
@@ -34,11 +36,11 @@ from kolibri.core.device.models import LearnerDeviceStatus
 from kolibri.core.device.models import StatusSentiment
 from kolibri.core.device.models import SyncQueueStatus
 from kolibri.core.device.models import UserSyncStatus
+from kolibri.core.device.utils import app_initialize_url
 from kolibri.core.public.constants import user_sync_statuses
 from kolibri.core.public.constants.user_sync_options import DELAYED_SYNC
 from kolibri.utils.conf import OPTIONS
 from kolibri.utils.tests.helpers import override_option
-
 
 DUMMY_PASSWORD = "password"
 
@@ -104,6 +106,28 @@ class DeviceSettingsTestCase(APITestCase):
         self.assertFalse(device_settings.allow_guest_access)
         self.assertTrue(device_settings.allow_peer_unlisted_channel_import)
         self.assertFalse(device_settings.allow_learner_unassigned_resource_access)
+
+    def test_patch_allow_other_browsers_to_connect(self):
+        device_settings = DeviceSettings.objects.get()
+        self.assertTrue(device_settings.allow_other_browsers_to_connect)
+
+        response = self.client.patch(
+            reverse("kolibri:core:devicesettings"),
+            {"allow_other_browsers_to_connect": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        device_settings.refresh_from_db()
+        self.assertFalse(device_settings.allow_other_browsers_to_connect)
+
+    def test_get_includes_allow_other_browsers_to_connect(self):
+        response = self.client.get(
+            reverse("kolibri:core:devicesettings"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["allow_other_browsers_to_connect"])
 
 
 class DevicePermissionsTestCase(APITestCase):
@@ -774,3 +798,48 @@ class UserSyncStatusTestCase(APITestCase):
         content_removal_request.save()
         response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
         self.assertFalse(response.data[0]["sync_downloads_in_progress"])
+
+
+class InitializeEndpointTestCase(APITestCase):
+    databases = "__all__"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.facility = FacilityFactory.create()
+        provision_device(default_facility=cls.facility)
+        cls.superuser = create_superuser(cls.facility)
+
+    def test_os_user_capability_enabled_log_in(self):
+        with mock.patch(
+            "kolibri.core.auth.models.GetOSUserHook.retrieve_os_user",
+            return_value=("test_user", False),
+        ):
+            initialize_url = app_initialize_url(auth_token="test")
+            self.client.get(initialize_url)
+            session_data = self.client.session.load()
+            user_id = session_data.get(SESSION_KEY)
+            user = FacilityUser.objects.get(id=user_id)
+            self.assertTrue(user.os_user)
+            self.assertEqual(user.os_user.os_username, "test_user")
+            self.assertNotEqual(self.superuser.id, user.id)
+
+    def test_no_os_user_capability_no_log_in(self):
+        initialize_url = app_initialize_url()
+        self.client.get(initialize_url)
+        session_data = self.client.session.load()
+        user_id = session_data.get(SESSION_KEY)
+        self.assertIsNone(user_id)
+
+    def test_os_user_capability_enabled_already_logged_in_no_change(self):
+        with mock.patch(
+            "kolibri.core.auth.models.GetOSUserHook.retrieve_os_user",
+            return_value=("test_user", False),
+        ):
+            self.client.login(username=self.superuser.username, password="password")
+            initialize_url = app_initialize_url(auth_token="test")
+            self.client.get(initialize_url)
+            session_data = self.client.session.load()
+            user_id = session_data.get(SESSION_KEY)
+            user = FacilityUser.objects.get(id=user_id)
+            self.assertFalse(hasattr(user, "os_user"))
+            self.assertEqual(self.superuser.id, user.id)

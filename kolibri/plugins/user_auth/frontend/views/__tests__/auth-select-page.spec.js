@@ -1,35 +1,52 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { render, screen } from '@testing-library/vue';
+import '@testing-library/jest-dom';
 import VueRouter from 'vue-router';
+import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
 import AuthSelect from '../AuthSelect';
+import { userString } from '../commonUserStrings';
 import makeStore from '../../__tests__/utils/makeStore';
 
+const { signInLabel$ } = coreStrings;
+
+jest.mock('kolibri/composables/useUser');
+jest.mock('kolibri-common/composables/useFacility');
 jest.mock('kolibri/urls');
-const localVue = createLocalVue();
-const router = new VueRouter({
-  routes: [
-    { name: 'SIGN_IN', path: '/signin' },
-    { name: 'SIGN_UP', path: '/signup' },
-    { name: 'FACILITY_SELECT', path: '/facilities' },
-  ],
-});
+jest.mock('kolibri-plugin-data', () => ({
+  __esModule: true,
+  default: {
+    allowRemoteAccess: true,
+    oidcProviderEnabled: false,
+    allowGuestAccess: false,
+    deviceUnusableReason: null,
+  },
+}));
 
-function makeWrapper() {
+const routes = [
+  { name: 'SignInPage', path: '/signin' },
+  { name: 'SignUpPage', path: '/signup' },
+  { name: 'FacilitySelect', path: '/facilities' },
+];
+
+VueRouter.prototype.getRoute = jest.fn((name, params = {}, query = {}) => ({
+  name,
+  params,
+  query,
+}));
+
+function renderComponent() {
   const store = makeStore();
-  store.getters = { ...store.getters, allowAccess: true };
-
-  return mount(AuthSelect, {
+  return render(AuthSelect, {
     store,
-    localVue,
-    router,
+    routes,
   });
 }
 
-describe.skip('user index page component', () => {
-  it('auth select facility', () => {
-    const wrapper = makeWrapper();
-    const createLink = wrapper.find('[data-test="createUser"]');
-    expect(createLink.attributes().href).toBe('#/facilities?next=SIGN_UP&backTo=AUTH_SELECT');
-    const signIn = wrapper.find('[data-test="signIn"]');
-    expect(signIn.attributes().href).toBe('#/facilities?next=SIGN_IN&backTo=AUTH_SELECT');
+describe('user index page component', () => {
+  it('shows sign in and create account options with facility selection', () => {
+    renderComponent();
+    const signInLink = screen.getByRole('link', { name: signInLabel$() });
+    const createAccountLink = screen.getByRole('link', { name: userString('createAccountAction') });
+    expect(signInLink).toHaveAttribute('href', '#/facilities');
+    expect(createAccountLink).toHaveAttribute('href', '#/facilities');
   });
 });

@@ -4,20 +4,28 @@ import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResp
 import AppBarPage from '../index';
 
 jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow');
+jest.mock('vue-router/composables', () => ({
+  useRoute: jest.fn(() => ({ params: {}, query: {} })),
+}));
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
-const store = new Store({});
-
-store.state.core = {
-  loading: false,
-};
+const store = new Store({
+  state: {
+    core: {},
+  },
+});
 
 function createWrapper({ propsData = {}, slots = {} } = {}) {
   return mount(AppBarPage, {
     propsData,
     slots,
-    stubs: ['CoreMenu'],
+    stubs: {
+      CoreMenu: {
+        template: '<div><slot /></div>',
+        methods: { focusFirstEl() {} },
+      },
+    },
     store,
     localVue,
   });

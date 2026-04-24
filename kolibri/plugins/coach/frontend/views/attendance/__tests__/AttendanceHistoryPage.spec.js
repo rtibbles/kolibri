@@ -2,12 +2,12 @@ import { mount, createLocalVue } from '@vue/test-utils';
 import VueRouter from 'vue-router';
 import { ref } from 'vue';
 import store from 'kolibri/store';
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import useSnackbar, { useSnackbarMock } from 'kolibri/composables/useSnackbar';
 import { DateRangeFilters } from 'kolibri-common/constants/DateRangeFilters';
 import AttendanceSessionResource from 'kolibri-common/apiResources/AttendanceSessionResource';
 import makeStore from '../../../__tests__/utils/makeStore';
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import { useAttendance, useAttendanceMock } from '../../../composables/useAttendance';
 import CSVExporter from '../../../csv/exporter';
 import AttendanceHistoryPage from '../AttendanceHistoryPage.vue';
@@ -20,7 +20,7 @@ jest.mock('../../../csv/exporter', () => {
   return { __esModule: true, default: MockCSVExporter };
 });
 jest.mock('kolibri-common/composables/usePagination', () => {
-  const { ref } = require('vue');
+  const { ref } = jest.requireActual('vue');
   return {
     __esModule: true,
     default: jest.fn(() => {
@@ -30,8 +30,8 @@ jest.mock('kolibri-common/composables/usePagination', () => {
   };
 });
 jest.mock('../../../composables/useCoreCoach', () => {
-  const { computed } = require('vue');
-  const store = require('kolibri/store').default;
+  const { computed } = jest.requireActual('vue');
+  const store = jest.requireActual('kolibri/store').default;
   return () => ({
     classId: computed(() => 'class-123'),
     className: computed(() => store.state.classSummary.name || ''),

@@ -1,11 +1,13 @@
 import LearnerGroupResource from 'kolibri-common/apiResources/LearnerGroupResource';
 import useUser from 'kolibri/composables/useUser';
+import { handleApiError } from 'kolibri/utils/appError';
 import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames } from '../../constants';
 
 export async function setLessonSummaryState(store, params) {
-  const { getFacilities, facilities } = useFacilities();
+  const { fetchFacilities, facilities } = useFacilities();
   const { classId, lessonId } = params;
   store.commit('lessonSummary/resources/RESET_STATE');
   store.commit('lessonSummary/SET_STATE', {
@@ -19,7 +21,7 @@ export async function setLessonSummaryState(store, params) {
   const { isSuperuser } = useUser();
   const getFacilitiesPromise =
     get(isSuperuser) && get(facilities).length === 0
-      ? getFacilities().catch(() => {})
+      ? fetchFacilities().catch(() => {})
       : Promise.resolve();
 
   await Promise.all([initClassInfoPromise, getFacilitiesPromise]);
@@ -43,14 +45,14 @@ export async function setLessonSummaryState(store, params) {
       });
     })
     .catch(error => {
-      return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+      pageLoading.value = false;
+      return handleApiError({ error, reloadOnReconnect: true });
     });
 }
 
 export function showLessonSummaryPage(store, params) {
-  return store.dispatch('loading').then(() => {
-    setLessonSummaryState(store, params).then(() => {
-      store.dispatch('notLoading');
-    });
+  pageLoading.value = true;
+  return setLessonSummaryState(store, params).then(() => {
+    pageLoading.value = false;
   });
 }

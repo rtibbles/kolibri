@@ -1,8 +1,11 @@
 <template>
 
-  <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+    :loading="pageLoading"
+  >
     <div
-      v-if="!$store.state.core.loading"
+      v-if="!pageLoading"
       role="main"
     >
       <KBreadcrumbs
@@ -70,13 +73,14 @@
   import ProgressIcon from 'kolibri-common/components/labels/ProgressIcon';
   import ContentIcon from 'kolibri-common/components/labels/ContentIcon';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import ResourceSyncingUiAlert from '../ResourceSyncingUiAlert';
   import useContentLink from '../../composables/useContentLink';
   import useContentNodeProgress from '../../composables/useContentNodeProgress';
   import { PageNames, ClassesPageNames } from '../../constants';
-  import commonLearnStrings from './../commonLearnStrings';
-  import LearnAppBarPage from './../LearnAppBarPage';
-  import HybridLearningLessonCard from './../HybridLearningLessonCard';
+  import commonLearnStrings from '../commonLearnStrings';
+  import LearnAppBarPage from '../LearnAppBarPage';
+  import HybridLearningLessonCard from '../HybridLearningLessonCard';
 
   export default {
     name: 'LessonPlaylistPage',
@@ -101,6 +105,7 @@
       return {
         contentNodeProgressMap,
         genContentLinkBackLinkCurrentPage,
+        pageLoading,
         windowIsSmall,
       };
     },

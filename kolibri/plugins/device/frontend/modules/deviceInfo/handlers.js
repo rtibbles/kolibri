@@ -4,6 +4,7 @@ import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator'
 import bytesForHumans from 'kolibri/uiText/bytesForHumans';
 import { get } from '@vueuse/core';
 import useUser from 'kolibri/composables/useUser';
+import { handleApiError } from 'kolibri/utils/appError';
 
 /* Function to fetch device info from the backend
  * and resolve validated data
@@ -41,10 +42,10 @@ export function getDeviceInfo() {
  * @param {Store} store
  * @returns Promise<void>
  */
-export function showDeviceInfoPage(store) {
+export function showDeviceInfoPage(store, route) {
   const { canManageContent } = useUser();
   if (get(canManageContent)) {
-    const shouldResolve = samePageCheckGenerator(store);
+    const shouldResolve = samePageCheckGenerator(route);
     const promises = Promise.all([getDeviceInfo()]);
     return promises
       .then(function onSuccess([deviceInfo]) {
@@ -55,9 +56,9 @@ export function showDeviceInfoPage(store) {
         }
       })
       .catch(function onFailure(error) {
-        shouldResolve()
-          ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-          : null;
+        if (shouldResolve()) {
+          handleApiError({ error, reloadOnReconnect: true });
+        }
       });
   }
   return Promise.resolve();

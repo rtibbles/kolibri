@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <ReportsResourceHeader
         :resource="resource"
@@ -30,6 +30,7 @@
   import sortBy from 'lodash/sortBy';
   import { mapState } from 'vuex';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import { PageNames } from '../../../constants';
@@ -48,6 +49,9 @@
       ReportsLearnersTable,
     },
     mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      return { pageLoading };
+    },
     computed: {
       ...mapState('resourceDetail', ['resource']),
       lesson() {

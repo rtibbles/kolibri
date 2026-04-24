@@ -1,5 +1,11 @@
 import { render, fireEvent, screen } from '@testing-library/vue';
-import InteractionList from '../';
+import { createTranslator } from 'kolibri/utils/i18n';
+import InteractionList from '..';
+
+const { currAnswer$, noInteractions$ } = createTranslator(
+  InteractionList.name,
+  InteractionList.$trs,
+);
 
 const renderComponent = props => {
   const defaultProps = {
@@ -21,7 +27,7 @@ describe('InteractionList', () => {
   const isSelected = iteractionItem => iteractionItem.style.cursor === 'auto';
 
   describe('when there are interactions', () => {
-    test('renders the interactions correctly [No selected interactions]', async () => {
+    it('renders the interactions correctly [No selected interactions]', async () => {
       const interactions = [{ type: 'hint' }, { type: 'answer', correct: true }, { type: 'error' }];
       const selectedInteractionIndex = -1;
 
@@ -37,7 +43,7 @@ describe('InteractionList', () => {
         expect(isSelected(interactionItem)).toBeFalsy();
     });
 
-    test('renders the interactions correctly [Selected interaction]', async () => {
+    it('renders the interactions correctly [Selected interaction]', async () => {
       const interactions = [{ type: 'hint' }, { type: 'answer', correct: true }, { type: 'error' }];
       const selectedInteractionIndex = 1;
 
@@ -54,10 +60,12 @@ describe('InteractionList', () => {
         expect(isSelected(interactionItems[i])).toBe(selectedInteractionIndex === i);
 
       // Check if the correct attempt label is rendered
-      expect(screen.getByText(`Attempt ${selectedInteractionIndex + 1}`)).toBeInTheDocument();
+      expect(
+        screen.getByText(currAnswer$({ value: selectedInteractionIndex + 1 })),
+      ).toBeInTheDocument();
     });
 
-    test("no event is emitted when the user clicks on the same interaction that's already selected", async () => {
+    it("no event is emitted when the user clicks on the same interaction that's already selected", async () => {
       const interactions = [{ type: 'hint' }, { type: 'answer', correct: true }, { type: 'error' }];
       const selectedInteractionIndex = 1;
 
@@ -71,7 +79,7 @@ describe('InteractionList', () => {
       expect(emitted()).not.toHaveProperty('select');
     });
 
-    test('emits the correct event when the user clicks on a different interaction', async () => {
+    it('emits the correct event when the user clicks on a different interaction', async () => {
       const interactions = [{ type: 'hint' }, { type: 'answer', correct: true }, { type: 'error' }];
       const selectedInteractionIndex = 1;
 
@@ -87,8 +95,8 @@ describe('InteractionList', () => {
     });
   });
 
-  test('renders the correct label when they are no interactions', () => {
+  it('renders the correct label when they are no interactions', () => {
     renderComponent({ interactions: [] });
-    expect(screen.getByText('No attempts made on this question')).toBeInTheDocument();
+    expect(screen.getByText(noInteractions$())).toBeInTheDocument();
   });
 });

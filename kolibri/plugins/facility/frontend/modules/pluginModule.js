@@ -1,11 +1,13 @@
 import useUser from 'kolibri/composables/useUser';
 import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { getReactiveRoute } from 'kolibri/router';
+import { clearError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { pageNameToModuleMap, PageNames } from '../constants';
 import classAssignMembers from './classAssignMembers';
 import classEditManagement from './classEditManagement';
 import classManagement from './classManagement';
-import facilityConfig from './facilityConfig';
 import userManagement from './userManagement';
 import manageCSV from './manageCSV';
 import importCSV from './importCSV';
@@ -17,8 +19,8 @@ export default {
   actions: {
     preparePage(store, options = {}) {
       const { isAsync = true } = options;
-      store.commit('CORE_SET_PAGE_LOADING', isAsync);
-      store.commit('CORE_SET_ERROR', null);
+      pageLoading.value = isAsync;
+      clearError();
     },
     resetModuleState(store, { fromRoute, toRoute }) {
       const moduleName = pageNameToModuleMap[fromRoute.name];
@@ -36,7 +38,7 @@ export default {
     },
   },
   getters: {
-    activeFacilityId(state, getters, rootState) {
+    activeFacilityId() {
       // Return either the facility_id param in the route module,
       // or the userFacilityId value from core.session
 
@@ -44,10 +46,11 @@ export default {
       // fallback would always navigate to our default facility, not multi-facility landing page
       const { userFacilityId } = useUser();
       const { userIsMultiFacilityAdmin } = useFacilities();
+      const routeParams = getReactiveRoute().params || {};
       if (userIsMultiFacilityAdmin.value) {
-        return rootState.route.params.facility_id;
+        return routeParams.facility_id;
       }
-      return rootState.route.params.facility_id || get(userFacilityId);
+      return routeParams.facility_id || get(userFacilityId);
     },
     facilityPageLinks(state, getters) {
       // Use this getter to get Link objects that have the optional 'facility_id'
@@ -124,7 +127,6 @@ export default {
     classEditManagement,
     classAssignMembers,
     userManagement,
-    facilityConfig,
     manageCSV,
     importCSV,
   },

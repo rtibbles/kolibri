@@ -2,7 +2,9 @@ import { get } from '@vueuse/core';
 import store from 'kolibri/store';
 import router from 'kolibri/router';
 import useUser from 'kolibri/composables/useUser';
+import { clearError } from 'kolibri/utils/appError';
 import useChannels from 'kolibri-common/composables/useChannels';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames, ClassesPageNames, KolibriStudioId } from '../constants';
 import LibraryPage from '../views/LibraryPage';
 import HomePage from '../views/HomePage';
@@ -17,6 +19,7 @@ import classesRoutes from './classesRoutes';
 let qtiSandboxRoutes = [];
 if (process.env.NODE_ENV !== 'production') {
   try {
+    // eslint-disable-next-line import-x/no-commonjs
     const { sandboxRoutes } = require('../../../qti_viewer/frontend/sandbox');
     qtiSandboxRoutes = sandboxRoutes;
   } catch (e) {
@@ -58,7 +61,7 @@ export default [
         next({ name: PageNames.LIBRARY, replace: true });
         return;
       }
-      store.commit('CORE_SET_PAGE_LOADING', true);
+      pageLoading.value = true;
     },
   },
   // Next class routes under home page
@@ -92,8 +95,8 @@ export default [
     path: '/resources-unavailable',
     handler: () => {
       store.commit('SET_PAGE_NAME', PageNames.CONTENT_UNAVAILABLE);
-      store.commit('CORE_SET_PAGE_LOADING', false);
-      store.commit('CORE_SET_ERROR', null);
+      pageLoading.value = false;
+      clearError();
     },
     component: ContentUnavailablePage,
   },
@@ -161,7 +164,7 @@ export default [
         return;
       }
       store.commit('SET_PAGE_NAME', PageNames.BOOKMARKS);
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      pageLoading.value = false;
       next();
     },
     component: BookmarkPage,
@@ -179,7 +182,7 @@ export default [
         return;
       }
       store.commit('SET_PAGE_NAME', PageNames.EXPLORE_LIBRARIES);
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      pageLoading.value = false;
       next();
     },
   },

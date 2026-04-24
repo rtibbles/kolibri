@@ -6,7 +6,7 @@
         <div class="main-cell table-cell">
           <!-- remote access disabled -->
           <div
-            v-if="!$store.getters.allowAccess || deviceUnusableReason"
+            v-if="!allowAccess || deviceUnusableReason"
             class="box"
             :style="{ backgroundColor: $themeTokens.surface }"
           >
@@ -24,8 +24,8 @@
             >
               {{ logoText }}
             </h1>
-            <template v-if="!$store.getters.allowAccess">
-              <p data-test="restrictedAccess">
+            <template v-if="!allowAccess">
+              <p data-testid="restrictedAccess">
                 {{ $tr('restrictedAccess') }}
               </p>
               <p>{{ $tr('restrictedAccessDescription') }}</p>
@@ -89,7 +89,7 @@
                 appearance="raised-button"
                 :disabled="busy"
                 style="width: 100%"
-                data-test="createUser"
+                data-testid="createUser"
               />
             </p>
 
@@ -187,6 +187,7 @@
 
 <script>
 
+  import { computed } from 'vue';
   import CoreLogo from 'kolibri/components/CoreLogo';
   import PrivacyInfoModal from 'kolibri/components/PrivacyInfoModal';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
@@ -194,9 +195,10 @@
   import loginComponents from 'kolibri-common/utils/loginComponents';
   import urls from 'kolibri/urls';
   import plugin_data from 'kolibri-plugin-data';
-  import useFacilities from 'kolibri-common/composables/useFacilities';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import useUser from 'kolibri/composables/useUser';
   import { ComponentMap } from '../constants';
-  import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
+  import LanguageSwitcherFooter from './LanguageSwitcherFooter';
   import commonUserStrings from './commonUserStrings';
   import getUrlParameter from './getUrlParameter';
   import DeviceUnusableMessage from './DeviceUnusableMessage.vue';
@@ -206,8 +208,12 @@
     components: { CoreLogo, LanguageSwitcherFooter, PrivacyInfoModal, DeviceUnusableMessage },
     mixins: [commonCoreStrings, commonUserStrings],
     setup() {
-      const { facilityConfig } = useFacilities();
-      return { themeConfig, facilityConfig };
+      const { facilityConfig } = useFacility();
+      const { isAppContext } = useUser();
+      const allowAccess = computed(() => {
+        return plugin_data.allowRemoteAccess || isAppContext.value;
+      });
+      return { themeConfig, facilityConfig, allowAccess };
     },
     props: {
       hideCreateAccount: {

@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 import VueRouter from 'vue-router';
 import CoreMenuOption from '../CoreMenuOption.vue';
 
+const OPTION_LABEL = 'Sample Option';
+const SECONDARY_TEXT = 'Secondary Text';
+
 const sampleSubRoutes = [
   { name: 'subRoute1', label: 'Sub Route 1' },
   { name: 'subRoute2', label: 'Sub Route 2' },
@@ -22,7 +25,7 @@ const renderComponent = props => {
 };
 
 describe('CoreMenuOption', () => {
-  test('smoke test', () => {
+  it('smoke test', () => {
     renderComponent();
     expect(screen.getByRole('menuitem')).toBeInTheDocument();
   });
@@ -104,13 +107,13 @@ describe('CoreMenuOption', () => {
       });
 
       it('should display the label of the option when provided', () => {
-        renderComponent({ label: 'Sample Option', subRoutes: sampleSubRoutes });
-        expect(screen.getByText('Sample Option')).toBeInTheDocument();
+        renderComponent({ label: OPTION_LABEL, subRoutes: sampleSubRoutes });
+        expect(screen.getByText(OPTION_LABEL)).toBeInTheDocument();
       });
 
       it('should display the secondary text of the option when provided', () => {
-        renderComponent({ secondaryText: 'Secondary Text', subRoutes: sampleSubRoutes });
-        expect(screen.getByText('Secondary Text')).toBeInTheDocument();
+        renderComponent({ secondaryText: SECONDARY_TEXT, subRoutes: sampleSubRoutes });
+        expect(screen.getByText(SECONDARY_TEXT)).toBeInTheDocument();
       });
 
       it('should display the icon of the option when provided', () => {
@@ -137,8 +140,8 @@ describe('CoreMenuOption', () => {
       });
 
       it('should display the label of the option when provided', () => {
-        renderComponent({ label: 'Sample Option', subRoutes: [] });
-        expect(screen.getByText('Sample Option')).toBeInTheDocument();
+        renderComponent({ label: OPTION_LABEL, subRoutes: [] });
+        expect(screen.getByText(OPTION_LABEL)).toBeInTheDocument();
       });
 
       it('pressing tab from keyboard should focus the menuitem', async () => {
@@ -171,10 +174,14 @@ describe('CoreMenuOption', () => {
           },
         ];
 
-        test.each(testcases)('%s [Mouse Click]', async ({ disabled, link, expected }) => {
+        it.each(testcases)('%s [Mouse Click]', async ({ disabled, link, expected }) => {
+          // Clicking a link triggers jsdom's "Not implemented: navigation"
+          // console.error. Suppress it since this is an expected jsdom limitation.
+          const spy = jest.spyOn(console, 'error').mockImplementation(() => {}); // eslint-disable-line no-console
           const { emitted } = renderComponent({ link, disabled, subRoutes: [] });
 
           await userEvent.click(screen.getByRole('menuitem'));
+          spy.mockRestore();
           if (expected) {
             expect(emitted()).toHaveProperty('select');
             expect(emitted().select).toHaveLength(1);
@@ -183,7 +190,7 @@ describe('CoreMenuOption', () => {
           }
         });
 
-        test.each(testcases)('%s [Enter Key]', async ({ disabled, link, expected }) => {
+        it.each(testcases)('%s [Enter Key]', async ({ disabled, link, expected }) => {
           const { emitted } = renderComponent({ link, disabled, subRoutes: [] });
 
           await fireEvent.keyDown(screen.getByRole('menuitem'), { key: 'Enter' });

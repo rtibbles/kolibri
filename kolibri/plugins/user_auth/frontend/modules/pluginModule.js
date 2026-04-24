@@ -1,5 +1,6 @@
 import Lockr from 'lockr';
-import useFacilities from 'kolibri-common/composables/useFacilities';
+import useFacility from 'kolibri-common/composables/useFacility';
+import { clearError } from 'kolibri/utils/appError';
 import { ComponentMap, pageNameToModuleMap } from '../constants';
 import signIn from './signIn';
 
@@ -12,14 +13,13 @@ export default {
     };
   },
   actions: {
-    reset(store) {
-      store.commit('CORE_SET_PAGE_LOADING', false);
-      store.commit('CORE_SET_ERROR', null);
+    reset() {
+      clearError();
     },
-    setFacilitiesAndConfig() {
-      const { getFacilities, getFacilityConfig, selectedFacility } = useFacilities();
-      return getFacilities().then(() => {
-        return getFacilityConfig(selectedFacility.value.id);
+    setFacilitiesAndConfig(store) {
+      const { fetchFacilities, setFacilityId, selectedFacility } = useFacility();
+      return fetchFacilities().then(() => {
+        return setFacilityId(selectedFacility.value?.id || store.state.facilityId);
       });
     },
     resetModuleState(store, { toRoute, fromRoute }) {
@@ -31,10 +31,10 @@ export default {
         store.commit(`${moduleName}/RESET_STATE`);
       }
     },
-    setFacilityId(store, { facilityId }) {
-      const { getFacilityConfig } = useFacilities();
+    async setFacilityId(store, { facilityId }) {
+      const { setFacilityId } = useFacility();
+      await setFacilityId(facilityId);
       store.commit('SET_FACILITY_ID', facilityId);
-      return getFacilityConfig(facilityId);
     },
   },
   mutations: {

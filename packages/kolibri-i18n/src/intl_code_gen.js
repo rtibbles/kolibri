@@ -1,5 +1,5 @@
-const path = require('path');
-const fs = require('fs');
+const path = require('node:path');
+const fs = require('node:fs');
 const { writeSourceToFile } = require('kolibri-format');
 const logger = require('kolibri-logging');
 const uniqBy = require('lodash/uniqBy');
@@ -29,7 +29,13 @@ module.exports = function (outputDir, languageInfoPath) {
     try {
       if (fs.existsSync(sourcePath)) {
         const targetPath = path.resolve(targetDir, filename);
-        fs.copyFileSync(sourcePath, targetPath);
+        const content = fs.readFileSync(sourcePath, 'utf8');
+        fs.writeFileSync(
+          targetPath,
+          '/* eslint-disable import-x/no-commonjs, import-x/no-amd, import-x/no-import-module-exports */\n' +
+            content,
+          'utf8',
+        );
         return true;
       }
     } catch (e) {
@@ -38,7 +44,7 @@ module.exports = function (outputDir, languageInfoPath) {
     return false;
   }
 
-  const commonHeader = `
+  const commonHeader = `/* eslint-disable import-x/no-commonjs */
   /*
   * This is an auto-generated file, any manual edits will be overridden.
   *

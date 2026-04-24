@@ -1,7 +1,10 @@
 <template>
 
-  <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
-    <KCircularLoader v-if="loading" />
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+    :loading="pageLoading"
+  >
+    <KCircularLoader v-if="pageLoading" />
     <div
       v-else
       role="main"
@@ -38,11 +41,12 @@
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
 
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames, ClassesPageNames } from '../../constants';
 
   import useLearnerResources from '../../composables/useLearnerResources';
-  import commonLearnStrings from './../commonLearnStrings';
-  import LearnAppBarPage from './../LearnAppBarPage';
+  import commonLearnStrings from '../commonLearnStrings';
+  import LearnAppBarPage from '../LearnAppBarPage';
   import AssignedCoursesCards from './AssignedCoursesCards';
   import AssignedQuizzesCards from './AssignedQuizzesCards';
   import AssignedLessonsCards from './AssignedLessonsCards';
@@ -91,13 +95,10 @@
         activeCourses,
         activeLessons,
         activeQuizzes,
+        pageLoading,
       };
     },
     props: {
-      loading: {
-        type: Boolean,
-        default: false,
-      },
       classId: {
         type: String,
         required: true,

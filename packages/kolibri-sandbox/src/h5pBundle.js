@@ -1,5 +1,6 @@
+/* eslint-disable import-x/no-commonjs, import-x/no-amd, import-x/no-import-module-exports */
 import jQuery from 'jquery';
-/* eslint-disable import/no-unresolved */
+/* eslint-disable import-x/no-unresolved */
 /*
  * These files are temporarily brought in
  * for building new versions of our H5P vendor

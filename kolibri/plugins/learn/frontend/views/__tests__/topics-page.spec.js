@@ -8,15 +8,18 @@ import { useDevicesWithFilter } from 'kolibri-common/components/syncComponentSet
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
 import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 import plugin_data from 'kolibri-plugin-data';
-// eslint-disable-next-line import/named
-import useBaseSearch, { useBaseSearchMock } from 'kolibri-common/composables/useBaseSearch';
-// eslint-disable-next-line import/named
+/* eslint-disable import-x/named */
+import useBaseSearch, {
+  useBaseSearchMock,
+  injectBaseSearch,
+} from 'kolibri-common/composables/useBaseSearch';
+/* eslint-enable import-x/named */
+// eslint-disable-next-line import-x/named
 import useChannels, { useChannelsMock } from 'kolibri-common/composables/useChannels';
 import makeStore from '../../__tests__/utils/makeStore';
 import CustomContentRenderer from '../ChannelRenderer/CustomContentRenderer';
 import { PageNames } from '../../constants';
 import TopicsPage from '../TopicsPage';
-// eslint-disable-next-line import/named
 
 jest.mock('kolibri-common/components/syncComponentSet/SelectDeviceModalGroup/useDevices');
 jest.mock('kolibri-plugin-data', () => {
@@ -95,6 +98,7 @@ jest.mock('kolibri-common/composables/useChannels');
 jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow');
 // Needed to test anything using mount() where children use this composable
 jest.mock('kolibri-common/composables/useLearningActivities');
+jest.mock('kolibri-common/utils/samePageCheckGenerator', () => jest.fn(() => () => true));
 
 const localVue = createLocalVue();
 localVue.use(VueRouter);
@@ -188,7 +192,7 @@ describe('TopicsPage', () => {
         router,
       });
       await flushPromises();
-      expect(wrapper.find("[data-test='header-breadcrumbs']").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='header-breadcrumbs']").exists()).toBe(true);
     });
   });
 
@@ -217,7 +221,7 @@ describe('TopicsPage', () => {
       router,
     });
     await flushPromises();
-    expect(wrapper.find("[data-test='header-title']").element).toHaveTextContent(
+    expect(wrapper.find("[data-testid='header-title']").element).toHaveTextContent(
       DEFAULT_TOPIC.title,
     );
   });
@@ -233,7 +237,7 @@ describe('TopicsPage', () => {
       router,
     });
     await flushPromises();
-    expect(smallScreenWrapper.find("[data-test='mobile-title']").element).toHaveTextContent(
+    expect(smallScreenWrapper.find("[data-testid='mobile-title']").element).toHaveTextContent(
       DEFAULT_TOPIC.title,
     );
   });
@@ -257,13 +261,13 @@ describe('TopicsPage', () => {
     });
 
     it('shows breadcrumbs when screen is small', () => {
-      expect(wrapper.find("[data-test='mobile-breadcrumbs']").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='mobile-breadcrumbs']").exists()).toBe(true);
     });
     it('displays filter buttons when screen is not large', () => {
-      expect(wrapper.find("[data-test='filter-button']").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='filter-button']").exists()).toBe(true);
     });
     it('displays folders button when there are topics and the screen is not large', () => {
-      expect(wrapper.find("[data-test='folders-button']").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='folders-button']").exists()).toBe(true);
     });
 
     describe('when showing search results', () => {
@@ -306,10 +310,45 @@ describe('TopicsPage', () => {
           }),
         );
 
+        // Re-mock injectBaseSearch after clearAllMocks so SearchChips
+        // can access availableLanguages.value without TypeError.
+        injectBaseSearch.mockReturnValue({
+          availableLearningActivities: { value: [] },
+          availableLibraryCategories: { value: [] },
+          availableResourcesNeeded: { value: [] },
+          availableGradeLevels: { value: [] },
+          availableAccessibilityOptions: { value: [] },
+          availableLanguages: { value: [] },
+          availableChannels: { value: [] },
+          searchableLabels: { value: [] },
+          activeSearchTerms: { value: [] },
+          searchLoading: { value: false },
+        });
+
+        useChannels.mockImplementation(() =>
+          useChannelsMock({
+            channelsMap: {
+              [CHANNEL_ID]: CHANNEL,
+            },
+            fetchChannels: jest.fn(() => Promise.resolve([CHANNEL])),
+          }),
+        );
+
+        ContentNodeResource.fetchTree.mockResolvedValue(DEFAULT_TOPIC);
+
         useKResponsiveWindow.mockImplementation(() => ({
           windowIsSmall: true,
           windowIsLarge: false,
         }));
+
+        useDevicesWithFilter.mockReturnValue({
+          devices: [
+            {
+              id: '1',
+              available: true,
+            },
+          ],
+        });
 
         wrapper = mount(TopicsPage, {
           store: store,
@@ -320,7 +359,7 @@ describe('TopicsPage', () => {
       });
 
       it('shows the search results', () => {
-        searchResults = wrapper.find("[data-test='search-results']");
+        searchResults = wrapper.find("[data-testid='search-results']");
         expect(searchResults.exists()).toBe(true);
       });
     });
@@ -379,9 +418,9 @@ describe('TopicsPage', () => {
           },
         });
         await flushPromises();
-        expect(wrapper.find('[data-test="topics"]').element).toHaveTextContent('test-title-1');
-        expect(wrapper.find('[data-test="topics"]').element).toHaveTextContent('test-title-2');
-        expect(wrapper.find('[data-test="children-cards-grid"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="topics"]').element).toHaveTextContent('test-title-1');
+        expect(wrapper.find('[data-testid="topics"]').element).toHaveTextContent('test-title-2');
+        expect(wrapper.find('[data-testid="children-cards-grid"]').exists()).toBe(true);
       });
     });
   });

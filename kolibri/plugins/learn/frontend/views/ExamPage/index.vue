@@ -3,8 +3,9 @@
   <ImmersivePage
     :route="homePageLink"
     :appBarTitle="exam.title || ''"
+    :loading="pageLoading"
   >
-    <KCircularLoader v-if="loading || !currentQuestion" />
+    <KCircularLoader v-if="pageLoading || !currentQuestion" />
 
     <div v-else>
       <KGrid :gridStyle="gridStyle">
@@ -311,6 +312,7 @@
 
   import { ref } from 'vue';
   import { mapState } from 'vuex';
+  import { handleApiError } from 'kolibri/utils/appError';
   import isEqual from 'lodash/isEqual';
   import {
     displaySectionTitle,
@@ -323,6 +325,7 @@
   import TimeDuration from 'kolibri-common/components/TimeDuration';
   import { annotateSections } from 'kolibri-common/quizzes/utils';
   import useUser from 'kolibri/composables/useUser';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import ResourceSyncingUiAlert from '../ResourceSyncingUiAlert';
   import useProgressTracking from '../../composables/useProgressTracking';
   import { PageNames, ClassesPageNames } from '../../constants';
@@ -359,6 +362,7 @@
       const { quizSectionsLabel$, questionsLabel$ } = enhancedQuizManagementStrings;
       const currentQuestionAnswered = ref(false);
       return {
+        pageLoading,
         questionsLabel$,
         quizSectionsLabel$,
         displaySectionTitle,
@@ -374,6 +378,7 @@
         windowIsMedium,
         currentUserId,
         currentQuestionAnswered,
+        handleApiError,
       };
     },
     data() {
@@ -385,9 +390,6 @@
       };
     },
     computed: {
-      ...mapState({
-        loading: state => state.core.loading,
-      }),
       ...mapState('examViewer', ['exam', 'contentNodeMap', 'questions', 'questionNumber']),
       questionSelectOptions() {
         if (!this.currentSection) return [];
@@ -568,7 +570,7 @@
               },
             });
           }
-          this.$store.dispatch('handleApiError', { error: err });
+          this.handleApiError({ error: err });
         });
     },
     methods: {

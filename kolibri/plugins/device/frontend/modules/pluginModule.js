@@ -1,5 +1,6 @@
+import { clearError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { pageNameToModuleMap, PageNames, ContentWizardPages } from '../constants';
-import facilityConfig from '../../../facility/frontend/modules/facilityConfig';
 import deviceInfo from './deviceInfo';
 import manageContent from './manageContent';
 import managePermissions from './managePermissions';
@@ -43,9 +44,9 @@ export default {
       store.commit('SET_GRANT_PLUGIN_ACCESS', grantAccess);
     },
     preparePage(store, { name, isAsync = true }) {
-      store.commit('CORE_SET_PAGE_LOADING', isAsync);
+      pageLoading.value = isAsync;
       store.commit('SET_PAGE_NAME', name);
-      store.commit('CORE_SET_ERROR', null);
+      clearError();
     },
     resetModuleState(store, { toRoute, fromRoute }) {
       // Don't reset when going to available channels page
@@ -70,7 +71,5 @@ export default {
     userPermissions,
     // MANAGE_CONTENT_PAGE + wizards
     manageContent,
-    //Facility configurations for pin setup
-    facilityConfig,
   },
 };

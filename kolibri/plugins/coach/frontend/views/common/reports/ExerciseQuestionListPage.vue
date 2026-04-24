@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <ReportsResourceHeader
         :resource="resource"
@@ -54,13 +54,14 @@
 <script>
 
   import { mapGetters, mapState } from 'vuex';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
-  import LearnerProgressRatio from '../../common/status/LearnerProgressRatio';
+  import LearnerProgressRatio from '../status/LearnerProgressRatio';
   import CSVExporter from '../../../csv/exporter';
   import * as csvFields from '../../../csv/fields';
-  import ReportsResourceHeader from '../../common/ReportsResourceHeader';
-  import ReportsControls from '../../common/ReportsControls';
+  import ReportsResourceHeader from '../ReportsResourceHeader';
+  import ReportsControls from '../ReportsControls';
   import { PageNames } from '../../../constants';
 
   export default {
@@ -72,6 +73,9 @@
       LearnerProgressRatio,
     },
     mixins: [commonCoach],
+    setup() {
+      return { pageLoading };
+    },
     computed: {
       ...mapState('questionList', ['exercise']),
       ...mapState('resourceDetail', ['resource']),

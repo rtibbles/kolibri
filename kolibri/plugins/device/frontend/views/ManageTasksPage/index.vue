@@ -3,6 +3,7 @@
   <ImmersivePage
     :appBarTitle="$tr('appBarTitle')"
     :route="backRoute"
+    :loading="pageLoading"
   >
     <KPageContainer class="device-container">
       <KGrid>
@@ -79,6 +80,7 @@
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonDeviceStrings from '../commonDeviceStrings';
   import useContentTasks from '../../composables/useContentTasks';
   import { PageNames } from '../../constants';
@@ -104,6 +106,7 @@
       const { windowIsLarge } = useKResponsiveWindow();
       return {
         windowIsLarge,
+        pageLoading,
       };
     },
     data() {

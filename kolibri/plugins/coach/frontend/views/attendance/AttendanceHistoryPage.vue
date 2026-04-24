@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <BackLink
         :to="classHomeLink"
@@ -101,6 +101,7 @@
   import KDateRange from 'kolibri-design-system/lib/KDateRange';
   import { now } from 'kolibri/utils/serverClock';
   import { DateRangeFilters } from 'kolibri-common/constants/DateRangeFilters';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames } from '../../constants';
   import CoachAppBarPage from '../CoachAppBarPage';
   import BackLink from '../common/BackLink';
@@ -377,6 +378,7 @@
       }
 
       return {
+        pageLoading,
         PAGE_SIZE,
         attendanceLoading,
         classHomeLink,

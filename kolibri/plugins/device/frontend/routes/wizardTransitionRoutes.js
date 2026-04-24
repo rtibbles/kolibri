@@ -1,6 +1,7 @@
 import omit from 'lodash/omit';
 import router from 'kolibri/router';
 import store from 'kolibri/store';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import {
   showAvailableChannelsPage,
   showSelectContentPage,
@@ -17,12 +18,16 @@ export default [
     name: ContentWizardPages.AVAILABLE_CHANNELS,
     component: withAuthMessage(AvailableChannelsPage, 'contentManager'),
     path: '/content/channels',
-    handler: ({ query }) => {
-      return showAvailableChannelsPage(store, {
-        address_id: query.address_id,
-        drive_id: query.drive_id,
-        token: query.token,
-      });
+    handler: toRoute => {
+      return showAvailableChannelsPage(
+        store,
+        {
+          address_id: toRoute.query.address_id,
+          drive_id: toRoute.query.drive_id,
+          token: toRoute.query.token,
+        },
+        toRoute,
+      );
     },
   },
   {
@@ -31,7 +36,7 @@ export default [
     path: '/content/manage_channel/:channel_id',
     handler: ({ name }) => {
       store.dispatch('preparePage', { name });
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      pageLoading.value = false;
     },
   },
   {

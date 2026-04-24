@@ -1,4 +1,4 @@
-import store from 'kolibri/store';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames } from '../constants';
 import AttendanceNewPage from '../views/attendance/AttendanceNewPage';
 import AttendanceHistoryPage from '../views/attendance/AttendanceHistoryPage';
@@ -8,7 +8,7 @@ import { RouteSegments } from './utils';
 const { CLASS } = RouteSegments;
 
 function defaultHandler() {
-  store.dispatch('notLoading');
+  pageLoading.value = false;
 }
 
 export default [

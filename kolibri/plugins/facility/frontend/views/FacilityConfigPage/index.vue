@@ -1,8 +1,8 @@
 <template>
 
-  <FacilityAppBarPage>
+  <FacilityAppBarPage :loading="pageLoading">
     <KPageContainer
-      data-test="page-container"
+      data-testid="page-container"
       :style="{ marginBottom: '42px' }"
     >
       <p>
@@ -17,88 +17,152 @@
         />
       </p>
       <div class="mb">
-        <h1>{{ $tr('pageHeader') }}</h1>
+        <h1>{{ pageHeader$() }}</h1>
         <p>
-          {{ $tr('pageDescription') }}
+          {{ pageDescription$() }}
           <KExternalLink
             v-if="isSuperuser && deviceSettingsUrl"
-            :text="$tr('deviceSettings')"
+            :text="deviceSettings$()"
             :href="deviceSettingsUrl"
           />
         </p>
       </div>
 
-      <template v-if="settings !== null">
-        <div class="mb">
+      <KCircularLoader
+        v-if="facilityDataLoading"
+        class="facility-loader"
+      />
+      <template v-else-if="settings !== null">
+        <section class="facility-name facility-settings">
           <h2>{{ coreString('facilityLabel') }}</h2>
           <p class="current-facility-name">
-            <KCircularLoader
-              v-if="getFacilityDataLoading"
-              class="facility-loader"
+            {{ coreString('facilityNameWithId', { facilityName: facilityName, id: lastPartId }) }}
+            <KButton
+              appearance="basic-link"
+              :text="coreString('editAction')"
+              :disabled="facilityDataLoading"
+              name="edit-facilityname"
+              @click="showEditFacilityModal = true"
             />
-            <span v-else>
-              {{ coreString('facilityNameWithId', { facilityName: facilityName, id: lastPartId }) }}
-              <KButton
-                appearance="basic-link"
-                :text="coreString('editAction')"
-                :disabled="getFacilityDataLoading"
-                name="edit-facilityname"
-                @click="showEditFacilityModal = true"
-              />
-            </span>
           </p>
-        </div>
+        </section>
 
-        <div class="mb">
+        <!-- Users Section -->
+        <section class="facility-settings users">
+          <h3>{{ coreString('usersLabel') }}</h3>
           <div class="settings">
-            <template v-for="setting in settingsList">
-              <template
-                v-if="
-                  setting !== 'learner_can_edit_password' &&
-                    setting !== 'learner_can_login_with_no_password'
-                "
-              >
-                <KCheckbox
-                  :key="setting"
-                  :label="$tr(camelCase(setting))"
-                  :checked="settings[setting]"
-                  @change="toggleSetting(setting)"
-                />
-              </template>
-              <template v-else-if="setting === 'learner_can_login_with_no_password'">
-                <KCheckbox
-                  :key="setting"
-                  :label="$tr('learnerNeedPasswordToLogin')"
-                  :checked="!settings['learner_can_login_with_no_password']"
-                  @change="toggleLearnerLoginPassword()"
-                />
-                <KCheckbox
-                  :key="setting + 'learner_can_edit_password'"
-                  :disabled="enableChangePassword"
-                  :label="$tr('learnerCanEditPassword')"
-                  :checked="
-                    !settings['learner_can_login_with_no_password'] &&
-                      settings['learner_can_edit_password']
-                  "
-                  class="checkbox-password"
-                  @change="toggleSetting('learner_can_edit_password')"
-                />
-              </template>
-            </template>
+            <KCheckbox
+              v-model="settings.learner_can_edit_username"
+              :label="learnerCanEditUsername$()"
+              data-testid="learner_can_edit_username"
+            />
+            <KCheckbox
+              v-model="settings.learner_can_edit_name"
+              :label="learnerCanEditName$()"
+              data-testid="learner_can_edit_name"
+            />
+            <KCheckbox
+              v-model="settings.learner_can_sign_up"
+              :label="learnerCanSignUp$()"
+              data-testid="learner_can_sign_up"
+            />
+            <KCheckbox
+              v-if="isAttendanceFeatureEnabled"
+              v-model="settings.enable_mark_attendance"
+              :label="enableMarkAttendance$()"
+              data-testid="enable_mark_attendance"
+            />
           </div>
+        </section>
 
-          <div></div>
-        </div>
+        <!-- Resources Section -->
+        <section class="facility-settings resources">
+          <h3>{{ coreString('resourcesLabel') }}</h3>
+          <div class="settings">
+            <KCheckbox
+              v-model="settings.show_download_button_in_learn"
+              :label="showDownloadButtonInLearn$()"
+              data-testid="show_download_button_in_learn"
+            />
+          </div>
+        </section>
 
-        <div class="">
-          <h2>{{ $tr('deviceManagementPin') }}</h2>
+        <!-- How learners sign in Section -->
+        <section class="facility-settings learner-signin">
+          <h3>{{ howLearnersSignIn$() }}</h3>
+          <div class="settings">
+            <KRadioButtonGroup>
+              <KRadioButton
+                v-model="signInOption"
+                :label="enterUsernameAndPassword$()"
+                :buttonValue="OptionsForSignIn.USERNAME_PASSWORD"
+                :data-testid="OptionsForSignIn.USERNAME_PASSWORD"
+              />
+              <KCheckbox
+                v-if="signInOption === OptionsForSignIn.USERNAME_PASSWORD"
+                v-model="settings.learner_can_edit_password"
+                :label="learnerCanEditPassword$()"
+                class="nested-settings"
+                data-testid="learner_can_edit_password"
+              />
 
-          <p>{{ $tr('deviceManagementDescription') }}</p>
+              <KRadioButton
+                v-model="signInOption"
+                :label="enterUsernameOnly$()"
+                :buttonValue="OptionsForSignIn.USERNAME_ONLY"
+                :data-testid="OptionsForSignIn.USERNAME_ONLY"
+              />
+
+              <KRadioButton
+                v-if="isPictureLoginFeatureEnabled"
+                v-model="signInOption"
+                :label="picturePassword$()"
+                :buttonValue="OptionsForSignIn.PICTURE_PASSWORD"
+                :description="picturePasswordDescription$()"
+                :data-testid="OptionsForSignIn.PICTURE_PASSWORD"
+              />
+              <KRadioButtonGroup
+                v-if="
+                  isPictureLoginFeatureEnabled && signInOption === OptionsForSignIn.PICTURE_PASSWORD
+                "
+                class="nested-settings picture-password-settings"
+                :aria-label="iconStyle$()"
+              >
+                <KRadioButton
+                  v-model="picturePasswordStyle"
+                  :label="childFriendlyIcons$()"
+                  :buttonValue="PicturePasswordIconStyle.COLORFUL"
+                  data-testid="child_friendly_icons"
+                />
+                <KRadioButton
+                  v-model="picturePasswordStyle"
+                  :label="standardIcons$()"
+                  :buttonValue="PicturePasswordIconStyle.STANDARD"
+                  data-testid="standard_icons"
+                />
+                <hr
+                  class="divider"
+                  :style="dividerStyle"
+                >
+                <KCheckbox
+                  v-model="picturePasswordShowIconText"
+                  :label="showIconNames$()"
+                  data-testid="show_icon_text"
+                />
+              </KRadioButtonGroup>
+            </KRadioButtonGroup>
+          </div>
+        </section>
+
+        <section>
+          <h2>{{ deviceManagementPin$() }}</h2>
+
+          <p>{{ deviceManagementDescription$() }}</p>
           <KButton
             v-show="!isPinSet"
             @click="handleCreatePin"
           >
-            {{ $tr('createPinBtn') }}
+            {{ createPinBtn$() }}
           </KButton>
 
           <KButton
@@ -108,32 +172,40 @@
           >
             <template #menu>
               <KDropdownMenu
-                :options="dropdownOption"
+                :options="dropdownOptions"
                 :constrainToScrollParent="false"
                 class="options-btn"
                 @select="handleSelect"
               />
             </template>
           </KButton>
-        </div>
+        </section>
 
         <div
           v-if="isAppContext"
+          class="save-changes-row"
           :style="{
             marginTop: '32px',
             borderTop: '1px solid',
             borderTopColor: $themeTokens.fineLine,
           }"
         >
-          <KButton
-            :primary="true"
-            appearance="raised-button"
-            class="save-changes-button"
-            :text="coreString('saveChangesAction')"
-            name="save-settings"
-            :disabled="!settingsHaveChanged"
-            @click="saveConfig()"
-          />
+          <div class="save-changes-inline-group">
+            <KButton
+              :primary="true"
+              appearance="raised-button"
+              class="save-changes-button"
+              :text="coreString('saveChangesAction')"
+              name="save-settings"
+              :disabled="!settingsHaveChanged || pictureLoginTaskLoading"
+              @click="saveConfig()"
+            />
+            <KCircularLoader
+              v-if="pictureLoginTaskLoading"
+              :size="24"
+              data-testid="picture_password_assignment_status"
+            />
+          </div>
         </div>
       </template>
 
@@ -142,44 +214,54 @@
         id="edit-facility"
         :facilityId="facilityId"
         :facilityName="facilityName"
-        @submit="sendFacilityName"
+        @submit="submitFacilityName"
         @cancel="showEditFacilityModal = false"
       />
 
       <CreateManagementPinModal
         v-if="createPinShow"
-        @submit="createPinShow = false"
+        @submit="handleCreatePinSubmit"
         @cancel="createPinShow = false"
       />
 
       <ViewPinModal
         v-if="handleViewModal"
+        :pin="isPinSet"
         @cancel="handleViewModal = false"
       />
       <ChangePinModal
         v-if="handleChangePinModal"
-        @submit="handleChangePinModal = false"
+        @submit="handleChangePinSubmit"
         @cancel="handleChangePinModal = false"
       />
 
       <RemovePinModal
         v-if="handleRemovePinModal"
-        @submit="handleRemovePinModal = false"
+        @submit="handleRemovePinSubmit"
         @cancel="handleRemovePinModal = false"
       />
     </KPageContainer>
 
-    <BottomAppBar data-test="bottom-bar">
-      <KButton
+    <BottomAppBar data-testid="bottom-bar">
+      <div
         v-if="!isAppContext"
-        :primary="true"
-        class="save-button"
-        appearance="raised-button"
-        :text="coreString('saveChangesAction')"
-        name="save-settings"
-        :disabled="!settingsHaveChanged"
-        @click="saveConfig()"
-      />
+        class="bottom-bar-save-group"
+      >
+        <KCircularLoader
+          v-if="pictureLoginTaskLoading"
+          :size="24"
+          data-testid="picture_password_assignment_status"
+        />
+        <KButton
+          :primary="true"
+          class="save-button"
+          appearance="raised-button"
+          :text="coreString('saveChangesAction')"
+          name="save-settings"
+          :disabled="!settingsHaveChanged || pictureLoginTaskLoading"
+          @click="saveConfig()"
+        />
+      </div>
     </BottomAppBar>
   </FacilityAppBarPage>
 
@@ -188,17 +270,24 @@
 
 <script>
 
-  import { mapActions, mapGetters, mapState } from 'vuex';
-
-  import camelCase from 'lodash/camelCase';
-  import isEqual from 'lodash/isEqual';
-  import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { mapGetters } from 'vuex';
+  import { useRoute } from 'vue-router/composables';
+  import { ref, onMounted, computed, watch } from 'vue';
+  import commonCoreStrings, { coreString } from 'kolibri/uiText/commonCoreStrings';
   import urls from 'kolibri/urls';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
   import useFacilities from 'kolibri-common/composables/useFacilities';
-  import { createTranslator, currentLanguage } from 'kolibri/utils/i18n';
+  import useTaskPolling from 'kolibri-common/composables/useTaskPolling';
+  import { TaskStatuses } from 'kolibri-common/utils/syncTaskUtils';
+  import { handleApiError } from 'kolibri/utils/appError';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
+  import { createTranslator } from 'kolibri/utils/i18n';
+  import { picturePasswordStrings } from 'kolibri-common/strings/picturePasswords';
+
+  import { OptionsForSignIn, PicturePasswordIconStyle } from 'kolibri-common/constants/Auth';
+  import useFacilityEditor from '../../composables/useFacilityEditor';
   import FacilityAppBarPage from '../FacilityAppBarPage';
   import RemovePinModal from './RemovePinModal';
   import ChangePinModal from './ChangePinModal';
@@ -222,22 +311,75 @@
       context: 'Placeholder label for a PIN input',
     },
   });
-
-  // See FacilityDataset in core.auth.models for details
-  const settingsList = [
-    'learner_can_edit_username',
-    'learner_can_edit_password',
-    'learner_can_edit_name',
-    'learner_can_sign_up',
-    'learner_can_login_with_no_password',
-    'show_download_button_in_learn',
-  ];
+  const facilityConfigPageStrings = createTranslator('FacilityConfigPage', {
+    learnerCanEditUsername: {
+      message: 'Allow learners to edit their username',
+      context: "Option on 'Facility settings' page.",
+    },
+    learnerCanEditName: {
+      message: 'Allow learners to edit their full name',
+      context: "Option on 'Facility settings' page.",
+    },
+    learnerCanSignUp: {
+      message: 'Allow learners to create accounts',
+      context: "Option on 'Facility settings' page.",
+    },
+    learnerCanEditPassword: {
+      message: 'Allow learners to edit their password when signed in',
+      context: "Option on 'Facility settings' page.",
+    },
+    showDownloadButtonInLearn: {
+      message: "Show 'download' button with resources",
+      context: "Option on 'Facility settings' page.\n",
+    },
+    enableMarkAttendance: {
+      message: 'Allow coaches to take attendance (English only)',
+      context: "Option on 'Facility settings' page.",
+    },
+    saveFailure: {
+      message: 'There was a problem saving your settings',
+      context: 'Status report after the facility change operation.',
+    },
+    saveSuccess: {
+      message: 'Facility settings updated',
+      context: 'Status report after the facility change operation.',
+    },
+    pageDescription: {
+      message: 'Configure facility settings here.',
+      context: 'Interpret as "[You can] configure facility settings here"',
+    },
+    deviceSettings: {
+      message: 'You can also configure device settings',
+      context: 'Text link on Facility settings page.',
+    },
+    pageHeader: {
+      message: 'Facility settings',
+      context: 'Title of the Facility > Settings page.',
+    },
+    documentTitle: {
+      message: 'Facility Settings',
+      context: 'Title of page where user can configure facility settings.',
+    },
+    deviceManagementPin: {
+      message: 'Device management PIN',
+      context: 'The title for the device management PIN',
+    },
+    deviceManagementDescription: {
+      message:
+        'This 4-digit PIN allows users to manage content and other settings on learn-only devices',
+      context: 'Description for the device management',
+    },
+    createPinBtn: {
+      message: 'Create PIN',
+      context: 'Button for the create PIN',
+    },
+  });
 
   export default {
     name: 'FacilityConfigPage',
     metaInfo() {
       return {
-        title: this.$tr('documentTitle'),
+        title: facilityConfigPageStrings.documentTitle$(),
       };
     },
     components: {
@@ -251,235 +393,268 @@
     },
     mixins: [commonCoreStrings],
     setup() {
+      const { showSnackbarNotification } = commonCoreStrings.methods;
+      const route = useRoute();
       const { createSnackbar } = useSnackbar();
-      const { isAppContext, isSuperuser } = useUser();
+      const { isAppContext, isSuperuser, userFacilityId } = useUser();
       const { userIsMultiFacilityAdmin } = useFacilities();
-      return {
-        createSnackbar,
-        isAppContext,
-        isSuperuser,
-        userIsMultiFacilityAdmin,
-      };
-    },
-    data() {
-      return {
-        showEditFacilityModal: false,
-        settingsCopy: {},
-        createPinShow: false,
-        handleViewModal: false,
-        handleChangePinModal: false,
-        handleRemovePinModal: false,
-      };
-    },
-    computed: {
-      ...mapState('facilityConfig', [
-        'facilityName',
-        'facilityId',
-        'settings',
-        'facilityNameSaved',
-        'facilityNameError',
-      ]),
-      ...mapGetters(['facilityPageLinks']),
-      ...mapGetters('facilityConfig', ['getFacilityDataLoading']),
-      settingsList: () =>
-        currentLanguage === 'en' ? settingsList.concat('enable_mark_attendance') : settingsList,
-      settingsHaveChanged() {
-        return !isEqual(this.settings, this.settingsCopy);
-      },
-      isPinSet() {
-        if (
-          this.settings &&
-          this.settings['extra_fields'] &&
-          this.settings['extra_fields']['pin_code']
-        ) {
-          return this.settings['extra_fields']['pin_code'];
-        } else {
-          return null;
-        }
-      },
-      deviceSettingsUrl() {
+      const facilityId = route.params.facility_id || userFacilityId.value;
+      const {
+        facilityName,
+        settings,
+        facilityDataLoading,
+        settingsHaveChanged,
+        isPinSet,
+        isAttendanceFeatureEnabled,
+        isPictureLoginFeatureEnabled,
+        signInOption,
+        picturePasswordStyle,
+        picturePasswordShowIconText,
+        pictureLoginTaskId,
+        fetchFacility,
+        undoSettingsChange,
+        saveFacilityName,
+        saveFacilityConfig,
+        saveFacilityLoginSettings,
+        setPin,
+        unsetPin,
+      } = useFacilityEditor(facilityId);
+
+      const {
+        pageHeader$,
+        pageDescription$,
+        deviceSettings$,
+        learnerCanEditUsername$,
+        learnerCanEditName$,
+        learnerCanSignUp$,
+        showDownloadButtonInLearn$,
+        enableMarkAttendance$,
+        learnerCanEditPassword$,
+        deviceManagementPin$,
+        deviceManagementDescription$,
+        createPinBtn$,
+        saveSuccess$,
+        saveFailure$,
+      } = facilityConfigPageStrings;
+      const {
+        howLearnersSignIn$,
+        enterUsernameAndPassword$,
+        enterUsernameOnly$,
+        picturePassword$,
+        picturePasswordDescription$,
+        childFriendlyIcons$,
+        standardIcons$,
+        showIconNames$,
+        iconStyle$,
+      } = picturePasswordStrings;
+      const { pinPlaceholder$ } = pinAuthenticationModalStrings;
+      const { changeLocation$ } = deviceSettingsPageStrings;
+
+      // state
+      const showEditFacilityModal = ref(false);
+      const createPinShow = ref(false);
+      const handleViewModal = ref(false);
+      const handleChangePinModal = ref(false);
+      const handleRemovePinModal = ref(false);
+
+      // computed
+      const deviceSettingsUrl = computed(() => {
         const getUrl = urls['kolibri:kolibri.plugins.device:device_management'];
         if (getUrl) {
           return getUrl() + '#/settings';
         }
         return null;
-      },
-      lastPartId() {
-        return this.facilityId.slice(0, 4);
-      },
-      enableChangePassword() {
-        return this.settings['learner_can_login_with_no_password'];
-      },
-      dropdownOption() {
+      });
+      const lastPartId = computed(() => {
+        return facilityId ? facilityId.slice(0, 4) : '';
+      });
+      const changePINLabel = computed(() => {
+        return `${changeLocation$()} ${pinPlaceholder$()}`;
+      });
+      const viewPINLabel = computed(() => {
+        return `${coreString('viewAction')} ${pinPlaceholder$()}`;
+      });
+      const dropdownOptions = computed(() => {
         return [
-          { label: this.viewPINLabel, value: 'VIEW' },
-          { label: this.changePINLabel, value: 'CHANGE' },
-          { label: this.coreString('removePinPlacholder'), value: 'REMOVE' },
+          { label: viewPINLabel.value, value: 'VIEW' },
+          { label: changePINLabel.value, value: 'CHANGE' },
+          { label: coreString('removePinPlacholder'), value: 'REMOVE' },
         ];
-      },
-      changePINLabel() {
-        /* eslint-disable kolibri/vue-no-undefined-string-uses */
-        return `${deviceSettingsPageStrings.$tr('changeLocation')} ${this.pinPlaceholder}`;
-        /* eslint-enable */
-      },
-      viewPINLabel() {
-        return `${this.coreString('viewAction')} ${this.pinPlaceholder}`;
-      },
-      pinPlaceholder() {
-        /* eslint-disable kolibri/vue-no-undefined-string-uses */
-        return pinAuthenticationModalStrings.$tr('pinPlaceholder');
-        /* eslint-enable */
-      },
-    },
-    watch: {
-      facilityNameSaved(val) {
-        if (val) {
-          this.createSnackbar(this.coreString('changesSavedNotification'));
-          this.$store.commit('facilityConfig/RESET_FACILITY_NAME_STATES');
+      });
+
+      // actions
+      async function submitFacilityName(name) {
+        showEditFacilityModal.value = false;
+        if (name !== facilityName.value) {
+          try {
+            await saveFacilityName(name);
+            createSnackbar(coreString('changesSavedNotification'));
+          } catch (error) {
+            createSnackbar(coreString('changesNotSavedNotification'));
+          }
         }
-      },
-      facilityNameError(val) {
-        if (val) {
-          this.createSnackbar(this.coreString('changesNotSavedNotification'));
-          this.$store.commit('facilityConfig/RESET_FACILITY_NAME_STATES');
+      }
+
+      async function saveConfig() {
+        try {
+          pictureLoginTaskLoading.value = true;
+          await saveFacilityConfig();
+          await saveFacilityLoginSettings();
+          if (!pictureLoginTaskId.value) {
+            createSnackbar(saveSuccess$());
+          }
+        } catch (error) {
+          createSnackbar(saveFailure$());
+          undoSettingsChange();
+        } finally {
+          if (!pictureLoginTaskId.value) {
+            pictureLoginTaskLoading.value = false;
+          }
         }
-      },
-    },
-    mounted() {
-      this.copySettings();
-    },
-    methods: {
-      camelCase,
-      ...mapActions('facilityConfig', ['saveFacilityName']),
-      updateSettingValue(settingName, newValue) {
-        this.$store.commit('facilityConfig/CONFIG_PAGE_MODIFY_SETTING', {
-          name: settingName,
-          value: newValue,
-        });
-        return newValue;
-      },
-      toggleSetting(settingName) {
-        return this.updateSettingValue(settingName, !this.settings[settingName]);
-      },
-      toggleLearnerLoginPassword() {
-        const newValue = this.toggleSetting('learner_can_login_with_no_password');
-        if (newValue === true) {
-          // If learners do not need passwords to log in, learners (and admins)
-          // should not be able to edit passwords for their accounts
-          this.updateSettingValue('learner_can_edit_password', false);
+      }
+
+      async function handleCreatePinSubmit(payload) {
+        try {
+          await setPin(payload);
+          showSnackbarNotification('pinCreated');
+          createPinShow.value = false;
+        } catch (error) {
+          createSnackbar(saveFailure$());
         }
-      },
-      updateSettings(action) {
-        this.$store
-          .dispatch(action)
-          .then(() => {
-            this.createSnackbar(this.$tr('saveSuccess'));
-            this.copySettings();
-          })
-          .catch(() => {
-            this.createSnackbar(this.$tr('saveFailure'));
-            this.$store.commit('facilityConfig/CONFIG_PAGE_UNDO_SETTINGS_CHANGE');
-          });
-      },
-      sendFacilityName(name) {
-        this.showEditFacilityModal = false;
-        if (name != this.facilityName) this.saveFacilityName({ name: name, id: this.facilityId });
-      },
-      saveConfig() {
-        this.updateSettings('facilityConfig/saveFacilityConfig');
-      },
-      copySettings() {
-        this.settingsCopy = Object.assign({}, this.settings);
-      },
-      handleCreatePin() {
-        this.createPinShow = true;
-      },
-      handleSelect(option) {
+      }
+
+      async function handleChangePinSubmit(payload) {
+        try {
+          await setPin(payload);
+          showSnackbarNotification('pinUpdated');
+          handleChangePinModal.value = false;
+        } catch (error) {
+          createSnackbar(saveFailure$());
+        }
+      }
+
+      async function handleRemovePinSubmit() {
+        try {
+          await unsetPin();
+          showSnackbarNotification('pinRemove');
+          handleRemovePinModal.value = false;
+        } catch (error) {
+          createSnackbar(saveFailure$());
+        }
+      }
+
+      function handleCreatePin() {
+        createPinShow.value = true;
+      }
+
+      function handleSelect(option) {
         if (option.value === 'VIEW') {
-          this.handleViewModal = true;
+          handleViewModal.value = true;
         } else if (option.value === 'CHANGE') {
-          this.handleChangePinModal = true;
+          handleChangePinModal.value = true;
         } else if (option.value === 'REMOVE') {
-          this.handleRemovePinModal = true;
+          handleRemovePinModal.value = true;
         }
-      },
+      }
+
+      onMounted(async () => {
+        try {
+          await fetchFacility();
+        } catch (error) {
+          handleApiError({ error, reloadOnReconnect: true, shouldThrow: false });
+        }
+      });
+
+      const { tasks: facilityTasks } = useTaskPolling('facility_task');
+      const pictureLoginTaskLoading = ref(false);
+
+      const pictureLoginTask = computed(() => {
+        if (!pictureLoginTaskId.value) return null;
+        return facilityTasks.value.find(t => t.id === pictureLoginTaskId.value) || null;
+      });
+
+      watch(pictureLoginTask, task => {
+        if (!task) return;
+        if (task.status === TaskStatuses.FAILED) {
+          pictureLoginTaskLoading.value = false;
+          pictureLoginTaskId.value = null;
+          createSnackbar(saveFailure$());
+        } else if (task.status === TaskStatuses.COMPLETED) {
+          pictureLoginTaskLoading.value = false;
+          pictureLoginTaskId.value = null;
+          createSnackbar(saveSuccess$());
+        }
+      });
+
+      return {
+        // Constants
+        OptionsForSignIn,
+        PicturePasswordIconStyle,
+
+        // State
+        isAppContext,
+        pageLoading,
+        isSuperuser,
+        userIsMultiFacilityAdmin,
+        facilityName,
+        facilityId,
+        settings,
+        facilityDataLoading,
+        settingsHaveChanged,
+        isPinSet,
+        showEditFacilityModal,
+        createPinShow,
+        handleViewModal,
+        handleChangePinModal,
+        handleRemovePinModal,
+        deviceSettingsUrl,
+        lastPartId,
+        dropdownOptions,
+        isAttendanceFeatureEnabled,
+        isPictureLoginFeatureEnabled,
+        signInOption,
+        picturePasswordStyle,
+        picturePasswordShowIconText,
+        pictureLoginTaskLoading,
+
+        // Functions
+        submitFacilityName,
+        saveConfig,
+        handleCreatePinSubmit,
+        handleChangePinSubmit,
+        handleRemovePinSubmit,
+        handleCreatePin,
+        handleSelect,
+
+        // Strings
+        pageHeader$,
+        pageDescription$,
+        deviceSettings$,
+        learnerCanEditUsername$,
+        learnerCanEditName$,
+        learnerCanSignUp$,
+        enableMarkAttendance$,
+        learnerCanEditPassword$,
+        showDownloadButtonInLearn$,
+        deviceManagementPin$,
+        deviceManagementDescription$,
+        createPinBtn$,
+        howLearnersSignIn$,
+        enterUsernameAndPassword$,
+        enterUsernameOnly$,
+        picturePassword$,
+        picturePasswordDescription$,
+        childFriendlyIcons$,
+        standardIcons$,
+        showIconNames$,
+        iconStyle$,
+      };
     },
-    $trs: {
-      // These are not going to be picked up by the linter because snake cased versions
-      // are used to get the keys to these strings.
-      /* eslint-disable kolibri/vue-no-unused-translations */
-      learnerCanEditName: {
-        message: 'Allow learners to edit their full name',
-        context: "Option on 'Facility settings' page.",
+    computed: {
+      ...mapGetters(['facilityPageLinks']),
+      dividerStyle() {
+        return `color : ${this.$themeTokens.fineLine}`;
       },
-      learnerCanEditPassword: {
-        message: 'Allow learners to edit their password when signed in',
-        context: "Option on 'Facility settings' page.",
-      },
-      learnerCanEditUsername: {
-        message: 'Allow learners to edit their username',
-        context: "Option on 'Facility settings' page.",
-      },
-      learnerCanSignUp: {
-        message: 'Allow learners to create accounts',
-        context: "Option on 'Facility settings' page.",
-      },
-      learnerNeedPasswordToLogin: {
-        message: 'Require password for learners',
-        context: "Option on 'Facility settings' page.",
-      },
-      showDownloadButtonInLearn: {
-        message: "Show 'download' button with resources",
-        context: "Option on 'Facility settings' page.\n",
-      },
-      enableMarkAttendance: {
-        message: 'Allow coaches to take attendance (English only)',
-        context: "Option on 'Facility settings' page.",
-      },
-      /* eslint-enable kolibri/vue-no-unused-translations */
-      saveFailure: {
-        message: 'There was a problem saving your settings',
-        context: 'Status report after the facility change operation.',
-      },
-      saveSuccess: {
-        message: 'Facility settings updated',
-        context: 'Status report after the facility change operation.',
-      },
-      pageDescription: {
-        message: 'Configure facility settings here.',
-        context: 'Interpret as "[You can] configure facility settings here"',
-      },
-      deviceSettings: {
-        message: 'You can also configure device settings',
-        context: 'Text link on Facility settings page.',
-      },
-      pageHeader: {
-        message: 'Facility settings',
-        context: 'Title of the Facility > Settings page.',
-      },
-      documentTitle: {
-        message: 'Facility Settings',
-        context: 'Title of page where user can configure facility settings.',
-      },
-      deviceManagementPin: {
-        message: 'Device management PIN',
-        context: 'The title for the device management PIN',
-      },
-      deviceManagementDescription: {
-        message:
-          'This 4-digit PIN allows users to manage content and other settings on learn-only devices',
-        context: 'Description for the device management',
-      },
-      createPinBtn: {
-        message: 'Create PIN',
-        context: 'Button for the create PIN',
-      },
-      /* eslint-disable kolibri/vue-no-unused-translations */
-      optionBtn: {
-        message: 'option',
-        context: 'Options button for the create PIN page',
-      },
-      /* eslint-enable kolibri/vue-no-unused-translations */
     },
   };
 
@@ -488,8 +663,12 @@
 
 <style lang="scss" scoped>
 
-  .mb {
-    margin-bottom: 2rem;
+  .facility-settings {
+    margin-bottom: 20px;
+  }
+
+  .facility-settings > h3 {
+    margin: 8px 0;
   }
 
   .settings > label {
@@ -498,13 +677,8 @@
     cursor: pointer;
   }
 
-  .checkbox-password {
-    margin-left: 24px;
-  }
-
   .save-button {
-    position: absolute;
-    right: 25px;
+    flex: 0 0 auto;
   }
 
   .facility-loader {
@@ -512,9 +686,40 @@
     margin-bottom: -0.5em; // To align with the text
   }
 
-  .save-changes-button {
+  .save-changes-row {
+    display: flex;
+  }
+
+  .save-changes-inline-group,
+  .bottom-bar-save-group {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .save-changes-inline-group {
     margin-top: 24px;
-    margin-left: -8px;
+  }
+
+  .save-changes-button {
+    flex: 0 0 auto;
+    margin-top: 0;
+    margin-left: 0;
+  }
+
+  .nested-settings {
+    // radio button width: 24px,
+    // label left padding: 8px,
+    // adjustment: -1px (slight left padding on checkbox)
+    margin-left: #{24px + 8px - 1px};
+  }
+
+  .picture-password-settings {
+    margin-top: 12px;
+  }
+
+  .divider {
+    border-style: solid;
   }
 
 </style>

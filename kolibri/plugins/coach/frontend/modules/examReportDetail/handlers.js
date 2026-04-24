@@ -1,6 +1,8 @@
 import { getExamReport } from 'kolibri-common/quizzes/utils';
 import { createTranslator } from 'kolibri/utils/i18n';
 import store from 'kolibri/store';
+import { handleApiError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
 const translator = createTranslator('ExamReportPageTitles', {
   examReportTitle: {
@@ -17,17 +19,22 @@ export function generateExamReportDetailHandler(paramsToCheck) {
     if (setLoading) {
       // Only set loading state if we are not switching between
       // different views of the same learner's exercise report.
-      store.dispatch('loading');
+      pageLoading.value = true;
     }
-    getExamReport(quizId, tryIndex, questionId, interactionIndex).then(examReport => {
-      store.commit('examReportDetail/SET_STATE', {
-        ...examReport,
-        learnerId,
-        pageTitle: translator.$tr('examReportTitle', {
-          examTitle: examReport.exam.title,
-        }),
+    getExamReport(quizId, tryIndex, questionId, interactionIndex)
+      .then(examReport => {
+        store.commit('examReportDetail/SET_STATE', {
+          ...examReport,
+          learnerId,
+          pageTitle: translator.$tr('examReportTitle', {
+            examTitle: examReport.exam.title,
+          }),
+        });
+        pageLoading.value = false;
+      })
+      .catch(error => {
+        pageLoading.value = false;
+        return handleApiError({ error, reloadOnReconnect: true });
       });
-      store.dispatch('notLoading');
-    });
   };
 }

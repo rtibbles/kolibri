@@ -3,7 +3,8 @@ import invert from 'lodash/invert';
 import isEqual from 'lodash/isEqual';
 // import uFuzzy from '@leeoniya/ufuzzy';
 import logger from 'kolibri-logging';
-import { computed, getCurrentInstance, inject, provide, ref, watch } from 'vue';
+import { computed, inject, provide, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router/composables';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
 import {
   AllCategories,
@@ -160,20 +161,14 @@ export const searchKeys = [
 
 export default function useBaseSearch({
   descendant,
-  store,
-  router,
   baseurl,
   filters,
   searchResultsRouteName,
   reloadOnDescendantChange = true,
   fetchContentNodeProgress,
 }) {
-  // Get store and router references from the curent instance
-  // but allow them to be passed in to allow for dependency
-  // injection, primarily for tests.
-  store = store || getCurrentInstance().proxy.$store;
-  router = router || getCurrentInstance().proxy.$router;
-  const route = computed(() => store.state.route);
+  const route = useRoute();
+  const router = useRouter();
 
   const searchResultsLoading = ref(false);
   const moreLoading = ref(false);
@@ -189,7 +184,7 @@ export default function useBaseSearch({
   const searchTerms = computed({
     get() {
       const searchTerms = {};
-      const query = get(route).query;
+      const query = route.query;
       for (const key of searchKeys) {
         const obj = {};
         if (query[key]) {
@@ -203,7 +198,7 @@ export default function useBaseSearch({
       return searchTerms;
     },
     set(value) {
-      const query = { ...get(route).query };
+      const query = { ...route.query };
       for (const key of searchKeys) {
         const val = Object.keys(value[key] || {})
           .filter(Boolean)
@@ -220,7 +215,7 @@ export default function useBaseSearch({
         delete query.keywords;
       }
 
-      const nextRoute = { ...get(route), query };
+      const nextRoute = { ...route, query };
       if (searchResultsRouteName) {
         nextRoute.name = searchResultsRouteName;
       }
@@ -422,7 +417,7 @@ export default function useBaseSearch({
 
   // Helper to get the route information in a setup() function
   function currentRoute() {
-    return get(route);
+    return route;
   }
 
   const results = computed(() => {

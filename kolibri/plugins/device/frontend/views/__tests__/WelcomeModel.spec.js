@@ -1,22 +1,22 @@
-import { mount } from '@vue/test-utils';
+import { render, fireEvent, screen } from '@testing-library/vue';
+import '@testing-library/jest-dom';
+import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
 import WelcomeModal from '../WelcomeModal';
 
-function makeWrapper(options) {
-  const wrapper = mount(WelcomeModal, {
-    ...options,
-  });
-  return { wrapper };
-}
+const { continueAction$ } = coreStrings;
 
 describe('WelcomeModal', () => {
-  it('clicking submit emits a "submit" event', () => {
+  it('emits submit event when continue button is clicked', async () => {
     const submitListener = jest.fn();
-    const { wrapper } = makeWrapper({
+
+    render(WelcomeModal, {
       listeners: {
         submit: submitListener,
       },
     });
-    wrapper.find('form').trigger('submit');
+
+    const submitButton = screen.getByRole('button', { name: continueAction$() });
+    await fireEvent.click(submitButton);
     expect(submitListener).toHaveBeenCalledTimes(1);
   });
 });

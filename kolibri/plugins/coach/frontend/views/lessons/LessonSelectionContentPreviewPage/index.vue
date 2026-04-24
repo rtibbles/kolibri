@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     :appBarTitle="lessonNameLabel"
     icon="back"
     :route="returnBackRoute"
@@ -28,8 +29,9 @@
   import get from 'lodash/get';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
-  import CoachImmersivePage from '../../../views/CoachImmersivePage';
+  import CoachImmersivePage from '../../CoachImmersivePage';
   import LessonContentPreview from './LessonContentPreview';
 
   export default {
@@ -42,7 +44,7 @@
     mixins: [commonCoreStrings, commonCoach],
     setup() {
       const { clearSnackbar } = useSnackbar();
-      return { clearSnackbar };
+      return { clearSnackbar, pageLoading };
     },
     props: {
       // If set to true, will show the add/remove buttons.

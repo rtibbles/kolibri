@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer class="container">
       <KCircularLoader v-if="pageLoading" />
       <div
@@ -307,11 +307,13 @@
   import AccordionContainer from 'kolibri-common/components/accordion/AccordionContainer';
   import AccordionItem from 'kolibri-common/components/accordion/AccordionItem';
   import { themePalette, themeTokens } from 'kolibri-design-system/lib/styles/theme';
+  import { handleApiError } from 'kolibri/utils/appError';
   import { isRtl, currentLanguage } from 'kolibri/utils/i18n';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames } from '../../constants';
   import Recipients from '../common/Recipients.vue';
   import CoachHeader from '../common/CoachHeader.vue';
-  import { coachStrings } from '../../views/common/commonCoachStrings';
+  import { coachStrings } from '../common/commonCoachStrings';
   import CoachAppBarPage from '../CoachAppBarPage.vue';
   import useCourseSession from '../../composables/useCourseSession';
   import useClassSummary from '../../composables/useClassSummary.js';
@@ -458,7 +460,7 @@
               };
             })
             .catch(error => {
-              store.dispatch('handleApiError', { error });
+              handleApiError({ error });
               unitReportInfo.value = {
                 ...unitReportInfo.value,
                 [unit.id]: {
@@ -811,6 +813,11 @@
         onSelectObjective,
         onClosePanel,
       };
+    },
+    watch: {
+      courseSession() {
+        pageLoading.value = false;
+      },
     },
   };
 

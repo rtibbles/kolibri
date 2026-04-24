@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="!quizInitialized"
     :appBarTitle="title"
     icon="close"
     :pageTitle="title"
@@ -115,7 +116,7 @@
   import get from 'lodash/get';
   import { ERROR_CONSTANTS } from 'kolibri/constants';
   import CatchErrors from 'kolibri/utils/CatchErrors';
-  import { ref, getCurrentInstance } from 'vue';
+  import { ref } from 'vue';
   import pickBy from 'lodash/pickBy';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import commonCoreStrings, { coreStrings } from 'kolibri/uiText/commonCoreStrings';
@@ -139,7 +140,6 @@
     },
     mixins: [commonCoreStrings],
     setup() {
-      const store = getCurrentInstance().proxy.$store;
       const closeConfirmationToRoute = ref(null);
       const { createSnackbar } = useSnackbar();
       const { classId, initClassInfo, groups } = useCoreCoach();
@@ -156,7 +156,7 @@
       const showError = ref(false);
       const quizInitialized = ref(false);
 
-      initClassInfo().then(() => store.dispatch('notLoading'));
+      initClassInfo();
 
       const {
         allSectionsEmptyWarning$,
@@ -279,9 +279,6 @@
         next();
       }
     },
-    mounted() {
-      this.$store.dispatch('notLoading');
-    },
     async created() {
       window.addEventListener('beforeunload', this.beforeUnload);
       await this.initializeQuiz(this.$route.params.classId, this.$route.params.quizId);
@@ -356,9 +353,12 @@
           })
           .catch(error => {
             const errors = CatchErrors(error, [ERROR_CONSTANTS.UNIQUE, 'BLANK']);
-            this.$refs.detailsModal.handleSubmitFailure();
-            if (errors.length) {
+            if (errors && errors.length) {
               this.$refs.detailsModal.handleSubmitTitleFailure();
+            } else if (error.response && error.response.data && error.response.data.learner_ids) {
+              this.$refs.detailsModal.handleSubmitDeletedUsersFailure();
+            } else {
+              this.$refs.detailsModal.handleSubmitFailure();
             }
           });
       },

@@ -4,6 +4,8 @@ import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator'
 import groupBy from 'lodash/groupBy';
 import mapValues from 'lodash/mapValues';
 import head from 'lodash/head';
+import { handleApiError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
 function fetchDevicePermissions() {
   return DevicePermissionsResource.fetchCollection({ force: true }).then(
@@ -18,10 +20,10 @@ function fetchFacilityUsers() {
   return FacilityUserResource.fetchCollection();
 }
 
-export function showManagePermissionsPage(store) {
-  const shouldResolve = samePageCheckGenerator(store);
+export function showManagePermissionsPage(store, route) {
+  const shouldResolve = samePageCheckGenerator(route);
   store.commit('managePermissions/SET_LOADING_FACILITY_USERS', true);
-  store.dispatch('notLoading'); // We're loading data now, not the page
+  pageLoading.value = false; // We're loading data now, not the page
   const promises = Promise.all([fetchFacilityUsers(store), fetchDevicePermissions()]);
   return promises
     .then(([users, permissions]) => {
@@ -35,8 +37,8 @@ export function showManagePermissionsPage(store) {
     })
     .catch(error => {
       store.commit('managePermissions/SET_LOADING_FACILITY_USERS', false);
-      return shouldResolve()
-        ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-        : null;
+      if (shouldResolve()) {
+        handleApiError({ error, reloadOnReconnect: true });
+      }
     });
 }

@@ -4,6 +4,7 @@
     class="manage-channel-page"
     :appBarTitle="appBarTitle"
     :route="backRoute"
+    :loading="pageLoading"
   >
     <KPageContainer class="device-container">
       <!-- Show this progress bar to match other import flows -->
@@ -87,8 +88,10 @@
   import get from 'lodash/get';
   import last from 'lodash/last';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { handleApiError } from 'kolibri/utils/appError';
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import { TransferTypes } from 'kolibri-common/utils/syncTaskUtils';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import useContentTasks from '../../../composables/useContentTasks';
   import ChannelContentsSummary from '../../SelectContentPage/ChannelContentsSummary';
   import ContentTreeViewer from '../../SelectContentPage/ContentTreeViewer';
@@ -127,6 +130,7 @@
     mixins: [commonCoreStrings, taskNotificationMixin],
     setup() {
       useContentTasks();
+      return { handleApiError, pageLoading };
     },
     data() {
       return {
@@ -201,7 +205,7 @@
           this.setUpPage(pageData);
         })
         .catch(error => {
-          this.$store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          this.handleApiError({ error, reloadOnReconnect: true });
         });
     },
     methods: {
@@ -239,7 +243,7 @@
               }
             })
             .catch(error => {
-              this.$store.dispatch('handleApiError', { error });
+              this.handleApiError({ error });
             });
         }
       },
@@ -329,7 +333,7 @@
             if (error.response.status === 404) {
               this.$router.replace({ name: PageNames.MANAGE_CONTENT_PAGE });
             } else {
-              this.$store.dispatch('handleApiError', { error });
+              this.handleApiError({ error });
             }
           });
       },

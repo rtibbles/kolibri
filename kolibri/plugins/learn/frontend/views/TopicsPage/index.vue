@@ -12,6 +12,7 @@
       :appBarTitle="barTitle"
       :appearanceOverrides="{}"
       :primary="false"
+      :loading="loading"
       class="page"
     >
       <template #actions>
@@ -33,7 +34,7 @@
           v-if="!windowIsSmall"
           ref="header"
           role="complementary"
-          data-test="header-breadcrumbs"
+          data-testid="header-breadcrumbs"
           :title="(topic && topic.title) || ''"
           :description="topic && topic.description"
           :thumbnail="topic && topic.thumbnail"
@@ -81,7 +82,7 @@
         >
           <KBreadcrumbs
             v-if="breadcrumbs.length && windowIsSmall"
-            data-test="mobile-breadcrumbs"
+            data-testid="mobile-breadcrumbs"
             :items="breadcrumbs"
             :ariaLabel="learnString('channelAndFoldersLabel')"
           />
@@ -90,12 +91,12 @@
             <!-- Filter buttons - shown when not sidebar not visible -->
             <div
               v-if="!windowIsLarge"
-              data-test="tab-buttons"
+              data-testid="tab-buttons"
             >
               <KButton
                 v-if="topics.length"
                 icon="topic"
-                data-test="folders-button"
+                data-testid="folders-button"
                 class="overlay-toggle-button"
                 :text="coreString('folders')"
                 :primary="false"
@@ -104,7 +105,7 @@
               <KButton
                 icon="filter"
                 class="overlay-toggle-button"
-                data-test="filter-button"
+                data-testid="filter-button"
                 :text="coreString('filter')"
                 :primary="false"
                 @click="handleSearchButton"
@@ -114,7 +115,7 @@
             <!-- default/preview display of nested folder structure, not search -->
             <div
               v-if="!displayingSearchResults"
-              data-test="topics"
+              data-testid="topics"
             >
               <!-- Rows of cards and links / show more for each Topic -->
               <template v-for="(c, i) in contentsForDisplay">
@@ -138,7 +139,7 @@
                   v-else
                   :key="'grid_' + i"
                   :allowDownloads="allowDownloads"
-                  data-test="search-results"
+                  data-testid="search-results"
                   :contents="c"
                   :gridType="gridType"
                   currentCardViewStyle="card"
@@ -167,7 +168,7 @@
                 search results? -->
             <SearchResultsGrid
               v-else
-              data-test="search-results"
+              data-testid="search-results"
               :allowDownloads="allowDownloads"
               :currentCardViewStyle="currentSearchCardViewStyle"
               :hideCardViewToggle="true"
@@ -262,6 +263,7 @@
   import { getCurrentInstance, ref, watch } from 'vue';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useUser from 'kolibri/composables/useUser';
+  import { handleApiError, clearError } from 'kolibri/utils/appError';
   import { ContentNodeKinds } from 'kolibri/constants';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import Modalities from 'kolibri-constants/Modalities';
@@ -286,12 +288,12 @@
   import CustomContentRenderer from '../ChannelRenderer/CustomContentRenderer';
   import SearchResultsGrid from '../SearchResultsGrid';
   import DeviceConnectionStatus from '../DeviceConnectionStatus.vue';
+  import commonLearnStrings from '../commonLearnStrings';
   import TopicsHeader from './TopicsHeader';
   import ToggleHeaderTabs from './ToggleHeaderTabs';
   import TopicsMobileHeader from './TopicsMobileHeader';
   import TopicSubsection from './TopicSubsection';
   import TopicsPanelModal from './TopicsPanelModal';
-  import commonLearnStrings from './../commonLearnStrings';
 
   function _handleRootTopic(topic, currentChannel) {
     const isRoot = !topic.parent;
@@ -483,45 +485,42 @@
             set(channel, currentChannel);
 
             set(loading, false);
-
-            store.dispatch('notLoading');
-            store.commit('CORE_SET_ERROR', null);
+            clearError();
           }
         });
       }
 
       function showTopicsTopic() {
-        return store.dispatch('loading').then(() => {
-          const route = currentRoute();
-          store.commit('SET_PAGE_NAME', route.name);
-          set(loading, true);
-          set(topic, null);
-          set(channel, null);
-          set(contents, []);
-          set(isRoot, false);
-          set(sidePanelIsOpen, false);
-          const shouldResolve = samePageCheckGenerator(store);
-          let promise;
-          if (props.deviceId) {
-            promise = setCurrentDevice(props.deviceId).then(device => {
-              const baseurl = device.base_url;
-              return _loadTopicsTopic({ baseurl, shouldResolve });
-            });
-          } else {
-            promise = _loadTopicsTopic({ shouldResolve });
-          }
-          return promise.catch(error => {
-            if (shouldResolve()) {
-              if (
-                error === StudioNotAllowedError ||
-                (error.response && error.response.status === 410)
-              ) {
-                router.replace({ name: PageNames.LIBRARY });
-                return;
-              }
-              store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-            }
+        const route = currentRoute();
+        store.commit('SET_PAGE_NAME', route.name);
+        set(loading, true);
+        set(topic, null);
+        set(channel, null);
+        set(contents, []);
+        set(isRoot, false);
+        set(sidePanelIsOpen, false);
+        const shouldResolve = samePageCheckGenerator();
+        let promise;
+        if (props.deviceId) {
+          promise = setCurrentDevice(props.deviceId).then(device => {
+            const baseurl = device.base_url;
+            return _loadTopicsTopic({ baseurl, shouldResolve });
           });
+        } else {
+          promise = _loadTopicsTopic({ shouldResolve });
+        }
+        return promise.catch(error => {
+          if (shouldResolve()) {
+            set(loading, false);
+            if (
+              error === StudioNotAllowedError ||
+              (error.response && error.response.status === 410)
+            ) {
+              router.replace({ name: PageNames.LIBRARY });
+              return;
+            }
+            handleApiError({ error, reloadOnReconnect: true });
+          }
         });
       }
 
@@ -554,6 +553,7 @@
         fetchContentNodeTreeProgress,
         loading,
         sidePanelIsOpen,
+        handleApiError,
       };
     },
     props: {
@@ -895,7 +895,7 @@
               this.fetchRemoteBrowsingContentNodeUserData(data);
             })
             .catch(err => {
-              this.$store.dispatch('handleApiError', { error: err });
+              this.handleApiError({ error: err });
             });
         }
         return Promise.resolve();
@@ -925,7 +925,7 @@
               this.fetchRemoteBrowsingContentNodeUserData(data);
             })
             .catch(err => {
-              this.$store.dispatch('handleApiError', { error: err });
+              this.handleApiError({ error: err });
             });
         }
       },

@@ -1,6 +1,8 @@
 import uniq from 'lodash/uniq';
 import LearnerGroupResource from 'kolibri-common/apiResources/LearnerGroupResource';
 import MembershipResource from 'kolibri-common/apiResources/MembershipResource';
+import { handleApiError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
 function _groupState(group) {
   return {
@@ -33,12 +35,12 @@ export function createGroup(store, { groupName, classId }) {
       // to get that back up to date!
       return store.dispatch('classSummary/refreshClassSummary', null, { root: true });
     },
-    error => store.dispatch('handleApiError', { error }, { root: true }),
+    error => handleApiError({ error }),
   );
 }
 
 export function renameGroup(store, { groupId, newGroupName }) {
-  store.commit('CORE_SET_PAGE_LOADING', true, { root: true });
+  pageLoading.value = true;
   return LearnerGroupResource.saveModel({
     id: groupId,
     data: { name: newGroupName },
@@ -49,10 +51,13 @@ export function renameGroup(store, { groupId, newGroupName }) {
       const groupIndex = groups.findIndex(group => group.id === groupId);
       groups[groupIndex].name = newGroupName;
       store.commit('SET_GROUPS', groups);
-      store.commit('CORE_SET_PAGE_LOADING', false, { root: true });
+      pageLoading.value = false;
       store.commit('SET_GROUP_MODAL', '');
     },
-    error => store.dispatch('handleApiError', { error }, { root: true }),
+    error => {
+      pageLoading.value = false;
+      handleApiError({ error });
+    },
   );
 }
 
@@ -63,7 +68,7 @@ export function deleteGroup(store, groupId) {
       const updatedGroups = groups.filter(group => group.id !== groupId);
       store.commit('SET_GROUPS', updatedGroups);
     },
-    error => store.dispatch('handleApiError', { error }, { root: true }),
+    error => handleApiError({ error }),
   );
 }
 
@@ -123,23 +128,27 @@ function _removeMultipleUsersFromGroup(store, groupId, userIds) {
 }
 
 export function addUsersToGroup(store, { groupId, userIds }) {
-  store.commit('CORE_SET_PAGE_LOADING', true, { root: true });
+  pageLoading.value = true;
   const final = () => {
-    store.commit('CORE_SET_PAGE_LOADING', false, { root: true });
+    pageLoading.value = false;
     store.commit('SET_GROUP_MODAL', '');
   };
   return _addMultipleUsersToGroup(store, groupId, userIds)
-    .catch(error => store.dispatch('handleApiError', { error }, { root: true }))
+    .catch(error => {
+      handleApiError({ error });
+    })
     .then(final, final);
 }
 
 export function removeUsersFromGroup(store, { groupId, userIds }) {
-  store.commit('CORE_SET_PAGE_LOADING', true, { root: true });
+  pageLoading.value = true;
   const final = () => {
-    store.commit('CORE_SET_PAGE_LOADING', false, { root: true });
+    pageLoading.value = false;
     store.commit('SET_GROUP_MODAL', '');
   };
   return _removeMultipleUsersFromGroup(store, groupId, userIds)
-    .catch(error => store.dispatch('handleApiError', { error }, { root: true }))
+    .catch(error => {
+      handleApiError({ error });
+    })
     .then(final, final);
 }

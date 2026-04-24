@@ -6,6 +6,7 @@
     icon="close"
     :appBarTitle="$tr('editProfileHeader')"
     :route="profileRoute"
+    :loading="pageLoading"
   >
     <KPageContainer
       class="narrow-container"
@@ -84,7 +85,9 @@
   import useUser from 'kolibri/composables/useUser';
   import FacilityUserResource from 'kolibri-common/apiResources/FacilityUserResource';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import useFacilities from 'kolibri-common/composables/useFacilities';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import { handleApiError } from 'kolibri/utils/appError';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { RoutesMap } from '../constants';
 
   export default {
@@ -104,8 +107,15 @@
     mixins: [commonCoreStrings],
     setup() {
       const { isLearnerOnlyImport, isLearner, currentUserId } = useUser();
-      const { facilityConfig } = useFacilities();
-      return { isLearnerOnlyImport, isLearner, currentUserId, facilityConfig };
+      const { facilityConfig } = useFacility();
+      return {
+        pageLoading,
+        isLearnerOnlyImport,
+        isLearner,
+        currentUserId,
+        facilityConfig,
+        handleApiError,
+      };
     },
     data() {
       return {
@@ -202,7 +212,7 @@
               if (this.caughtErrors.length > 0) {
                 this.focusOnInvalidField();
               } else {
-                this.$store.dispatch('handleApiError', { error });
+                this.handleApiError({ error });
               }
             });
         } else {

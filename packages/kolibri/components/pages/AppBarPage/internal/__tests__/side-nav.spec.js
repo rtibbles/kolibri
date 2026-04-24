@@ -3,8 +3,7 @@ import { UserKinds } from 'kolibri/constants';
 import useNav, { useNavMock } from 'kolibri/composables/useNav'; // eslint-disable-line
 import useUser, { useUserMock } from 'kolibri/composables/useUser'; // eslint-disable-line
 import SideNav from '../SideNav';
-// eslint-disable-next-line import/named
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import LearnOnlyDeviceNotice from '../LearnOnlyDeviceNotice';
 import SyncStatusDisplay from '../../../../SyncStatusDisplay';
 import { stubWindowLocation } from 'testUtils'; // eslint-disable-line
@@ -152,7 +151,7 @@ describe('side nav component', () => {
       );
       setUserKind(UserKinds.SUPERUSER);
       const wrapper = createWrapper();
-      const sideNavComponents = wrapper.findAll("[data-test='side-nav-item']");
+      const sideNavComponents = wrapper.findAll("[data-testid='side-nav-item']");
       expect(sideNavComponents.exists()).toBeTruthy();
       expect(sideNavComponents.at(0).html()).toContain(label);
       expect(sideNavComponents.at(1).html()).toContain(label2);

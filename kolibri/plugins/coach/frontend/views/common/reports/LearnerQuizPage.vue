@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     icon="back"
     :primary="false"
     :route="toolbarRoute"
@@ -30,6 +31,7 @@
 
   import { mapState } from 'vuex';
   import ExamReport from 'kolibri-common/components/quizzes/QuizReport';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachImmersivePage from '../../CoachImmersivePage';
   import { PageNames } from '../../../constants';
@@ -41,6 +43,9 @@
       CoachImmersivePage,
     },
     mixins: [commonCoach],
+    setup() {
+      return { pageLoading };
+    },
     data() {
       return {
         prevRoute: null,

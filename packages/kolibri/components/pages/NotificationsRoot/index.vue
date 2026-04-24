@@ -20,7 +20,7 @@
     <div
       v-else
       tabindex="-1"
-      data-test="base-page"
+      data-testid="base-page"
     >
       <slot :loading="loading"></slot>
     </div>
@@ -28,7 +28,6 @@
     <GlobalSnackbar />
     <UpdateNotification
       v-if="!loading && showNotification && mostRecentNotification"
-      :id="mostRecentNotification.id"
       :title="mostRecentNotification.title"
       :msg="mostRecentNotification.msg"
       :linkText="mostRecentNotification.linkText"
@@ -42,7 +41,6 @@
 
 <script>
 
-  import { mapState } from 'vuex';
   import Lockr from 'lockr';
   import { UPDATE_MODAL_DISMISSED } from 'kolibri/constants';
   import { currentLanguage, defaultLanguage } from 'kolibri/utils/i18n';
@@ -51,6 +49,7 @@
   import AppError from 'kolibri/components/error/AppError';
   import GlobalSnackbar from 'kolibri/components/GlobalSnackbar';
   import useUser from 'kolibri/composables/useUser';
+  import { error, handleApiError } from 'kolibri/utils/appError';
   import PingbackNotificationDismissedResource from './internal/PingbackNotificationDismissedResource';
   import PingbackNotificationResource from './internal/PingbackNotificationResource';
   import UpdateNotification from './internal/UpdateNotification';
@@ -71,6 +70,8 @@
         isAdmin,
         isSuperuser,
         currentUserId,
+        error,
+        handleApiError,
       };
     },
     props: {
@@ -103,9 +104,6 @@
       };
     },
     computed: {
-      ...mapState({
-        error: state => state.core.error,
-      }),
       notAuthorized() {
         // catch "not authorized" error, display AuthMessage
         if (
@@ -190,7 +188,7 @@
         }
       },
       dispatchError(error) {
-        this.$store.dispatch('handleApiError', { error });
+        this.handleApiError({ error });
       },
       removeNotification(notificationId) {
         this.notifications = this.notifications.filter(n => n.id !== notificationId);

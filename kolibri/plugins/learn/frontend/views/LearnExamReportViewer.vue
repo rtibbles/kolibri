@@ -3,13 +3,14 @@
   <ImmersivePage
     :route="homePageLink"
     :appBarTitle="reportVisible ? exam.title : ''"
+    :loading="pageLoading"
   >
     <KPageContainer
       v-if="reportVisible"
       :topMargin="50"
       class="container"
     >
-      <KCircularLoader v-if="loading" />
+      <KCircularLoader v-if="pageLoading" />
       <div v-else-if="exerciseContentNodes && exerciseContentNodes.length">
         <ExamReport
           :contentId="exam.id"
@@ -56,6 +57,7 @@
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import useUser from 'kolibri/composables/useUser';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames, ClassesPageNames } from '../constants';
   import useLearnerResources from '../composables/useLearnerResources';
 
@@ -74,7 +76,7 @@
     setup() {
       const { full_name, currentUserId } = useUser();
       const { activeClassesQuizzes } = useLearnerResources();
-      return { userName: full_name, userId: currentUserId, activeClassesQuizzes };
+      return { userName: full_name, userId: currentUserId, activeClassesQuizzes, pageLoading };
     },
     computed: {
       ...mapState('examReportViewer', [
@@ -89,9 +91,6 @@
         classId: state => state.exam.collection,
         selectedInteractionIndex: state => state.interactionIndex,
       }),
-      ...mapState({
-        loading: state => state.core.loading,
-      }),
       homePageLink() {
         return {
           name: PageNames.HOME,
@@ -103,7 +102,7 @@
         return quiz.instant_report_visibility !== false || quiz.archive;
       },
       showQuizReportComingSoonModal() {
-        return !this.reportVisible && !this.loading;
+        return !this.reportVisible && !this.pageLoading;
       },
     },
     methods: {

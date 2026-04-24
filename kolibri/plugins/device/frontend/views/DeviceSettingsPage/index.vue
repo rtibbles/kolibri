@@ -1,8 +1,11 @@
 <template>
 
-  <DeviceAppBarPage :title="pageTitle">
+  <DeviceAppBarPage
+    :title="pageTitle"
+    :loading="pageLoading"
+  >
     <KPageContainer
-      v-if="!isPageLoading"
+      v-if="!pageLoading"
       class="device-container"
     >
       <UiAlert
@@ -35,6 +38,7 @@
             :disabled="language.value === undefined"
             :floatingLabel="false"
             style="max-width: 300px"
+            data-testid="languageSelect"
           />
         </div>
 
@@ -67,14 +71,14 @@
           <label class="fieldset-label">{{ $tr('landingPageLabel') }}</label>
           <KRadioButtonGroup>
             <KRadioButton
-              data-test="landingPageButton"
+              data-testid="landingPageButton"
               :label="$tr('learnerAppPageChoice')"
               :buttonValue="landingPageChoices.LEARN"
               :currentValue="landingPage"
               @input="handleLandingPageChange"
             />
             <KRadioButton
-              data-test="signInPageButton"
+              data-testid="signInPageButton"
               :label="$tr('signInPageChoice')"
               :buttonValue="landingPageChoices.SIGN_IN"
               :currentValue="landingPage"
@@ -83,7 +87,7 @@
 
             <div class="fieldset left-margin">
               <KRadioButton
-                data-test="allowGuestAccessButton"
+                data-testid="allowGuestAccessButton"
                 :label="$tr('allowGuestAccess')"
                 :buttonValue="SignInPageOptions.ALLOW_GUEST_ACCESS"
                 :currentValue="signInPageOption"
@@ -91,7 +95,7 @@
                 @input="handleSignInPageChange"
               />
               <KRadioButton
-                data-test="disallowGuestAccessButton"
+                data-testid="disallowGuestAccessButton"
                 :label="$tr('disallowGuestAccess')"
                 :buttonValue="SignInPageOptions.DISALLOW_GUEST_ACCESS"
                 :currentValue="signInPageOption"
@@ -99,7 +103,7 @@
                 @input="handleSignInPageChange"
               />
               <KRadioButton
-                data-test="lockedContentButton"
+                data-testid="lockedContentButton"
                 :label="$tr('lockedContent')"
                 :buttonValue="SignInPageOptions.LOCKED_CONTENT"
                 :currentValue="signInPageOption"
@@ -312,7 +316,7 @@
           :text="coreString('saveChangesAction')"
           appearance="raised-button"
           primary
-          data-test="saveButtonAndroid"
+          data-testid="saveButtonAndroid"
           @click="handleClickSave"
         />
       </section>
@@ -322,7 +326,7 @@
             :text="coreString('saveChangesAction')"
             appearance="raised-button"
             primary
-            data-test="saveButton"
+            data-testid="saveButton"
             @click="handleClickSave"
           />
         </KButtonGroup>
@@ -375,15 +379,16 @@
   import urls from 'kolibri/urls';
   import logger from 'kolibri-logging';
   import { ref, watch } from 'vue';
+  import pluginData from 'kolibri-plugin-data';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import { availableLanguages, currentLanguage, sortLanguages } from 'kolibri/utils/i18n';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
-  import { checkCapability } from 'kolibri/utils/appCapabilities';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
   import useFacilities from 'kolibri-common/composables/useFacilities';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonDeviceStrings from '../commonDeviceStrings';
   import DeviceAppBarPage from '../DeviceAppBarPage';
   import { LandingPageChoices, MeteredConnectionDownloadOptions } from '../../constants';
@@ -429,7 +434,6 @@
       const dataPlugins = ref(null);
       const { snackbarIsVisible, createSnackbar } = useSnackbar();
       const { facilities } = useFacilities();
-
       fetchPlugins.then(() => {
         dataPlugins.value = plugins.value.map(plugin => ({ ...plugin }));
       });
@@ -468,6 +472,7 @@
         snackbarIsVisible,
         createSnackbar,
         facilities,
+        pageLoading,
       };
     },
     data() {
@@ -507,7 +512,6 @@
       };
     },
     computed: {
-      ...mapGetters(['isPageLoading']),
       ...mapGetters('deviceInfo', ['isRemoteContent']),
       InfoDescriptionColor() {
         return {
@@ -600,7 +604,7 @@
         }
       },
       canCheckMeteredConnection() {
-        return checkCapability('check_is_metered');
+        return pluginData.canCheckMeteredConnection;
       },
       showDisabledAlert() {
         return this.isRemoteContent || !this.canRestart;
@@ -672,7 +676,7 @@
             this.primaryStorageLocation,
           ]);
         })
-        .then(() => this.$store.dispatch('notLoading'));
+        .then(() => (this.pageLoading = false));
     },
     methods: {
       setSignInPageOption(settings) {

@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <p>
         <BackLink
@@ -19,6 +19,7 @@
 <script>
 
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../common';
   import CoachAppBarPage from '../CoachAppBarPage';
   import { nStringsMixin } from '../common/notifications/notificationStrings';
@@ -31,6 +32,9 @@
       CoachAppBarPage,
     },
     mixins: [commonCoach, nStringsMixin, commonCoreStrings],
+    setup() {
+      return { pageLoading };
+    },
     $trs: {
       noActivityLabel: {
         message: 'No activity in your class',

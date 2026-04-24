@@ -3,29 +3,31 @@ import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator'
 import { fetchExamWithContent } from 'kolibri-common/quizzes/utils';
 import shuffled from 'kolibri-common/utils/shuffled';
 import useUser from 'kolibri/composables/useUser';
+import { handleApiError, handleError, clearError } from 'kolibri/utils/appError';
 import { get } from '@vueuse/core';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { ClassesPageNames } from '../../constants';
 import { LearnerClassroomResource } from '../../apiResources';
 
-export function showExam(store, params, alreadyOnQuiz) {
+export function showExam(store, params, alreadyOnQuiz, route) {
   const questionNumber = Number(params.questionNumber);
   const { classId, examId } = params;
   if (!alreadyOnQuiz) {
-    store.commit('CORE_SET_PAGE_LOADING', true);
+    pageLoading.value = true;
   }
   store.commit('SET_PAGE_NAME', ClassesPageNames.EXAM_VIEWER);
 
   const { currentUserId } = useUser();
 
   if (!get(currentUserId)) {
-    store.commit('CORE_SET_ERROR', 'You must be logged in as a learner to view this page');
-    store.commit('CORE_SET_PAGE_LOADING', false);
+    handleError('You must be logged in as a learner to view this page');
+    pageLoading.value = false;
   } else {
     const promises = [
       LearnerClassroomResource.fetchModel({ id: classId }),
       ExamResource.fetchModel({ id: examId }),
     ];
-    const shouldResolve = samePageCheckGenerator(store);
+    const shouldResolve = samePageCheckGenerator(route);
     Promise.all(promises).then(
       ([classroom, exam]) => {
         if (shouldResolve()) {
@@ -54,8 +56,8 @@ export function showExam(store, params, alreadyOnQuiz) {
 
               // Exam is drawing solely on malformed exercise data, best to quit now
               if (allQuestions.some(question => !question.item)) {
-                store.dispatch(
-                  'handleError',
+                pageLoading.value = false;
+                handleError(
                   `This quiz cannot be displayed:\nQuestion sources: ${JSON.stringify(
                     allQuestions,
                   )}\nExam: ${JSON.stringify(exam)}`,
@@ -64,10 +66,8 @@ export function showExam(store, params, alreadyOnQuiz) {
               }
               // Illegal question number!
               else if (questionNumber >= allQuestions.length) {
-                store.dispatch(
-                  'handleError',
-                  `Question number ${questionNumber} is not valid for this quiz`,
-                );
+                pageLoading.value = false;
+                handleError(`Question number ${questionNumber} is not valid for this quiz`);
                 return;
               }
 
@@ -87,21 +87,19 @@ export function showExam(store, params, alreadyOnQuiz) {
                 questionNumber,
                 questions: allQuestions,
               });
-              store.commit('CORE_SET_PAGE_LOADING', false);
-              store.commit('CORE_SET_ERROR', null);
+              pageLoading.value = false;
+              clearError();
             }
           }),
             error => {
-              shouldResolve()
-                ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-                : null;
+              pageLoading.value = false;
+              shouldResolve() ? handleApiError({ error, reloadOnReconnect: true }) : null;
             });
         }
       },
       error => {
-        shouldResolve()
-          ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-          : null;
+        pageLoading.value = false;
+        shouldResolve() ? handleApiError({ error, reloadOnReconnect: true }) : null;
       },
     );
   }

@@ -11,6 +11,7 @@ function makeWrapper({ propsData } = {}) {
 describe('DeviceConnectionStatus', () => {
   beforeEach(() => {
     useDevices.mockReturnValue({
+      hasFetched: true,
       devices: [
         {
           id: '1',
@@ -33,19 +34,16 @@ describe('DeviceConnectionStatus', () => {
       },
     });
 
-    expect(wrapper.find('[data-test="disconnected-icon"]').exists()).toBeFalsy();
+    expect(wrapper.find('[data-testid="disconnected-icon"]').exists()).toBeFalsy();
   });
 
-  it('shows the disconnected icon', async () => {
-    useDevices.mockReturnValue({ devices: [], isFetching: true });
+  it('shows the disconnected icon', () => {
+    useDevices.mockReturnValue({ hasFetched: true, devices: [] });
     const wrapper = makeWrapper({
       propsData: {
         deviceId: '1',
       },
     });
-    useDevices.mockReturnValue({ isFetching: false });
-    wrapper.vm.$nextTick(() => {
-      expect(wrapper.find('[data-test="disconnected-icon"]').exists()).toBeTruthy();
-    });
+    expect(wrapper.find('[data-testid="disconnected-icon"]').exists()).toBeTruthy();
   });
 });

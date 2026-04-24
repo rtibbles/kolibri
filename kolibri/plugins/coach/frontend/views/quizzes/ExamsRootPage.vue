@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <MissingResourceAlert v-if="hasChannels && hasMissingResources && !isLoading" />
       <NoResourceAlert v-if="!hasChannels && !isLoading" />
@@ -179,18 +179,19 @@
 
 <script>
 
-  import { getCurrentInstance, ref } from 'vue';
+  import { ref } from 'vue';
   import CoreTable from 'kolibri/components/CoreTable';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import ChannelResource from 'kolibri-common/apiResources/ChannelResource';
   import ExamResource from 'kolibri-common/apiResources/ExamResource';
   import NoResourceAlert from 'kolibri-common/components/NoResourceAlert';
-  import UserSyncStatusResource from 'kolibri-common/apiResources/UserSyncStatusResource';
   import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert.vue';
   import plugin_data from 'kolibri-plugin-data';
   import bytesForHumans from 'kolibri/uiText/bytesForHumans';
   import { mapState, mapGetters } from 'vuex';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
+  import { fetchClassSyncStatus } from '../../composables/fetchClassSyncStatus';
   import { PageNames } from '../../constants';
   import { coachStrings } from '../common/commonCoachStrings';
   import CoachAppBarPage from '../CoachAppBarPage';
@@ -224,19 +225,15 @@
       const { createSnackbar } = useSnackbar();
       const { classId, initClassInfo, refreshClassSummary } = useCoreCoach();
       const { quizzes, fetchQuizSizes } = useQuizzes();
-      const store = getCurrentInstance().proxy.$store;
       const showOpenConfirmationModal = ref(false);
       const showCloseConfirmationModal = ref(false);
       const activeQuiz = ref(null);
       const learnOnlyDevicesExist = ref(false);
 
-      initClassInfo().then(() => store.dispatch('notLoading'));
+      initClassInfo().then(() => (pageLoading.value = false));
 
       // TODO: refactor to a more robust check
-      UserSyncStatusResource.fetchCollection({
-        force: true,
-        getParams: { member_of: classId.value },
-      }).then(data => {
+      fetchClassSyncStatus(classId.value).then(data => {
         if (data && data.length > 0) {
           learnOnlyDevicesExist.value = true;
         }
@@ -284,6 +281,7 @@
       });
 
       return {
+        pageLoading,
         quizzes,
         refreshClassSummary,
         PageNames,

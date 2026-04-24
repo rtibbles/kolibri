@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KGrid
       v-if="exam"
       gutter="16"
@@ -99,7 +99,9 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import ExamResource from 'kolibri-common/apiResources/ExamResource';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { handleApiError } from 'kolibri/utils/appError';
   import { convertExamQuestionSources } from 'kolibri-common/quizzes/utils';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { QUIZZES_TABS_ID, QuizzesTabs } from '../../../constants/tabsConstants';
   import { useCoachTabs } from '../../../composables/useCoachTabs';
 
@@ -135,10 +137,12 @@
       const { saveTabsClick, wereTabsClickedRecently } = useCoachTabs();
 
       return {
+        pageLoading,
         wereTabsClickedRecently,
         createSnackbar,
         clearSnackbar,
         saveTabsClick,
+        handleApiError,
       };
     },
     data() {
@@ -252,20 +256,15 @@
         const { difficultQuestions } = data;
         this.difficultQuestions = difficultQuestions;
         this.loading = false;
-        this.$store.dispatch('notLoading');
+        pageLoading.value = false;
       },
       /**
        * @public
        */
       setError(error) {
-        try {
-          this.$store.dispatch('handleApiError', { error });
-        } catch (e) {
-          // nothing to do here, just catching the error to avoid
-          // unhandled errors in the dispatch to handleApiError
-        }
+        this.handleApiError({ error });
         this.loading = false;
-        this.$store.dispatch('notLoading');
+        pageLoading.value = false;
       },
       setCurrentAction(action) {
         if (action === 'EDIT_DETAILS') {
@@ -326,9 +325,9 @@
                 actionCallback: () => this.clearSnackbar(),
               });
             } else {
-              this.$store.dispatch('handleApiError', { error });
+              this.handleApiError({ error });
             }
-            this.$store.dispatch('notLoading');
+            pageLoading.value = false;
             this.closeModal();
           });
       },
@@ -341,7 +340,7 @@
             });
           })
           .catch(error => {
-            this.$store.dispatch('handleApiError', { error });
+            this.handleApiError({ error });
           });
       },
       detailLink(learnerId) {

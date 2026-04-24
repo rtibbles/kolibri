@@ -1,18 +1,29 @@
 import { render, screen, waitFor } from '@testing-library/vue';
+import { createTranslator } from 'kolibri/utils/i18n';
 import SafeHtml5RendererIndex from '../SafeHtml5RendererIndex.vue';
 
+const { articleContent$ } = createTranslator(
+  SafeHtml5RendererIndex.name,
+  SafeHtml5RendererIndex.$trs,
+);
+
 jest.mock('kolibri-common/components/SafeHTML/style.scss', () => ({}));
+
+const HEADING = 'Mocked HTML content';
+const TABLE_CAPTION = 'Mocked 3-column Table';
+const CELLS = ['Cell 1', 'Cell 2', 'Cell 3'];
+
 jest.mock('kolibri-zip', () => {
   return jest.fn().mockImplementation(() => ({
     file: jest.fn().mockResolvedValue({
       toString: () => `
-        <h1>Mocked HTML content</h1>
+        <h1>${HEADING}</h1>
         <table>
-          <caption>Mocked 3-column Table</caption>
+          <caption>${TABLE_CAPTION}</caption>
           <tr>
-            <td>Cell 1</td>
-            <td>Cell 2</td>
-            <td>Cell 3</td>
+            <td>${CELLS[0]}</td>
+            <td>${CELLS[1]}</td>
+            <td>${CELLS[2]}</td>
           </tr>
         </table>
         `,
@@ -47,36 +58,36 @@ async function setupTableContainer(scrollWidth, clientWidth) {
 
 describe('SafeHtml5RendererIndex', () => {
   describe('first render', () => {
-    test('smoke test', async () => {
+    it('smoke test', async () => {
       renderComponent();
       expect(screen.getByTestId('safe-html-renderer-container')).toBeInTheDocument();
     });
 
-    test('shows KCircularLoader initially', async () => {
+    it('shows KCircularLoader initially', async () => {
       renderComponent();
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
-    test('hides KCircularLoader after loading', async () => {
+    it('hides KCircularLoader after loading', async () => {
       renderComponent();
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
     });
 
-    test('renders safe-html-wrapper div and HTML content after loading finishes', async () => {
+    it('renders safe-html-wrapper div and HTML content after loading finishes', async () => {
       renderComponent();
       await waitFor(() => {
-        expect(screen.getByLabelText('Article content')).toBeInTheDocument();
-        expect(screen.getByText('Mocked HTML content')).toBeInTheDocument();
-        expect(screen.getByText('Mocked 3-column Table')).toBeInTheDocument();
-        expect(screen.getByText('Cell 1')).toBeInTheDocument();
+        expect(screen.getByLabelText(articleContent$())).toBeInTheDocument();
+        expect(screen.getByText(HEADING)).toBeInTheDocument();
+        expect(screen.getByText(TABLE_CAPTION)).toBeInTheDocument();
+        CELLS.forEach(cell => expect(screen.getByText(cell)).toBeInTheDocument());
       });
     });
   });
 
   describe("table's tabindex", () => {
-    test("a table has tabindex='0' when scrollable", async () => {
+    it("a table has tabindex='0' when scrollable", async () => {
       renderComponent();
       const tableContainer = await setupTableContainer(600, 500); // scrollWidth > clientWidth
       window.dispatchEvent(new Event('resize')); // Resize to trigger `applyTabIndexes`
@@ -84,7 +95,7 @@ describe('SafeHtml5RendererIndex', () => {
       expect(tableContainer).toHaveAttribute('tabindex', '0');
     });
 
-    test("a table doesn't have tabindex='0' when non-scrollable", async () => {
+    it("a table doesn't have tabindex='0' when non-scrollable", async () => {
       renderComponent();
       const tableContainer = await setupTableContainer(600, 800); // scrollWidth < clientWidth
       window.dispatchEvent(new Event('resize'));
@@ -94,7 +105,7 @@ describe('SafeHtml5RendererIndex', () => {
   });
 
   describe('progress tracking', () => {
-    test('emits startTracking on created', async () => {
+    it('emits startTracking on created', async () => {
       const { emitted } = renderComponent();
       await waitFor(() => {
         expect(emitted()).toHaveProperty('startTracking');
@@ -102,10 +113,10 @@ describe('SafeHtml5RendererIndex', () => {
       });
     });
 
-    test('emits stopTracking on destroy', async () => {
+    it('emits stopTracking on destroy', async () => {
       const { emitted, unmount } = renderComponent();
       await waitFor(() => {
-        expect(screen.getByLabelText('Article content')).toBeInTheDocument();
+        expect(screen.getByLabelText(articleContent$())).toBeInTheDocument();
       });
       unmount();
 
@@ -115,13 +126,13 @@ describe('SafeHtml5RendererIndex', () => {
   });
 
   describe('scroll-based progress tracking', () => {
-    test('emits `updateProgress` event with scroll-based progress when user scrolls', async () => {
+    it('emits `updateProgress` event with scroll-based progress when user scrolls', async () => {
       jest.useFakeTimers();
       const { emitted } = renderComponent({
         scrollBasedProgress: 0.5,
       });
       await waitFor(() => {
-        expect(screen.getByLabelText('Article content')).toBeInTheDocument();
+        expect(screen.getByLabelText(articleContent$())).toBeInTheDocument();
       });
 
       jest.advanceTimersByTime(5000);
@@ -131,13 +142,13 @@ describe('SafeHtml5RendererIndex', () => {
       jest.useRealTimers();
     });
 
-    test('emits `finished` event when progress reaches 1', async () => {
+    it('emits `finished` event when progress reaches 1', async () => {
       jest.useFakeTimers();
       const { emitted } = renderComponent({
         scrollBasedProgress: 1,
       });
       await waitFor(() => {
-        expect(screen.getByLabelText('Article content')).toBeInTheDocument();
+        expect(screen.getByLabelText(articleContent$())).toBeInTheDocument();
       });
 
       jest.advanceTimersByTime(5000);
@@ -147,12 +158,12 @@ describe('SafeHtml5RendererIndex', () => {
       jest.useRealTimers();
     });
 
-    test('removes scroll listener on component destroy', async () => {
+    it('removes scroll listener on component destroy', async () => {
       const { container, unmount } = renderComponent({
         debouncedHandleScroll: jest.fn(),
       });
       await waitFor(() => {
-        expect(screen.getByLabelText('Article content')).toBeInTheDocument();
+        expect(screen.getByLabelText(articleContent$())).toBeInTheDocument();
       });
 
       const wrapper = container.querySelector('[data-testid="safe-html-wrapper"]');

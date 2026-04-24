@@ -1,6 +1,6 @@
 'use strict';
 
-const path = require('path');
+const path = require('node:path');
 const RuleTester = require('eslint').RuleTester;
 const rule = require('../../../lib/rules/no-undefined-translator-keys');
 
@@ -8,8 +8,8 @@ const rule = require('../../../lib/rules/no-undefined-translator-keys');
 const testFilePath = path.join(__dirname, 'test.js');
 
 const tester = new RuleTester({
-  parserOptions: {
-    ecmaVersion: 2020,
+  languageOptions: {
+    ecmaVersion: 'latest',
     sourceType: 'module',
   },
 });

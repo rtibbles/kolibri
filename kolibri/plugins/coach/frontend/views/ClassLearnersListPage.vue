@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     :appBarTitle="className"
     icon="back"
     :route="backlink"
@@ -91,10 +92,12 @@
   import ElapsedTime from 'kolibri-common/components/ElapsedTime';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import { SyncStatus } from 'kolibri/constants';
-  import { mapState, mapActions } from 'vuex';
+  import { mapState } from 'vuex';
   import SyncStatusDisplay from 'kolibri/components/SyncStatusDisplay';
-  import CoachImmersivePage from '../views/CoachImmersivePage';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
+  import { fetchClassSyncStatus } from '../composables/fetchClassSyncStatus';
   import { PageNames } from '../constants';
+  import CoachImmersivePage from './CoachImmersivePage';
   import SyncStatusDescription from './common/SyncStatusDescription';
   import StorageNotificationBanner from './StorageNotificationBanner';
 
@@ -109,6 +112,9 @@
       StorageNotificationBanner,
     },
     mixins: [commonCoreStrings],
+    setup() {
+      return { pageLoading };
+    },
     data: function () {
       return {
         prevRoute: null,
@@ -166,7 +172,6 @@
       this.isPolling = false;
     },
     methods: {
-      ...mapActions(['fetchUserSyncStatus']),
       mapLastSyncedTimeToLearner(learnerId) {
         const learnerSyncData = this.classSyncStatusList[learnerId];
         if (learnerSyncData) {
@@ -182,7 +187,7 @@
         return SyncStatus.NOT_CONNECTED;
       },
       pollClassListSyncStatuses() {
-        this.fetchUserSyncStatus({ member_of: this.$route.params.classId }).then(data => {
+        fetchClassSyncStatus(this.$route.params.classId).then(data => {
           const statuses = {};
           for (const status of data) {
             statuses[status.user] = status;

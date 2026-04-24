@@ -39,9 +39,10 @@
   import omitBy from 'lodash/omitBy';
   import get from 'lodash/get';
   import useUser from 'kolibri/composables/useUser';
+  import { error as coreError, handleApiError, clearError } from 'kolibri/utils/appError';
+  import pluginData from 'kolibri-plugin-data';
   import AppError from 'kolibri/components/error/AppError';
   import { currentLanguage } from 'kolibri/utils/i18n';
-  import { checkCapability } from 'kolibri/utils/appCapabilities';
   import { TaskStatuses, TaskTypes } from 'kolibri-common/utils/syncTaskUtils';
   import redirectBrowser from 'kolibri/utils/redirectBrowser';
   import TaskResource from 'kolibri/apiResources/TaskResource';
@@ -59,17 +60,10 @@
     inject: ['wizardService'],
     mixins: [commonCoreStrings],
     setup() {
-      const { login } = useUser();
-      return { login };
+      const { isAppContext, login } = useUser();
+      return { isAppContext, login, coreError, handleApiError, clearError };
     },
     computed: {
-      coreError() {
-        if (this.$store) {
-          return this.$store.state.core.error;
-        } else {
-          return null;
-        }
-      },
       facilityData() {
         const usersName = get(this.wizardContext('superuser'), 'full_name', '');
         const facilityName =
@@ -113,7 +107,7 @@
       userBasedOnOs() {
         // On my own setup with OS user means that the user will be created
         // at login time, based on the OS user.
-        return this.isOnMyOwnSetup && checkCapability('get_os_user');
+        return this.isOnMyOwnSetup && this.isAppContext && pluginData.canGetOSUser;
       },
       learnerCanEditPassword() {
         // Note that we don't ask this question of a user during onboarding -- however,
@@ -194,7 +188,7 @@
     },
     methods: {
       startOver() {
-        this.$store.dispatch('clearError');
+        this.clearError();
         this.wizardService.send('START_OVER');
       },
       // A helper for readability
@@ -209,7 +203,7 @@
           });
           this.pollProvisionTask();
         } catch (e) {
-          this.$store.dispatch('handleApiError', { error: e });
+          this.handleApiError({ error: e });
         }
       },
       async pollProvisionTask() {
@@ -253,14 +247,14 @@
             }
           } else if (task.status === TaskStatuses.FAILED) {
             this.clearPollingTasks();
-            this.$store.dispatch('handleApiError', { error: task.traceback });
+            this.handleApiError({ error: task.traceback });
           } else {
             setTimeout(() => {
               this.pollProvisionTask();
             }, 1000);
           }
         } catch (e) {
-          this.$store.dispatch('handleApiError', { error: e });
+          this.handleApiError({ error: e });
         }
       },
       wrapOnboarding() {

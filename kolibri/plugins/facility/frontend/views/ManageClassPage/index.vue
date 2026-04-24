@@ -1,6 +1,6 @@
 <template>
 
-  <FacilityAppBarPage>
+  <FacilityAppBarPage :loading="pageLoading">
     <KPageContainer>
       <p>
         <KRouterLink
@@ -128,6 +128,7 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useFacilities from 'kolibri-common/composables/useFacilities';
   import { bulkUserManagementStrings } from 'kolibri-common/strings/bulkUserManagementStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { Modals } from '../../constants';
   import FacilityAppBarPage from '../FacilityAppBarPage';
   import ClassRenameModal from '../common/ClassRenameModal.vue';
@@ -158,7 +159,7 @@
       });
       const classToCopy = ref({});
       const { classToDelete, selectClassToDelete, clearClassToDelete } = useDeleteClass();
-      const { getFacilities, userIsMultiFacilityAdmin } = useFacilities();
+      const { fetchFacilities, userIsMultiFacilityAdmin } = useFacilities();
       const store = getCurrentInstance().proxy.$store;
       const displayModal = payload => store.dispatch('classManagement/displayModal', payload);
 
@@ -183,10 +184,11 @@
       };
 
       return {
+        pageLoading,
         classToDelete,
         clearClassToDelete,
         userIsMultiFacilityAdmin,
-        getFacilities,
+        fetchFacilities,
         copyClass$,
         renameClassLabel$,
         deleteClass$,
@@ -272,7 +274,7 @@
       refreshCoreFacilities() {
         if (this.userIsMultiFacilityAdmin) {
           // Update the core facilities object to update classroom number
-          this.getFacilities();
+          this.fetchFacilities();
         }
       },
       handleRenameSuccess() {

@@ -15,10 +15,15 @@
     "kolibri-plugin-data": "workspace:*",
     "lockr": "0.8.5",
     "lodash": "catalog:",
-    "markdown-it": "14.1.0",
+    "markdown-it": "14.1.1",
     "truncate-utf8-bytes": "^1.0.2",
     "vue": "catalog:",
     "vue-router": "catalog:",
     "vuex": "catalog:"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/vue": "catalog:",
+    "@vue/test-utils": "catalog:"
   }
 }

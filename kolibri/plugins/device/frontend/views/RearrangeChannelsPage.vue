@@ -3,6 +3,7 @@
   <ImmersivePage
     :appBarTitle="$tr('editChannelOrderTitle')"
     :route="backRoute"
+    :loading="pageLoading"
   >
     <KPageContainer class="device-container">
       <p class="instructions">
@@ -67,6 +68,8 @@
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { handleApiError } from 'kolibri/utils/appError';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import DeviceChannelResource from '../apiResources/deviceChannel';
   import useContentTasks from '../composables/useContentTasks';
   import { PageNames } from '../constants';
@@ -89,10 +92,11 @@
       useContentTasks();
       const { canManageContent } = useUser();
       const { createSnackbar } = useSnackbar();
-
       return {
         canManageContent,
         createSnackbar,
+        handleApiError,
+        pageLoading,
       };
     },
     data() {
@@ -123,7 +127,7 @@
           this.loading = false;
         })
         .catch(error => {
-          this.$store.dispatch('CORE_SET_ERROR', error);
+          this.handleApiError({ error });
         });
     },
     methods: {

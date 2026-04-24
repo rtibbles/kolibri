@@ -1,20 +1,19 @@
 import Vuex from 'vuex';
 import VueRouter from 'vue-router';
 import { render, waitFor } from '@testing-library/vue';
-import { createLocalVue } from '@vue/test-utils';
+import { coursesStrings } from 'kolibri-common/strings/coursesStrings';
 import { PageNames } from '../../constants';
 import CourseWelcomePage from '../CourseWelcomePage.vue';
 import useLearnerResources from '../../composables/useLearnerResources';
 
-jest.mock('../../composables/useLearnerResources');
-jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow', () => ({
-  __esModule: true,
-  default: () => ({ windowIsLarge: true }),
-}));
+const { startCourseAction$, resumeCourseAction$ } = coursesStrings;
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
-localVue.use(VueRouter);
+jest.mock('../../composables/useLearnerResources');
+
+const COURSE_DESCRIPTION = 'Learn the fundamentals of physics';
+const COURSE_SUBTITLE = '2 units · 12 lessons';
+const UNIT_1_TITLE = 'Unit 1: Motion';
+const UNIT_2_TITLE = 'Unit 2: Forces';
 
 describe('CourseWelcomePage', () => {
   let learnerResources;
@@ -25,14 +24,14 @@ describe('CourseWelcomePage', () => {
     id: 'course-session-1',
     course_id: 'course-1',
     title: 'Introduction to Physics',
-    description: 'Learn the fundamentals of physics',
+    description: COURSE_DESCRIPTION,
     lesson_count: 12,
   };
 
   const mockUnits = [
     {
       id: 'unit-1',
-      title: 'Unit 1: Motion',
+      title: UNIT_1_TITLE,
       sort_order: 0,
       options: {
         completion_criteria: {
@@ -64,7 +63,7 @@ describe('CourseWelcomePage', () => {
     },
     {
       id: 'unit-2',
-      title: 'Unit 2: Forces',
+      title: UNIT_2_TITLE,
       sort_order: 1,
       options: {
         completion_criteria: {
@@ -135,6 +134,26 @@ describe('CourseWelcomePage', () => {
           name: PageNames.COURSE_CONTENT,
           path: '/course/:courseId/content',
         },
+        {
+          name: PageNames.COURSE_CONTENT_TEST,
+          path: '/course/:courseId/unit/:unitId/test/:testType',
+        },
+        {
+          name: PageNames.COURSE_CONTENT__LESSON,
+          path: '/course/:courseId/unit/:unitId/lesson/:lessonId',
+        },
+        {
+          name: PageNames.COURSE_CONTENT__UNIT,
+          path: '/course/:courseId/unit/:unitId',
+        },
+        {
+          name: PageNames.COURSE_CONTENT__RESOURCE,
+          path: '/course/:courseId/unit/:unitId/lesson/:lessonId/resource/:resourceId',
+        },
+        {
+          name: PageNames.COURSE_CONTENT__COURSE,
+          path: '/course/:courseId',
+        },
       ],
     });
 
@@ -142,19 +161,11 @@ describe('CourseWelcomePage', () => {
 
     store = new Vuex.Store({
       state: {
-        core: {
-          loading: false,
-        },
+        core: {},
       },
-      getters: {
-        isPageLoading: jest.fn(() => false),
-      },
-      actions: {
-        handleApiError: jest.fn(),
-      },
-      mutations: {
-        CORE_SET_ERROR: jest.fn(),
-      },
+      getters: {},
+      actions: {},
+      mutations: {},
     });
 
     learnerResources = makeLearnerResourcesMock();
@@ -179,42 +190,11 @@ describe('CourseWelcomePage', () => {
 
   function renderComponent(props = {}) {
     return render(CourseWelcomePage, {
-      localVue,
       router,
       store,
       props: {
         courseSessionId: 'course-session-1',
         ...props,
-      },
-      global: {
-        stubs: {
-          ImmersivePage: {
-            template: '<div data-test="immersive-page"><slot /></div>',
-          },
-          AccordionContainer: {
-            template: `
-              <div data-test="accordion-container">
-                <slot name="header" v-bind="{
-                  expandAll: () => {},
-                  collapseAll: () => {},
-                  canExpandAll: true,
-                  canCollapseAll: true
-                }" />
-                <slot />
-              </div>
-            `,
-          },
-          AccordionItem: {
-            template: `
-              <div data-testid="accordion-item">
-                <div data-testid="accordion-title">{{ title }}</div>
-                <slot name="content" />
-                <slot name="trailing-actions" />
-              </div>
-            `,
-            props: ['title', 'disabled'],
-          },
-        },
       },
     });
   }
@@ -243,7 +223,7 @@ describe('CourseWelcomePage', () => {
 
       await waitFor(() => {
         expect(wrapper.getByTestId('header-title')).toHaveTextContent('Introduction to Physics');
-        expect(wrapper.getByText('2 units · 12 lessons')).toBeInTheDocument();
+        expect(wrapper.getByText(COURSE_SUBTITLE)).toBeInTheDocument();
       });
     });
 
@@ -251,7 +231,7 @@ describe('CourseWelcomePage', () => {
       const wrapper = renderComponent();
 
       await waitFor(() => {
-        expect(wrapper.getByText('Learn the fundamentals of physics')).toBeInTheDocument();
+        expect(wrapper.getByText(COURSE_DESCRIPTION)).toBeInTheDocument();
       });
     });
 
@@ -267,8 +247,8 @@ describe('CourseWelcomePage', () => {
       const wrapper = renderComponent();
 
       await waitFor(() => {
-        expect(wrapper.getByText('Unit 1: Motion')).toBeInTheDocument();
-        expect(wrapper.getByText('Unit 2: Forces')).toBeInTheDocument();
+        expect(wrapper.getByText(UNIT_1_TITLE)).toBeInTheDocument();
+        expect(wrapper.getByText(UNIT_2_TITLE)).toBeInTheDocument();
       });
     });
   });
@@ -283,7 +263,7 @@ describe('CourseWelcomePage', () => {
       const wrapper = renderComponent();
 
       await waitFor(() => {
-        expect(wrapper.getByText(content => content.includes('Start Course'))).toBeInTheDocument();
+        expect(wrapper.getByText(startCourseAction$())).toBeInTheDocument();
       });
     });
   });
@@ -306,8 +286,8 @@ describe('CourseWelcomePage', () => {
       const wrapper = renderComponent();
 
       await waitFor(() => {
-        expect(wrapper.getByText(content => content.includes('Resume Course'))).toBeInTheDocument();
-        expect(wrapper.queryByText('Start Course')).not.toBeInTheDocument();
+        expect(wrapper.getByText(resumeCourseAction$())).toBeInTheDocument();
+        expect(wrapper.queryByText(startCourseAction$())).not.toBeInTheDocument();
       });
     });
   });

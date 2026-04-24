@@ -2,15 +2,17 @@ import { mount, createLocalVue } from '@vue/test-utils';
 import VueRouter from 'vue-router';
 import { ref } from 'vue';
 import store from 'kolibri/store';
+import { handleApiError } from 'kolibri/utils/appError';
 import makeStore from '../../../../__tests__/utils/makeStore';
 import classSummaryModule from '../../../../modules/classSummary';
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import { useAttendance, useAttendanceMock } from '../../../../composables/useAttendance';
 import AttendanceBlock from '../AttendanceBlock.vue';
 
 jest.mock('../../../../composables/useAttendance');
+jest.mock('kolibri/utils/appError');
 jest.mock('../../../../composables/useCoreCoach', () => {
-  const { computed } = require('vue');
+  const { computed } = jest.requireActual('vue');
   return () => ({
     classId: computed(() => 'test-class-id'),
     pageTitle: computed(() => ''),
@@ -57,7 +59,7 @@ const MOCK_SESSIONS = [
 const STUBS = {
   KCircularLoader: {
     name: 'KCircularLoader',
-    template: '<div data-test="loader">Loading...</div>',
+    template: '<div data-testid="loader">Loading...</div>',
   },
   KRouterLink: {
     name: 'KRouterLink',
@@ -143,7 +145,7 @@ describe('AttendanceBlock', () => {
 
   it('shows loading state while fetchRecentSessions is in flight', () => {
     const { wrapper } = makeWrapper({ pendingFetch: true });
-    expect(wrapper.find('[data-test="loader"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="loader"]').exists()).toBe(true);
   });
 
   it('renders empty state when no sessions exist but learners are enrolled', async () => {
@@ -194,10 +196,12 @@ describe('AttendanceBlock', () => {
     expect(wrapper.findAll('.visuallyhidden').length).toBe(0);
   });
 
-  it('dispatches handleApiError when fetchRecentSessions fails', async () => {
+  it('calls handleApiError when fetchRecentSessions fails', async () => {
+    // Override handleApiError to not re-throw, avoiding unhandled rejection in test
+    handleApiError.mockImplementation(() => {});
     const error = new Error('API error');
     makeWrapper({ rejectWith: error });
     await global.flushPromises();
-    expect(store.dispatch).toHaveBeenCalledWith('handleApiError', { error });
+    expect(handleApiError).toHaveBeenCalledWith({ error });
   });
 });

@@ -5,6 +5,7 @@ import { SyncPageNames } from 'kolibri-common/components/SyncSchedule/constants'
 import useUser from 'kolibri/composables/useUser';
 import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import ClassEditPage from './views/ClassEditPage';
 import CoachClassAssignmentPage from './views/CoachClassAssignmentPage';
 import LearnerClassEnrollmentPage from './views/LearnerClassEnrollmentPage';
@@ -20,7 +21,6 @@ import UsersTrashPage from './views/users/UsersTrashPage/index.vue';
 
 import { showClassesPage } from './modules/classManagement/handlers';
 import { showClassEditPage } from './modules/classEditManagement/handlers';
-import { showFacilityConfigPage } from './modules/facilityConfig/handlers';
 import {
   showLearnerClassEnrollmentPage,
   showCoachClassAssignmentPage,
@@ -159,7 +159,7 @@ export default [
       if (facilityParamRequiredGuard(toRoute, FacilityConfigPage.name)) {
         return;
       }
-      showFacilityConfigPage(store, toRoute);
+      pageLoading.value = false;
     },
   },
   {

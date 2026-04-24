@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <ReportsResourceHeader
         :resource="resource"
@@ -20,11 +20,11 @@
           v-for="group in lessonGroups"
           :key="group.id"
           class="group"
-          :data-test="`group-${group.id}`"
+          :data-testid="`group-${group.id}`"
         >
           <h2
             class="group-title"
-            data-test="group-title"
+            data-testid="group-title"
           >
             <KLabeledIcon
               icon="group"
@@ -36,7 +36,7 @@
             <StatusSummary
               :tally="getGroupTally(group.id)"
               :verbose="false"
-              data-test="group-tally"
+              data-testid="group-tally"
             />
           </p>
 
@@ -53,7 +53,7 @@
         >
           <h2
             class="group-title"
-            data-test="group-title"
+            data-testid="group-title"
           >
             {{ coachString('ungroupedLearnersLabel') }}
           </h2>
@@ -70,7 +70,7 @@
         <p>
           <StatusSummary
             :tally="summaryTally"
-            data-test="summary-tally"
+            data-testid="summary-tally"
           />
         </p>
 
@@ -90,6 +90,7 @@
   import sortBy from 'lodash/sortBy';
   import fromPairs from 'lodash/fromPairs';
   import { mapState } from 'vuex';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import { PageNames } from '../../../constants';
@@ -109,6 +110,9 @@
       ReportsControls,
     },
     mixins: [commonCoach],
+    setup() {
+      return { pageLoading };
+    },
     data() {
       return {
         viewByGroups: Boolean(this.$route.query.groups),

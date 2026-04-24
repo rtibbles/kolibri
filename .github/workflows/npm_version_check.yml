@@ -1,0 +1,32 @@
+name: npm Package Version Check
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: 'package.json'
+      - name: Generate version report
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const utils = require('./.github/githubUtils.js');
+            const base = context.payload.pull_request.base.sha;
+            const body = utils.generateNpmVersionReport(base);
+            fs.mkdirSync('npm_version_report', { recursive: true });
+            fs.writeFileSync('npm_version_report/pr_number', String(context.payload.pull_request.number));
+            fs.writeFileSync('npm_version_report/body', body || '');
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm_version_report
+          path: npm_version_report/

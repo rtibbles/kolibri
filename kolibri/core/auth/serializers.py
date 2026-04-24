@@ -16,6 +16,7 @@ from .errors import IncompatibleDeviceSettingError
 from .errors import InvalidCollectionHierarchy
 from .errors import InvalidMembershipError
 from .errors import InvalidRoleKind
+from .errors import NoAvailableSequences
 from .models import Classroom
 from .models import Facility
 from .models import FacilityDataset
@@ -25,9 +26,10 @@ from .models import Membership
 from .models import Role
 from .models import validate_username_allowed_chars
 from .models import validate_username_max_length
+from .utils.picture_passwords import are_picture_passwords_exhausted
+from .utils.picture_passwords import assign_picture_password
 from kolibri.core import error_constants
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
-
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +166,9 @@ class FacilityUserSerializer(serializers.ModelSerializer):
             "gender",
             "birth_year",
             "extra_demographics",
+            "picture_password",
         )
-        read_only_fields = ("is_superuser",)
+        read_only_fields = ("is_superuser", "picture_password")
 
     def save(self, **kwargs):
         instance = super().save(**kwargs)
@@ -174,6 +177,20 @@ class FacilityUserSerializer(serializers.ModelSerializer):
         if password and password != NOT_SPECIFIED:
             instance.set_password(password)
             instance.save()
+        return instance
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            instance = super().create(validated_data)
+            facility = instance.facility
+            if (
+                facility.dataset.picture_password_settings is not None
+                and not are_picture_passwords_exhausted(instance.dataset_id)
+            ):
+                try:
+                    assign_picture_password(instance, instance.facility)
+                except NoAvailableSequences:
+                    pass
         return instance
 
     def _validate_extra_demographics(self, attrs, facility):
@@ -314,6 +331,7 @@ class MembershipSerializer(serializers.ModelSerializer):
 class FacilityDatasetSerializer(serializers.ModelSerializer):
 
     extra_fields = serializers.JSONField(required=False)
+    picture_password_settings = serializers.JSONField(allow_null=True, required=False)
 
     class Meta:
         model = FacilityDataset
@@ -328,11 +346,31 @@ class FacilityDatasetSerializer(serializers.ModelSerializer):
             "show_download_button_in_learn",
             "enable_mark_attendance",
             "extra_fields",
+            "picture_password_settings",
             "description",
             "location",
             "registered",
             "preset",
         )
+
+    def validate(self, attrs):
+        settings = attrs.get("picture_password_settings")
+        if settings is not None:
+            if not isinstance(settings, dict):
+                raise serializers.ValidationError(
+                    {"picture_password_settings": "Must be an object or null"}
+                )
+            if settings.get("icon_style") not in ("standard", "colorful"):
+                raise serializers.ValidationError(
+                    {
+                        "picture_password_settings": "icon_style must be 'standard' or 'colorful'"
+                    }
+                )
+            if not isinstance(settings.get("show_icon_text"), bool):
+                raise serializers.ValidationError(
+                    {"picture_password_settings": "show_icon_text must be a boolean"}
+                )
+        return attrs
 
     def save(self, **kwargs):
         try:
@@ -373,6 +411,7 @@ class PublicFacilitySerializer(serializers.ModelSerializer):
     learner_can_login_with_no_password = serializers.SerializerMethodField()
     learner_can_sign_up = serializers.SerializerMethodField()
     on_my_own_setup = serializers.SerializerMethodField()
+    picture_password_settings = serializers.SerializerMethodField()
 
     def get_learner_can_login_with_no_password(self, instance):
         return instance.dataset.learner_can_login_with_no_password
@@ -385,6 +424,9 @@ class PublicFacilitySerializer(serializers.ModelSerializer):
             return instance.dataset.extra_fields.get("on_my_own_setup", False)
         return False
 
+    def get_picture_password_settings(self, instance):
+        return instance.dataset.picture_password_settings
+
     class Meta:
         model = Facility
         fields = (
@@ -394,6 +436,7 @@ class PublicFacilitySerializer(serializers.ModelSerializer):
             "learner_can_login_with_no_password",
             "learner_can_sign_up",
             "on_my_own_setup",
+            "picture_password_settings",
         )
 
 

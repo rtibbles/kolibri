@@ -3,6 +3,7 @@
   <ImmersivePage
     :appBarTitle="toolbarTitle"
     :route="backRoute"
+    :loading="pageLoading"
   >
     <KPageContainer class="device-container">
       <ContentWizardUiAlert
@@ -11,7 +12,7 @@
       />
 
       <FilteredChannelListContainer
-        v-if="status === '' && !$store.state.core.loading"
+        v-if="status === '' && !pageLoading"
         :channels="allChannels"
         :selectedChannels.sync="selectedChannels"
         :selectAllCheckbox="multipleMode"
@@ -19,7 +20,7 @@
         <template #header>
           <h1
             v-if="status === ''"
-            data-test="title"
+            data-testid="title"
           >
             {{ multipleMode ? $tr('importChannelsHeader') : $tr('importResourcesHeader') }}
           </h1>
@@ -36,7 +37,7 @@
           </p>
           <KButton
             v-if="showUnlistedChannels"
-            data-test="token-button"
+            data-testid="token-button"
             :text="$tr('channelTokenButtonLabel')"
             appearance="raised-button"
             name="showtokenmodal"
@@ -143,6 +144,7 @@
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import { TransferTypes, TaskTypes } from 'kolibri-common/utils/syncTaskUtils';
   import plugin_data from 'kolibri-plugin-data';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonDeviceStrings from '../commonDeviceStrings';
   import ChannelPanel from '../ManageContentPage/ChannelPanel/WithImportDetails';
   import ContentWizardUiAlert from '../SelectContentPage/ContentWizardUiAlert';
@@ -176,6 +178,7 @@
     mixins: [commonCoreStrings, commonDeviceStrings, taskNotificationMixin],
     setup() {
       useContentTasks();
+      return { pageLoading };
     },
     data() {
       return {

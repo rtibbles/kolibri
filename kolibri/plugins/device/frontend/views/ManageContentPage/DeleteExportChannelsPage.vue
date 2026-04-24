@@ -3,7 +3,7 @@
   <ImmersivePage
     :appBarTitle="appBarTitle"
     :route="backRoute"
-    :loading="loading"
+    :loading="pageLoading || loading"
   >
     <KPageContainer
       v-if="!loading"
@@ -61,6 +61,7 @@
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import TaskResource from 'kolibri/apiResources/TaskResource';
   import { TaskTypes } from 'kolibri-common/utils/syncTaskUtils';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames } from '../../constants';
   import DeviceChannelResource from '../../apiResources/deviceChannel';
   import useContentTasks from '../../composables/useContentTasks';
@@ -90,6 +91,7 @@
     mixins: [taskNotificationMixin],
     setup() {
       useContentTasks();
+      return { pageLoading };
     },
     props: {
       actionType: {

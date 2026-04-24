@@ -1,6 +1,6 @@
 <template>
 
-  <FacilityAppBarPage>
+  <FacilityAppBarPage :loading="pageLoading">
     <KPageContainer>
       <p>
         <KRouterLink
@@ -149,6 +149,7 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import UserTable from 'kolibri-common/components/UserTable';
   import { bulkUserManagementStrings } from 'kolibri-common/strings/bulkUserManagementStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { Modals } from '../../constants.js';
   import FacilityAppBarPage from '../FacilityAppBarPage';
   import ClassCopyModal from '../common/ClassCopyModal.vue';
@@ -178,6 +179,7 @@
       const { copyClass$, renameClassLabel$, deleteClass$ } = bulkUserManagementStrings;
       const { classToDelete, selectClassToDelete, clearClassToDelete } = useDeleteClass();
       return {
+        pageLoading,
         classToCopy,
         copyClass$,
         renameClassLabel$,

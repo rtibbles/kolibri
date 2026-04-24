@@ -1,6 +1,9 @@
 <template>
 
-  <CoachAppBarPage showSubNav>
+  <CoachAppBarPage
+    :loading="pageLoading"
+    showSubNav
+  >
     <KPageContainer>
       <MissingResourceAlert
         v-if="anyContentMissing"
@@ -192,10 +195,12 @@
   import useKShow from 'kolibri-design-system/lib/composables/useKShow';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { handleApiError } from 'kolibri/utils/appError';
   import { useRoute, useRouter } from 'vue-router/composables';
   import { computed, getCurrentInstance, onMounted, ref, watch, nextTick } from 'vue';
   import { coursesStrings } from 'kolibri-common/strings/coursesStrings';
   import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { CoursesModals, PageNames } from '../../constants';
   import CoachAppBarPage from '../CoachAppBarPage.vue';
   import CoachHeader from '../common/CoachHeader.vue';
@@ -401,7 +406,7 @@
             await nextTick();
             openCourseAssignRecipientsLink();
           } catch (e) {
-            store.dispatch('handleApiError', e);
+            handleApiError({ error: e });
           }
         }
       };
@@ -414,12 +419,12 @@
       const coachString = (key, args) => coachStrings.$tr(key, args);
       const loadClassData = async classId => {
         await store.dispatch('initClassInfo', classId);
-        store.dispatch('notLoading');
+        pageLoading.value = false;
 
         try {
           await refreshClassCourses();
         } catch (error) {
-          store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          handleApiError({ error, reloadOnReconnect: true });
         }
       };
 
@@ -436,6 +441,7 @@
       );
 
       return {
+        pageLoading,
         CoursesModals,
         modelOpen,
         courseToDelete,

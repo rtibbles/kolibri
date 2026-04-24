@@ -49,6 +49,7 @@ from .errors import IncompatibleDeviceSettingError
 from .errors import InvalidCollectionHierarchy
 from .errors import InvalidMembershipError
 from .errors import InvalidRoleKind
+from .errors import NoAvailableSequences
 from .errors import UserDoesNotHaveRoleError
 from .errors import UserIsNotFacilityUser
 from .errors import UserIsNotMemberError
@@ -74,6 +75,7 @@ from kolibri.core.auth.constants.demographics import LabelTranslationValidator
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
 from kolibri.core.auth.constants.demographics import UniqueIdsValidator
 from kolibri.core.auth.constants.morango_sync import ScopeDefinitions
+from kolibri.core.device.hooks import GetOSUserHook
 from kolibri.core.device.utils import device_provisioned
 from kolibri.core.device.utils import get_device_setting
 from kolibri.core.device.utils import is_full_facility_import
@@ -84,7 +86,6 @@ from kolibri.core.fields import JSONField
 from kolibri.core.utils.model_router import KolibriModelRouter
 from kolibri.core.utils.validators import JSON_Schema_Validator
 from kolibri.deployment.default.sqlite_db_names import SESSIONS
-from kolibri.plugins.app.utils import interface
 from kolibri.utils.time_utils import local_now
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,15 @@ DEMOGRAPHIC_FIELDS_KEY = "demographic_fields"
 # '"optional":True' is obsolete but needed while we keep using an
 # old json_schema_validator version compatible with python 2.7.
 # "additionalProperties": False must be avoided for backwards compatibility
+picture_password_settings_schema = {
+    "type": "object",
+    "properties": {
+        "icon_style": {"type": "string", "enum": ["standard", "colorful"]},
+        "show_icon_text": {"type": "boolean"},
+    },
+    "required": ["icon_style", "show_icon_text"],
+}
+
 extra_fields_schema = {
     "type": "object",
     "properties": {
@@ -222,6 +232,12 @@ class FacilityDataset(FacilityDataSyncableModel):
     learner_can_login_with_no_password = models.BooleanField(default=False)
     show_download_button_in_learn = models.BooleanField(default=True)
     enable_mark_attendance = models.BooleanField(default=False)
+    picture_password_settings = JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        validators=[JSON_Schema_Validator(picture_password_settings_schema)],
+    )
     extra_fields = JSONField(
         null=True,
         blank=True,
@@ -254,6 +270,16 @@ class FacilityDataset(FacilityDataSyncableModel):
                 "Device Settings [learner_can_login_with_no_password={}] & [learner_can_edit_password={}] "
                 "values incompatible together.".format(
                     self.learner_can_login_with_no_password,
+                    self.learner_can_edit_password,
+                )
+            )
+        if (
+            self.picture_password_settings is not None
+            and self.learner_can_edit_password
+        ):
+            raise IncompatibleDeviceSettingError(
+                "Device Settings [picture_password_settings is set] & [learner_can_edit_password={}] "
+                "values incompatible together.".format(
                     self.learner_can_edit_password,
                 )
             )
@@ -753,7 +779,7 @@ class BaseFacilityUserModelManager(SyncableModelManager, UserManager):
         If the user does not exist in the database, it is created.
         """
         try:
-            os_username, is_superuser = interface.get_os_user(auth_token)
+            os_username, is_superuser = GetOSUserHook.retrieve_os_user(auth_token)
         except NotImplementedError:
             return None
         if not os_username:
@@ -911,6 +937,18 @@ class FacilityUser(AbstractBaseUser, KolibriBaseUserMixin, AbstractFacilityDataM
     )
 
     date_deleted = DateTimeTzField(null=True, blank=True)
+
+    # This field is used when picture login for learners is enabled. It stores the ordered
+    # picture sequence as a dot-separated string, e.g. "3.7.12". This field is only
+    # applicable to learners, so coach and admin users will never have this field set.
+    # The field is intentionally stored as plaintext, because coaches should be able to see
+    # learner passcodes.
+    picture_password = models.CharField(
+        max_length=8, null=True, blank=True, default=None
+    )
+
+    class Meta:
+        unique_together = (("dataset", "picture_password"),)
 
     def get_short_name(self):
         return self.full_name.split(" ", 1)[0]
@@ -1550,7 +1588,11 @@ class Role(AbstractFacilityDataModel):
         self.validate_role()
         with transaction.atomic():
             self.ensure_coach_role_at_facility()
-            return super().save(*args, **kwargs)
+            result = super().save(*args, **kwargs)
+            if self.user.picture_password is not None:
+                self.user.picture_password = None
+                self.user.save(update_fields=["picture_password"])
+        return result
 
     def delete(self, **kwargs):
         with transaction.atomic():
@@ -1566,7 +1608,24 @@ class Role(AbstractFacilityDataModel):
                     collection__in=self.collection.children.all(),
                     kind=role_kinds.COACH,
                 ).delete()
-            return super().delete(**kwargs)
+            result = super().delete(**kwargs)
+            user = self.user
+            user.refresh_from_db(fields=["picture_password"])
+            if (
+                user.picture_password is None
+                and not user.roles.exists()
+                and user.dataset.picture_password_settings is not None
+            ):
+                # Deferred to avoid circular import: picture_passwords.py imports from models.py
+                from .utils.picture_passwords import are_picture_passwords_exhausted
+                from .utils.picture_passwords import assign_picture_password
+
+                if not are_picture_passwords_exhausted(user.dataset_id):
+                    try:
+                        assign_picture_password(user, user.facility)
+                    except NoAvailableSequences:
+                        pass
+            return result
 
 
 class CollectionProxyManager(SyncableModelManager):

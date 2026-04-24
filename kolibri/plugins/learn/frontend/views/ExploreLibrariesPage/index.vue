@@ -4,11 +4,11 @@
     :appBarTitle="learnString('exploreLibraries')"
     :route="back"
     :primary="false"
-    :loading="loading"
+    :loading="pageLoading"
   >
     <div
       class="page-header"
-      data-test="page-header"
+      data-testid="page-header"
       :style="pageHeaderStyle"
     >
       <h1>
@@ -37,12 +37,12 @@
       >
         <div
           v-if="pinnedDevicesExist"
-          data-test="more-libraries"
+          data-testid="more-libraries"
         >
           <h2>{{ learnString('moreLibraries') }}</h2>
           <KButton
             v-if="displayShowButton"
-            data-test="show-button"
+            data-testid="show-button"
             :text="coreString('showAction')"
             :primary="false"
             @click="loadMoreDevices"
@@ -61,7 +61,7 @@
         </FadeInTransitionGroup>
         <KButton
           v-if="displayShowMoreButton"
-          data-test="show-more-button"
+          data-testid="show-more-button"
           :text="coreString('showMoreAction')"
           :primary="false"
           @click="loadMoreDevices"
@@ -79,6 +79,7 @@
   import { ref, watch } from 'vue';
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonLearnStrings from '../commonLearnStrings';
   import FadeInTransitionGroup from '../FadeInTransitionGroup';
   import useCardLayoutSpan from '../../composables/useCardLayoutSpan';
@@ -139,6 +140,7 @@
         pinnedDevicesExist,
         deviceChannelsMap,
         back,
+        pageLoading,
         loading: isLoadingChannels,
         moreDevices,
         cardsToDisplay,

@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <CoachHeader :title="coachString('groupsLabel')">
         <template #actions>
@@ -96,6 +96,7 @@
   import orderBy from 'lodash/orderBy';
   import CoreTable from 'kolibri/components/CoreTable';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import { useGroups } from '../../../composables/useGroups';
   import CoachAppBarPage from '../../CoachAppBarPage';
@@ -126,6 +127,7 @@
       });
 
       return {
+        pageLoading,
         PageNames,
         selectedGroup,
         setSelectedGroup(name, id) {

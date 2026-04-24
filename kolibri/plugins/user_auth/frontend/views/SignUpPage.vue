@@ -43,7 +43,7 @@
             <h2>
               {{ coreString('facilityLabel') }}
             </h2>
-            <p data-test="facilityLabel">
+            <p data-testid="facilityLabel">
               {{ selectedFacility.name }}
             </p>
           </template>
@@ -122,7 +122,8 @@
   import client from 'kolibri/client';
   import CatchErrors from 'kolibri/utils/CatchErrors';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import useFacilities from 'kolibri-common/composables/useFacilities';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import { handleApiError } from 'kolibri/utils/appError';
   import { ComponentMap } from '../constants';
   import { SignUpResource } from '../apiResource';
   import LanguageSwitcherFooter from './LanguageSwitcherFooter';
@@ -149,10 +150,11 @@
     },
     mixins: [commonCoreStrings, commonUserStrings],
     setup() {
-      const { selectedFacility, facilityConfig } = useFacilities();
+      const { selectedFacility, facilityConfig } = useFacility();
       return {
         selectedFacility,
         facilityConfig,
+        handleApiError,
       };
     },
     data() {
@@ -215,7 +217,7 @@
           if (errorsCaught) {
             this.caughtErrors.push(ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS);
           } else {
-            this.$store.dispatch('handleApiError', { error });
+            this.handleApiError({ error });
           }
         });
       },
@@ -293,7 +295,7 @@
                 this.goToFirstStep();
                 this.focusOnInvalidField();
               } else {
-                this.$store.dispatch('handleApiError', { error });
+                this.handleApiError({ error });
               }
             });
         } else {

@@ -1,4 +1,4 @@
-import store from 'kolibri/store';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames } from '../constants';
 import CreateExamPage from '../views/quizzes/CreateExamPage';
 import SectionEditor from '../views/quizzes/CreateExamPage/sidePanels/SectionSidePanel/SectionEditor.vue';
@@ -198,7 +198,7 @@ export default [
     path: CLASS + QUIZ + '/preview',
     component: QuizPreviewPage,
     handler() {
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
     meta: {
       titleParts: ['previewLabel', 'QUIZ_NAME', 'CLASS_NAME'],

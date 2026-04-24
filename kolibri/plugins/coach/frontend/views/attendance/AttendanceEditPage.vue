@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     :appBarTitle="pageTitle"
     :route="backRoute"
   >
@@ -64,6 +65,7 @@
   import { coreString } from 'kolibri/uiText/commonCoreStrings';
   import useSnackbar from 'kolibri/composables/useSnackbar';
   import { attendanceStrings } from 'kolibri-common/strings/attendanceStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { useAttendance } from '../../composables/useAttendance';
   import useAttendanceForm from '../../composables/useAttendanceForm';
   import CoachImmersivePage from '../CoachImmersivePage';
@@ -196,6 +198,7 @@
       });
 
       return {
+        pageLoading,
         loading,
         pageTitle,
         coreString,

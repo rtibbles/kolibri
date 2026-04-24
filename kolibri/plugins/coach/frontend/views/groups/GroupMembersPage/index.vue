@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <p>
         <BackLink
@@ -125,6 +125,7 @@
   import { mapState, mapActions } from 'vuex';
   import CoreTable from 'kolibri/components/CoreTable';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import { GroupModals } from '../../../constants';
   import CoachAppBarPage from '../../CoachAppBarPage';
@@ -142,6 +143,9 @@
       DeleteGroupModal,
     },
     mixins: [commonCoreStrings, commonCoach],
+    setup() {
+      return { pageLoading };
+    },
     data() {
       return {
         userForRemoval: null,

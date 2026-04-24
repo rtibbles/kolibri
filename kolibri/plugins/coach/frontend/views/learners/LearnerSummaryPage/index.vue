@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <LearnerHeader :learnerLessons="getLessons" />
     </KPageContainer>
@@ -127,6 +127,7 @@
 <script>
 
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import { STATUSES } from '../../../modules/classSummary/constants';
@@ -144,6 +145,9 @@
       ReportsControls,
     },
     mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      return { pageLoading };
+    },
     data() {
       return {
         lessonLimit: 10,

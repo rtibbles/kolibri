@@ -3,18 +3,20 @@
   <ImmersivePage
     :route="$store.getters.facilityPageLinks.UserPage"
     :appBarTitle="coreString('usersLabel')"
+    :loading="loading"
   >
     <KPageContainer class="narrow-container">
       <form
         v-if="!loading"
         class="form"
+        data-testid="form"
         @submit.prevent="submitForm"
       >
-        <h1>
-          {{ $tr('editUserDetailsHeader') }}
-        </h1>
-
         <section>
+          <h1>
+            {{ $tr('editUserDetailsHeader') }}
+          </h1>
+
           <FullNameTextbox
             ref="fullNameTextbox"
             :autofocus="true"
@@ -33,6 +35,17 @@
             :isUniqueValidator="usernameIsUnique"
             :errors.sync="caughtErrors"
           />
+
+          <section
+            v-if="showPicturePasswordSection"
+            class="picture-password-section"
+            data-testid="picture-password-section"
+          >
+            <h3>
+              {{ picturePassword$() }}
+            </h3>
+            <UserPicturePassword :picturePassword="userPicturePassword" />
+          </section>
 
           <template v-if="editingSuperAdmin">
             <h2 class="header user-type">
@@ -55,11 +68,31 @@
           <template v-else>
             <KSelect
               v-model="typeSelected"
-              class="select"
+              :class="{ select: true, 'learner-role-disabled': disableLearnerRoleOption }"
               :disabled="formDisabled"
               :label="coreString('userTypeLabel')"
               :options="userTypeOptions"
+              data-testid="user-type"
             />
+            <div
+              v-if="disableLearnerRoleOption"
+              class="learner-limit-message"
+              data-testid="learner-limit-message"
+            >
+              <KIcon
+                class="icon"
+                icon="warningIncomplete"
+              />
+              <p :style="{ color: $themeTokens.annotation }">
+                {{ learnerCreationDisabled$() }}
+                <KButton
+                  appearance="basic-link"
+                  :text="coreString('learnMoreAction')"
+                  data-testid="learner-limit-modal-trigger"
+                  @click="isLearnerLimitModalOpen = true"
+                />
+              </p>
+            </div>
 
             <fieldset
               v-if="coachIsSelected"
@@ -127,6 +160,11 @@
           </KButtonGroup>
         </div>
       </form>
+      <LearnerLimitReachedModal
+        v-if="isLearnerLimitModalOpen"
+        data-testid="learner-limit-modal"
+        @close="isLearnerLimitModalOpen = false"
+      />
     </KPageContainer>
   </ImmersivePage>
 
@@ -153,8 +191,12 @@
   import ExtraDemographics from 'kolibri-common/components/ExtraDemographics';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
-  import useFacilities from 'kolibri-common/composables/useFacilities';
+  import { handleApiError } from 'kolibri/utils/appError';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import { picturePasswordStrings } from 'kolibri-common/strings/picturePasswords';
+  import UserPicturePassword from 'kolibri-common/components/UserPicturePassword.vue';
   import IdentifierTextbox from './users/sidePanels/UserCreate/IdentifierTextbox.vue';
+  import LearnerLimitReachedModal from './LearnerLimitReachedModal.vue';
 
   export default {
     name: 'UserEditPage',
@@ -172,19 +214,29 @@
       UsernameTextbox,
       UserTypeDisplay,
       ExtraDemographics,
+      LearnerLimitReachedModal,
+      UserPicturePassword,
     },
     mixins: [commonCoreStrings],
     setup() {
       const { createSnackbar } = useSnackbar();
       const { currentUserId, logout } = useUser();
-      const { getFacilityConfig, facilityConfig } = useFacilities();
+      const { updateFacilityConfig, selectedFacility, facilityConfig } = useFacility();
+      const { picturePassword$, learnerCreationDisabled$ } = picturePasswordStrings;
 
       return {
+        // state
+        currentUserId,
+        facilityConfig,
+        selectedFacility,
+        // actions
         logout,
         createSnackbar,
-        currentUserId,
-        getFacilityConfig,
-        facilityConfig,
+        updateFacilityConfig,
+        handleApiError,
+        // strings
+        learnerCreationDisabled$,
+        picturePassword$,
       };
     },
     data() {
@@ -205,6 +257,8 @@
         userCopy: {},
         caughtErrors: [],
         status: '',
+        userPicturePassword: null,
+        isLearnerLimitModalOpen: false,
       };
     },
     computed: {
@@ -226,6 +280,7 @@
           {
             label: this.coreString('learnerLabel'),
             value: UserKinds.LEARNER,
+            disabled: this.disableLearnerRoleOption,
           },
           {
             label: this.coreString('coachLabel'),
@@ -254,6 +309,23 @@
 
         return '';
       },
+      picturePasswordEnabled() {
+        return Boolean(this.facilityConfig.picture_password_settings);
+      },
+      disableLearnerRoleOption() {
+        return (
+          this.picturePasswordEnabled &&
+          this.selectedFacility.picture_passwords_exhausted &&
+          this.kind !== UserKinds.LEARNER
+        );
+      },
+      showPicturePasswordSection() {
+        return (
+          this.picturePasswordEnabled &&
+          this.kind === UserKinds.LEARNER &&
+          Boolean(this.userPicturePassword)
+        );
+      },
       newUserKind() {
         const { value } = this.typeSelected;
         if (value === UserKinds.COACH && this.classCoachIsSelected) {
@@ -266,7 +338,7 @@
       },
     },
     created() {
-      const facilityConfigPromise = this.getFacilityConfig();
+      const facilityConfigPromise = this.updateFacilityConfig();
       const facilityUserPromise = FacilityUserResource.fetchModel({
         id: this.$route.params.id,
       }).then(user => {
@@ -276,6 +348,7 @@
         this.gender = user.gender;
         this.birthYear = user.birth_year;
         this.extraDemographics = user.extra_demographics;
+        this.userPicturePassword = user.picture_password;
         this.setKind(user);
         this.makeCopyOfUser(user);
       });
@@ -284,7 +357,7 @@
           this.loading = false;
         })
         .catch(error => {
-          this.$store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          this.handleApiError({ error, reloadOnReconnect: true });
         });
     },
     methods: {
@@ -356,6 +429,11 @@
       submitForm() {
         this.formSubmitted = true;
 
+        if (this.disableLearnerRoleOption && this.newUserKind === UserKinds.LEARNER) {
+          this.isLearnerLimitModalOpen = true;
+          return;
+        }
+
         if (!this.formIsValid) {
           return this.focusOnInvalidField();
         }
@@ -390,7 +468,7 @@
         if (this.caughtErrors.length > 0) {
           this.focusOnInvalidField();
         } else {
-          this.$store.dispatch('handleApiError', { error });
+          this.handleApiError({ error });
         }
       },
       focusOnInvalidField() {
@@ -432,7 +510,7 @@
 
   .coach-selector {
     padding: 0;
-    margin: 0;
+    margin: 0 0 10px;
     border: 0;
   }
 
@@ -458,6 +536,35 @@
   .buttons {
     button:first-of-type {
       margin-left: 0;
+    }
+  }
+
+  .learner-role-disabled {
+    margin-bottom: 4px;
+  }
+
+  .learner-limit-message {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 12px;
+
+    .icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+      font-size: 14px;
+    }
+
+    p {
+      margin: 0 0 0 4px;
+      font-size: 14px;
+    }
+  }
+
+  .picture-password-section {
+    margin: 12px 0 24px;
+
+    h3 {
+      margin-bottom: 8px;
     }
   }
 

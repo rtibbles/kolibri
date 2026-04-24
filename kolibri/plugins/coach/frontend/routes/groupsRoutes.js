@@ -1,4 +1,5 @@
 import store from 'kolibri/store';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames } from '../constants';
 import { useGroups } from '../composables/useGroups';
 import GroupsRootPage from '../views/groups/GroupsRootPage';
@@ -30,7 +31,7 @@ const {
 const { showGroupsPage } = useGroups();
 
 function defaultHandler() {
-  store.dispatch('notLoading');
+  pageLoading.value = false;
 }
 
 export default [
@@ -42,7 +43,7 @@ export default [
       if (classIdParamRequiredGuard(toRoute, PageNames.GROUPS_ROOT, next)) {
         return;
       }
-      showGroupsPage(store, toRoute.params.classId);
+      showGroupsPage(store, toRoute.params.classId, toRoute);
     },
     meta: {
       titleParts: ['groupsLabel', 'CLASS_NAME'],
@@ -53,7 +54,7 @@ export default [
     path: CLASS + GROUP,
     component: GroupMembersPage,
     handler(to) {
-      showGroupsPage(store, to.params.classId);
+      showGroupsPage(store, to.params.classId, to);
     },
     meta: {
       titleParts: ['membersLabel', 'GROUP_NAME', 'CLASS_NAME'],
@@ -64,7 +65,7 @@ export default [
     path: CLASS + GROUP + '/enroll',
     component: GroupEnrollPage,
     handler(to) {
-      showGroupsPage(store, to.params.classId);
+      showGroupsPage(store, to.params.classId, to);
     },
   },
   {
@@ -78,7 +79,7 @@ export default [
       ) {
         return showLessonSummaryPage(store, toRoute.params);
       }
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
     props: {
       editable: false,

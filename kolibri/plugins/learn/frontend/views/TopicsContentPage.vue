@@ -23,7 +23,7 @@
       :showDownloadButton="showDownloadButton"
       :isDownloading="isDownloading"
       :downloadingLoaderTooltip="downloadRequestsTranslator.$tr('downloadStartedLabel')"
-      data-test="learningActivityBar"
+      data-testid="learningActivityBar"
       @navigateBack="navigateBack"
       @toggleBookmark="toggleBookmark"
       @download="handleRemoteDownloadRequest"
@@ -58,7 +58,7 @@
       <ContentPage
         ref="contentPage"
         class="content"
-        data-test="contentPage"
+        data-testid="contentPage"
         :content="content"
         :lessonId="lessonId"
         :style="{
@@ -155,7 +155,6 @@
 
 <script>
 
-  import { mapState } from 'vuex';
   import { get, set } from '@vueuse/core';
   import lodashGet from 'lodash/get';
   import { getCurrentInstance, ref, watch } from 'vue';
@@ -164,6 +163,7 @@
   import AuthMessage from 'kolibri/components/AuthMessage';
   import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
   import useUser from 'kolibri/composables/useUser';
+  import { error, handleApiError, clearError } from 'kolibri/utils/appError';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import AddDeviceForm from 'kolibri-common/components/syncComponentSet/SelectDeviceModalGroup/AddDeviceForm';
   import { ContentNodeKinds, ContentErrorConstants } from 'kolibri/constants';
@@ -270,13 +270,13 @@
               set(channel, currentChannel);
               set(content, fetchedContent);
               set(loading, false);
-              store.commit('CORE_SET_ERROR', null);
+              clearError();
             }
           },
           error => {
-            shouldResolve()
-              ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-              : null;
+            if (shouldResolve()) {
+              handleApiError({ error, reloadOnReconnect: true });
+            }
           },
         );
       }
@@ -287,7 +287,7 @@
         store.commit('SET_PAGE_NAME', PageNames.TOPICS_CONTENT);
         set(channel, null);
         set(content, null);
-        const shouldResolve = samePageCheckGenerator(store);
+        const shouldResolve = samePageCheckGenerator();
         let promise;
         if (deviceId) {
           promise = setCurrentDevice(deviceId).then(device => {
@@ -309,7 +309,7 @@
               router.replace({ name: PageNames.LIBRARY });
               return;
             }
-            store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+            handleApiError({ error, reloadOnReconnect: true });
           }
         });
       }
@@ -332,7 +332,7 @@
             moreResourcesContentAvailable.value = children.more;
           })
           .catch(error => {
-            store.dispatch('handleApiError', { error });
+            handleApiError({ error });
           })
           .finally(() => {
             moreResourcesContentLoading.value = false;
@@ -369,6 +369,7 @@
         moreResourcesContentAvailable,
         loadMoreResourcesContent,
         moreResourcesContentLoading,
+        error,
       };
     },
     props: {
@@ -407,9 +408,6 @@
       };
     },
     computed: {
-      ...mapState({
-        error: state => state.core.error,
-      }),
       isCoachContent() {
         return this.content && this.content.coach_content ? 1 : 0;
       },

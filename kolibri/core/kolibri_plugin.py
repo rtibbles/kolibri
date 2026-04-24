@@ -12,17 +12,17 @@ from django.utils.translation import get_language_bidi
 from django.utils.translation import get_language_info
 from django_js_reverse.core import generate_json
 
+from kolibri.core.content.hooks import ShareFileHook
 from kolibri.core.content.utils.paths import get_content_storage_url
 from kolibri.core.content.utils.paths import get_sandbox_path
 from kolibri.core.content.utils.paths import get_zip_content_base_path
 from kolibri.core.content.utils.paths import get_zip_content_config
-from kolibri.core.device.utils import allow_other_browsers_to_connect
+from kolibri.core.device.hooks import CheckIsMeteredHook
 from kolibri.core.hooks import FrontEndBaseHeadHook
 from kolibri.core.hooks import NavigationHook
 from kolibri.core.oidc_provider_hook import OIDCProviderHook
 from kolibri.core.theme_hook import ThemeHook
 from kolibri.core.webpack.hooks import WebpackBundleHook
-from kolibri.plugins.app.utils import interface
 from kolibri.plugins.hooks import register_hook
 from kolibri.utils import i18n
 from kolibri.utils.conf import OPTIONS
@@ -101,9 +101,10 @@ class FrontEndCoreAppAssetHook(WebpackBundleHook):
         return {
             "fullCSSFileModern": static(f"assets/fonts/{modern_hashed}"),
             "fullCSSFileBasic": static(f"assets/fonts/{basic_hashed}"),
-            "allowRemoteAccess": allow_other_browsers_to_connect()
-            or not interface.enabled,
-            "appCapabilities": interface.capabilities,
+            "appCapabilities": {
+                "check_is_metered": CheckIsMeteredHook.is_registered,
+                "share_file": ShareFileHook.is_registered,
+            },
             "languageGlobals": self.language_globals(),
             "oidcProviderEnabled": OIDCProviderHook.is_enabled(),
             "kolibriTheme": ThemeHook.get_theme(),

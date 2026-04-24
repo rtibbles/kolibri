@@ -8,9 +8,12 @@
         @cancel="hideWelcomeModal"
       />
     </transition>
-    <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
+    <LearnAppBarPage
+      :appBarTitle="learnString('learnLabel')"
+      :loading="pageLoading"
+    >
       <div
-        v-if="!loading"
+        v-if="!pageLoading"
         role="main"
       >
         <ResourceSyncingUiAlert
@@ -21,14 +24,14 @@
           v-if="displayClasses"
           class="section"
           :classes="classes"
-          data-test="classes"
+          data-testid="classes"
           short
         />
         <ContinueLearning
           v-if="continueLearning"
           class="section"
           :fromClasses="continueLearningFromClasses"
-          :data-test="
+          :data-testid="
             continueLearningFromClasses
               ? 'continueLearningFromClasses'
               : 'continueLearningOnYourOwn'
@@ -40,7 +43,7 @@
           :courses="activeClassesCourses"
           displayClassName
           recent
-          data-test="recentCourses"
+          data-testid="recentCourses"
         />
         <AssignedLessonsCards
           v-if="hasActiveClassesLessons"
@@ -48,7 +51,7 @@
           :lessons="activeClassesLessons"
           displayClassName
           recent
-          data-test="recentLessons"
+          data-testid="recentLessons"
         />
         <AssignedQuizzesCards
           v-if="hasActiveClassesQuizzes"
@@ -56,13 +59,13 @@
           :quizzes="activeClassesQuizzes"
           displayClassName
           recent
-          data-test="recentQuizzes"
+          data-testid="recentQuizzes"
         />
         <ExploreChannels
           v-if="displayExploreChannels"
           :channels="channels"
           class="section"
-          data-test="exploreChannels"
+          data-testid="exploreChannels"
           :short="
             Boolean(
               displayClasses ||
@@ -87,9 +90,11 @@
   import client from 'kolibri/client';
   import urls from 'kolibri/urls';
   import useUser from 'kolibri/composables/useUser';
+  import { handleApiError } from 'kolibri/utils/appError';
   import useChannels from 'kolibri-common/composables/useChannels';
   import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
   import { mapState } from 'vuex';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import ResourceSyncingUiAlert from '../ResourceSyncingUiAlert';
   import useDeviceSettings from '../../composables/useDeviceSettings';
   import useLearnerResources, {
@@ -105,7 +110,7 @@
   import YourClasses from '../YourClasses';
   import LearnAppBarPage from '../LearnAppBarPage';
   import PostSetupModalGroup from '../../../../device/frontend/views/PostSetupModalGroup.vue';
-  import commonLearnStrings from './../commonLearnStrings';
+  import commonLearnStrings from '../commonLearnStrings';
   import ContinueLearning from './ContinueLearning';
   import ExploreChannels from './ExploreChannels';
 
@@ -134,7 +139,6 @@
       const currentInstance = getCurrentInstance().proxy;
       const store = currentInstance.$store;
       const router = currentInstance.$router;
-
       const { isUserLoggedIn, user_id, isLearner } = useUser();
       const { canAccessUnassignedContent } = useDeviceSettings();
       const { localChannelsCache, fetchChannels } = useChannels();
@@ -232,10 +236,11 @@
         return hydrateHomePage()
           .then(() => {
             store.commit('SET_PAGE_NAME', PageNames.HOME);
-            store.dispatch('notLoading');
+            pageLoading.value = false;
           })
           .catch(error => {
-            return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+            pageLoading.value = false;
+            handleApiError({ error, reloadOnReconnect: true });
           });
       });
 
@@ -254,15 +259,10 @@
         displayClasses,
         missingResources,
         hydrateHomePage,
+        pageLoading,
         userId: user_id,
         isLearner,
       };
-    },
-    props: {
-      loading: {
-        type: Boolean,
-        default: null,
-      },
     },
     computed: {
       ...mapState({

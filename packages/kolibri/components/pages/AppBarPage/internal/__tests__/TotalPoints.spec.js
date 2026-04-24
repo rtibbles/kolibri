@@ -4,7 +4,10 @@ import useTotalProgress, { useTotalProgressMock } from 'kolibri/composables/useT
 import '@testing-library/jest-dom';
 import { ref } from 'vue';
 import { get, set } from '@vueuse/core';
+import { createTranslator } from 'kolibri/utils/i18n';
 import TotalPoints from '../TotalPoints.vue';
+
+const { pointsTooltip$ } = createTranslator(TotalPoints.name, TotalPoints.$trs);
 
 jest.mock('kolibri/composables/useUser');
 jest.mock('kolibri/composables/useTotalProgress');
@@ -18,7 +21,7 @@ describe('TotalPoints', () => {
     useTotalProgress.mockImplementation(() => useTotalProgressMock(totalPointsMock));
   });
 
-  test('renders when user is logged in', async () => {
+  it('renders when user is logged in', async () => {
     useUser.mockImplementation(() => useUserMock({ currentUserId: 1, isUserLoggedIn: true }));
     set(totalPointsMock.totalPoints, 100);
     render(TotalPoints);
@@ -27,7 +30,7 @@ describe('TotalPoints', () => {
     expect(screen.getByText(get(totalPointsMock.totalPoints))).toBeInTheDocument();
   });
 
-  test('does not render when user is not logged in', async () => {
+  it('does not render when user is not logged in', async () => {
     useUser.mockImplementation(() => useUserMock({ currentUserId: 1, isUserLoggedIn: false }));
     set(totalPointsMock.totalPoints, 100);
     render(TotalPoints);
@@ -36,21 +39,21 @@ describe('TotalPoints', () => {
     expect(screen.queryByText(get(totalPointsMock.totalPoints))).not.toBeInTheDocument();
   });
 
-  test('fetchPoints method is called on created', async () => {
+  it('fetchPoints method is called on created', async () => {
     useUser.mockImplementation(() => useUserMock({ currentUserId: 1, isUserLoggedIn: true }));
     render(TotalPoints);
 
     expect(totalPointsMock.fetchPoints).toHaveBeenCalledTimes(1);
   });
 
-  test('tooltip message is displayed correctly when the mouse hovers over the icon', async () => {
+  it('tooltip message is displayed correctly when the mouse hovers over the icon', async () => {
     useUser.mockImplementation(() => useUserMock({ currentUserId: 1, isUserLoggedIn: true }));
     set(totalPointsMock.totalPoints, 100);
     render(TotalPoints);
 
     await fireEvent.mouseOver(screen.getByRole('presentation'));
     expect(
-      screen.getByText(`You earned ${get(totalPointsMock.totalPoints)} points`),
+      screen.getByText(pointsTooltip$({ points: get(totalPointsMock.totalPoints) })),
     ).toBeInTheDocument();
   });
 });

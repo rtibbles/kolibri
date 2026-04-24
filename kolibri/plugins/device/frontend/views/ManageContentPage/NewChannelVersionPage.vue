@@ -4,6 +4,7 @@
     icon="back"
     :appBarTitle="channelName"
     :route="backRoute"
+    :loading="pageLoading"
   >
     <KPageContainer class="device-container">
       <div v-if="!loadingChannel">
@@ -127,9 +128,11 @@
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import TaskResource from 'kolibri/apiResources/TaskResource';
+  import { handleApiError } from 'kolibri/utils/appError';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import CoreInfoIcon from 'kolibri-common/components/labels/CoreInfoIcon';
   import { TaskStatuses, TaskTypes } from 'kolibri-common/utils/syncTaskUtils';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { PageNames } from '../../constants';
   import useContentTasks from '../../composables/useContentTasks';
   import { fetchOrTriggerChannelDiffStatsTask, fetchChannelAtSource } from './api';
@@ -149,6 +152,7 @@
     mixins: [commonCoreStrings],
     setup() {
       useContentTasks();
+      return { handleApiError, pageLoading };
     },
     data() {
       return {
@@ -268,7 +272,7 @@
             }
           })
           .catch(error => {
-            this.$store.dispatch('handleApiError', { error });
+            this.handleApiError({ error });
           });
       },
       setChannelData(installedChannel, sourceChannel) {
@@ -282,7 +286,7 @@
       loadChannelInfo() {
         return fetchChannelAtSource(this.params).catch(error => {
           // Useful errors will still appear on AppError
-          this.$store.dispatch('handleApiError', { error });
+          this.handleApiError({ error });
         });
       },
       startDiffStatsTask() {

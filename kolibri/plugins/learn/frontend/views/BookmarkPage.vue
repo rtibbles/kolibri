@@ -1,6 +1,9 @@
 <template>
 
-  <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+    :loading="pageLoading"
+  >
     <div role="main">
       <h1>
         {{ $tr('bookmarksHeader') }}
@@ -31,7 +34,7 @@
 
       <KButton
         v-if="more && !loading"
-        data-test="load-more-button"
+        data-testid="load-more-button"
         :text="coreString('viewMoreAction')"
         @click="loadMore"
       />
@@ -95,6 +98,7 @@
   import LearningActivityChip from 'kolibri-common/components/ResourceDisplayAndSearch/LearningActivityChip.vue';
   import useSnackbar from 'kolibri/composables/useSnackbar';
   import SidePanelModal from 'kolibri-common/components/SidePanelModal';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import useContentNodeProgress from '../composables/useContentNodeProgress';
   import useContentLink from '../composables/useContentLink';
   import useCoreLearn from '../composables/useCoreLearn';
@@ -131,6 +135,7 @@
         canDownloadExternally,
         fetchContentNodeProgress,
         genContentLinkBackLinkCurrentPage,
+        pageLoading,
         windowIsSmall,
         createSnackbar,
       };

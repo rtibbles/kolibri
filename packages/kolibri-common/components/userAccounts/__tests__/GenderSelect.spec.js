@@ -1,26 +1,30 @@
 import { render, screen, fireEvent } from '@testing-library/vue';
+import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
 import GenderSelect from '../GenderSelect';
 import '@testing-library/jest-dom';
+
+const { genderOptionMale$, genderOptionFemale$, genderOptionNotSpecified$, genderLabel$ } =
+  coreStrings;
 
 const renderComponent = () => {
   return render(GenderSelect);
 };
 
 describe('GenderSelect', () => {
-  const labelOptions = ['Male', 'Female', 'Not specified'];
+  const labelOptions = [genderOptionMale$(), genderOptionFemale$(), genderOptionNotSpecified$()];
 
-  test('renders correctly with label placeholder and options', async () => {
+  it('renders correctly with label placeholder and options', async () => {
     renderComponent();
-    await fireEvent.click(screen.getByText('Gender'));
-    expect(screen.getByText('Gender')).toBeInTheDocument();
+    await fireEvent.click(screen.getByText(genderLabel$()));
+    expect(screen.getByText(genderLabel$())).toBeInTheDocument();
     labelOptions.forEach(option => {
       expect(screen.getByText(option)).toBeInTheDocument();
     });
   });
 
-  test("emits 'update:value' event when an option is selected", async () => {
+  it("emits 'update:value' event when an option is selected", async () => {
     const { emitted } = renderComponent();
-    await fireEvent.click(screen.getByText('Gender'));
+    await fireEvent.click(screen.getByText(genderLabel$()));
 
     const selectedOption = labelOptions[0];
     await fireEvent.click(screen.getByText(selectedOption));
@@ -30,9 +34,9 @@ describe('GenderSelect', () => {
     expect(emittedEvents['update:value'][0]).toEqual([selectedOption.toUpperCase()]);
   });
 
-  test("the value of 'update:value' event is changed when a different option is selected", async () => {
+  it("the value of 'update:value' event is changed when a different option is selected", async () => {
     const { emitted } = renderComponent();
-    await fireEvent.click(screen.getByText('Gender'));
+    await fireEvent.click(screen.getByText(genderLabel$()));
     const selectedOption = labelOptions[0];
     await fireEvent.click(screen.getByText(selectedOption));
     const newSelectedOption = labelOptions[1];

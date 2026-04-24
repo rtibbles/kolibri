@@ -11,7 +11,7 @@
     <!-- Results count and search chips -->
     <h2
       class="results-title"
-      data-test="search-results-title"
+      data-testid="search-results-title"
     >
       {{
         more
@@ -29,7 +29,7 @@
     <div
       v-if="!windowIsSmall && results.length && !hideCardViewToggle"
       class="toggle-view-buttons"
-      data-test="toggle-view-buttons"
+      data-testid="toggle-view-buttons"
     >
       <KIconButton
         icon="menu"
@@ -53,7 +53,7 @@
     <LibraryAndChannelBrowserMainContent
       :contents="results"
       :allowDownloads="allowDownloads"
-      data-test="search-results-card-grid"
+      data-testid="search-results-card-grid"
       :currentCardViewStyle="currentCardViewStyle"
       :gridType="gridType"
       @openCopiesModal="copies => (displayedCopies = copies)"
@@ -67,7 +67,7 @@
       appearance="basic-link"
       :disabled="moreLoading"
       class="filter-action-button"
-      data-test="more-results-button"
+      data-testid="more-results-button"
       @click="searchMore"
     />
 

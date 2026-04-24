@@ -1,10 +1,12 @@
 import pickBy from 'lodash/pickBy';
 import isEqual from 'lodash/isEqual';
-import { useRouter } from 'vue-router/composables';
-import { ref, computed, getCurrentInstance, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router/composables';
+import { ref, computed, watch } from 'vue';
 import ClassroomResource from 'kolibri-common/apiResources/ClassroomResource';
 import FacilityUserResource from 'kolibri-common/apiResources/FacilityUserResource';
 import DeletedFacilityUserResource from 'kolibri-common/apiResources/DeletedFacilityUserResource';
+import { handleApiError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { _userState } from '../modules/mappers';
 import useUsersFilters from './useUsersFilters';
 
@@ -19,15 +21,14 @@ export default function useUserManagement({
   const usersCount = ref(0);
   const dataLoading = ref(false);
   const classes = ref([]);
-  const store = getCurrentInstance().proxy.$store;
   const router = useRouter();
-  const route = computed(() => store.state.route);
+  const route = useRoute();
   // query params
-  const page = computed(() => Number(route.value.query.page) || 1);
-  const pageSize = computed(() => Number(route.value.query.page_size) || 30);
-  const ordering = computed(() => route.value.query.ordering || null);
-  const order = computed(() => route.value.query.order || '');
-  const search = computed(() => route.value.query.search || null);
+  const page = computed(() => Number(route.query.page) || 1);
+  const pageSize = computed(() => Number(route.query.page_size) || 30);
+  const ordering = computed(() => route.query.ordering || null);
+  const order = computed(() => route.query.order || '');
+  const search = computed(() => route.query.search || null);
 
   const { routeFilters, numAppliedFilters, getBackendFilters, resetFilters } = useUsersFilters({
     classes,
@@ -57,13 +58,14 @@ export default function useUserManagement({
       totalPages.value = resp.total_pages;
       usersCount.value = resp.count;
       dataLoading.value = false;
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     } catch (error) {
+      pageLoading.value = false;
       // In case of 404 error because of stale pagination try loading users of page 1
       if (error.status === 404 && page.value > 1) {
-        router.push({ ...route.value, query: { ...route.value.query, page: 1 } });
+        router.push({ ...route, query: { ...route.query, page: 1 } });
       } else {
-        store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        handleApiError({ error, reloadOnReconnect: true });
       }
     }
   };
@@ -76,7 +78,7 @@ export default function useUserManagement({
       });
       classes.value = classList;
     } catch (error) {
-      store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+      handleApiError({ error, reloadOnReconnect: true });
     }
   };
 

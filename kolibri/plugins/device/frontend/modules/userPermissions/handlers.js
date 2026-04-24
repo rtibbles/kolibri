@@ -4,6 +4,8 @@ import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator'
 import useUser from 'kolibri/composables/useUser';
 import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { handleApiError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
 /**
  * Serially fetches Permissions, then FacilityUser. If returned Promise rejects,
@@ -43,35 +45,34 @@ function fetchUserPermissions(userId) {
  * @param {string} userId
  * @returns Promise<void>
  */
-export function showUserPermissionsPage(store, userId) {
-  const { getFacilities } = useFacilities();
+export function showUserPermissionsPage(store, userId, route) {
+  const { fetchFacilities } = useFacilities();
   const setUserPermissionsState = state => store.commit('userPermissions/SET_STATE', state);
-  const stopLoading = () => store.dispatch('notLoading');
 
   // Don't request any data if not an Admin
   const { isSuperuser } = useUser();
   if (!get(isSuperuser)) {
     setUserPermissionsState({ user: null, permissions: {} });
-    stopLoading();
+    pageLoading.value = false;
     return Promise.resolve();
   }
 
-  const samePage = samePageCheckGenerator(store);
+  const shouldResolve = samePageCheckGenerator(route);
 
-  return Promise.all([fetchUserPermissions(userId), getFacilities()])
+  return Promise.all([fetchUserPermissions(userId), fetchFacilities()])
     .then(([data]) => {
-      if (samePage()) {
+      if (shouldResolve()) {
         setUserPermissionsState({ user: data.user, permissions: data.permissions });
       }
-      stopLoading();
+      pageLoading.value = false;
     })
     .catch(error => {
-      if (samePage()) {
+      if (shouldResolve()) {
         if (error.response.status === 404) {
           setUserPermissionsState({ user: null, permissions: {} });
         }
-        store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-        stopLoading();
+        handleApiError({ error, reloadOnReconnect: true });
+        pageLoading.value = false;
       }
     });
 }

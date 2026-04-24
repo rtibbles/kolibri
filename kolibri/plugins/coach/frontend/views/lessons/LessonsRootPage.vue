@@ -1,6 +1,9 @@
 <template>
 
-  <CoachAppBarPage showSubNav>
+  <CoachAppBarPage
+    :loading="pageLoading"
+    showSubNav
+  >
     <KPageContainer>
       <CoachHeader :title="coreString('lessonsLabel')">
         <template #actions>
@@ -191,6 +194,8 @@
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import bytesForHumans from 'kolibri/uiText/bytesForHumans';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
+  import { fetchClassSyncStatus } from '../../composables/fetchClassSyncStatus';
   import CoachAppBarPage from '../CoachAppBarPage';
   import commonCoach from '../common';
   import { coachStrings } from '../common/commonCoachStrings';
@@ -218,7 +223,14 @@
       const { lessonsAreLoading } = useLessons();
       const { createSnackbar } = useSnackbar();
       const { windowIsSmall } = useKResponsiveWindow();
-      return { show, lessonsAreLoading, createSnackbar, windowIsSmall, entireClassLabel$ };
+      return {
+        show,
+        lessonsAreLoading,
+        createSnackbar,
+        windowIsSmall,
+        entireClassLabel$,
+        pageLoading,
+      };
     },
     data() {
       return {
@@ -299,7 +311,6 @@
     },
     methods: {
       ...mapActions('lessonsRoot', ['createLesson']),
-      ...mapActions(['fetchUserSyncStatus']),
       showLesson(lesson) {
         switch (this.filterSelection.value) {
           case 'filterLessonVisible':
@@ -324,6 +335,8 @@
             const errors = CatchErrors(error, [ERROR_CONSTANTS.UNIQUE]);
             if (errors) {
               this.$refs.detailsModal.handleSubmitTitleFailure();
+            } else if (error.response && error.response.data && error.response.data.learner_ids) {
+              this.$refs.detailsModal.handleSubmitDeletedUsersFailure();
             } else {
               this.$refs.detailsModal.handleSubmitFailure();
             }
@@ -334,7 +347,7 @@
       // which we are checking via if there have recently been any user syncs
       // TODO: refactor to a more robust check
       checkIfAnyLODsInClass() {
-        this.fetchUserSyncStatus({ member_of: this.$route.params.classId }).then(data => {
+        fetchClassSyncStatus(this.$route.params.classId).then(data => {
           if (data && data.length > 0) {
             this.learnOnlyDevicesExist = true;
           }

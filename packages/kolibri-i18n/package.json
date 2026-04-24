@@ -20,11 +20,11 @@
   "dependencies": {
     "ast-traverse": "^0.1.1",
     "cli-table": "^0.3.11",
-    "commander": "^14.0.2",
-    "csv-parse": "^6.1.0",
+    "commander": "^14.0.3",
+    "csv-parse": "^6.2.1",
     "csv-writer": "^1.3.0",
     "del": "^6.1.1",
-    "enhanced-resolve": "^5.18.3",
+    "enhanced-resolve": "^5.20.1",
     "ini": "^6.0.0",
     "kolibri-build": "workspace:*",
     "kolibri-format": "workspace:*",
@@ -40,6 +40,7 @@
     "webpack": "^5.102.0"
   },
   "devDependencies": {
+    "kolibri": "workspace:*",
     "rewire": "^6.0.0"
   },
   "engines": {

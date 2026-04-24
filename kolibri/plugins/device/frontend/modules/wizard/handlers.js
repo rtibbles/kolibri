@@ -1,10 +1,12 @@
 import find from 'lodash/find';
 import router from 'kolibri/router';
 import logger from 'kolibri-logging';
+import { handleApiError } from 'kolibri/utils/appError';
 import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator';
 import { TransferTypes } from 'kolibri-common/utils/syncTaskUtils';
 import ContentNodeGranularResource from 'kolibri-common/apiResources/ContentNodeGranularResource';
 import RemoteChannelResource from 'kolibri-common/apiResources/RemoteChannelResource';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { ContentWizardPages, ContentWizardErrors } from '../../constants';
 import { manageContentPageLink } from '../../views/ManageContentPage/manageContentLinks';
 import { getAvailableSpaceOnDrive, loadChannelMetadata } from './actions/selectContentActions';
@@ -68,18 +70,18 @@ function handleError(store, error) {
   }
   // handle other errors generically
   store.commit('manageContent/wizard/RESET_STATE');
-  store.dispatch('handleApiError', { error });
+  handleApiError({ error });
 }
 
 // Handler for when user goes directly to the Available Channels URL.
 // Params are { drive_id?: string, address_id?: string }
-export function showAvailableChannelsPage(store, params) {
+export function showAvailableChannelsPage(store, params, route) {
   let availableChannelsPromise;
   let selectedDrivePromise;
   const transferType = getTransferType(params);
 
   store.commit('SET_PAGE_NAME', ContentWizardPages.AVAILABLE_CHANNELS);
-  store.commit('CORE_SET_PAGE_LOADING', true);
+  pageLoading.value = true;
   store.commit('manageContent/wizard/RESET_STATE');
 
   if (transferType === null) {
@@ -119,7 +121,7 @@ export function showAvailableChannelsPage(store, params) {
       return getAvailableChannelsOnPeerServer(store, params.address_id);
     });
   }
-  const shouldResolve = samePageCheckGenerator(store);
+  const shouldResolve = samePageCheckGenerator(route);
   return Promise.all([availableChannelsPromise, selectedDrivePromise]).then(
     function onSuccess([availableChannels, selectedDrive]) {
       if (shouldResolve()) {
@@ -128,12 +130,12 @@ export function showAvailableChannelsPage(store, params) {
           selectedDrive,
           transferType,
         });
-        store.commit('CORE_SET_PAGE_LOADING', false);
+        pageLoading.value = false;
       }
     },
     function onFailure(error) {
       if (shouldResolve()) {
-        store.commit('CORE_SET_PAGE_LOADING', false);
+        pageLoading.value = false;
         return handleError(store, error);
       }
     },
@@ -153,7 +155,7 @@ export function showSelectContentPage(store, params) {
 
   store.commit('manageContent/wizard/RESET_STATE');
   store.commit('SET_PAGE_NAME', ContentWizardPages.SELECT_CONTENT);
-  store.commit('CORE_SET_PAGE_LOADING', true);
+  pageLoading.value = true;
 
   if (transferType === null) {
     return router.replace(manageContentPageLink());
@@ -244,10 +246,10 @@ export function showSelectContentPage(store, params) {
       });
     })
     .then(() => {
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      pageLoading.value = false;
     })
     .catch(error => {
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      pageLoading.value = false;
       return handleError(store, error);
     });
 }

@@ -1,43 +1,55 @@
-import { mount } from '@vue/test-utils';
+import { render, screen, waitFor } from '@testing-library/vue';
+import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
+import { createTranslator } from 'kolibri/utils/i18n';
+import { coreStrings } from 'kolibri/uiText/commonCoreStrings';
+import PasswordTextbox from 'kolibri-common/components/userAccounts/PasswordTextbox';
 import makeStore from '../../__tests__/utils/makeStore';
 import UserCredentialsForm from '../onboarding-forms/UserCredentialsForm';
 
-function makeWrapper() {
+const { fullNameLabel$, usernameLabel$, passwordLabel$, continueAction$ } = coreStrings;
+const { confirmPasswordLabel$ } = createTranslator(PasswordTextbox.name, PasswordTextbox.$trs);
+
+function renderComponent() {
   const store = makeStore();
-  const wrapper = mount(UserCredentialsForm, {
+  const send = jest.fn();
+
+  render(UserCredentialsForm, {
     store,
-    // These need to be stubbed because of some mysterious errors
-    stubs: ['FullNameTextbox', 'UsernameTextbox'],
+    provide: {
+      wizardService: {
+        send,
+        state: {
+          context: {},
+        },
+      },
+    },
   });
-  jest.spyOn(wrapper.vm, '$emit');
-  const actions = {
-    simulateSubmit: () => wrapper.findComponent({ name: 'OnboardingForm' }).vm.$emit('submit'),
-  };
-  return { store, wrapper, actions };
+
+  return { send, store };
 }
 
-describe.skip('UserCredentialsForm', () => {
-  it('clicking submit updates vuex with correct data', async () => {
-    const { store, wrapper, actions } = makeWrapper();
-    wrapper.setData({
-      fullName: 'Schoolhouse Rock',
-      fullNameValid: true,
-      username: 'schoolhouse_rock',
-      usernameValid: true,
-      password: 'password',
-      passwordValid: true,
-    });
-    actions.simulateSubmit();
-    await wrapper.vm.$nextTick();
+describe('UserCredentialsForm', () => {
+  it('saves the entered admin details when the user continues', async () => {
+    const { send, store } = renderComponent();
+
+    await userEvent.type(screen.getByLabelText(fullNameLabel$()), 'Schoolhouse Rock');
+    await userEvent.type(screen.getByLabelText(usernameLabel$()), 'schoolhouse_rock');
+    await userEvent.type(screen.getByLabelText(passwordLabel$()), 'password');
+    await userEvent.type(screen.getByLabelText(confirmPasswordLabel$()), 'password');
+
+    await userEvent.click(screen.getByRole('button', { name: continueAction$() }));
+
     expect(store.state.onboardingData.user).toEqual({
       full_name: 'Schoolhouse Rock',
       username: 'schoolhouse_rock',
       password: 'password',
     });
-    expect(wrapper.vm.$emit).toHaveBeenCalledWith('click_next', {
-      full_name: 'Schoolhouse Rock',
-      username: 'schoolhouse_rock',
-      password: 'password',
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith({
+        type: 'CONTINUE',
+        value: store.state.onboardingData.user,
+      });
     });
   });
 });

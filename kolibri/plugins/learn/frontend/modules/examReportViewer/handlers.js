@@ -1,5 +1,7 @@
 import { getExamReport } from 'kolibri-common/quizzes/utils';
 import router from 'kolibri/router';
+import { clearError } from 'kolibri/utils/appError';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { ClassesPageNames } from '../../constants';
 
 function getExamReportFromState(state, params) {
@@ -40,22 +42,24 @@ export function showExamReport(store, params) {
   const examReportFromState = getExamReportFromState(store.state, params);
   if (examReportFromState) {
     store.commit('examReportViewer/SET_STATE', examReportFromState);
-    store.commit('CORE_SET_ERROR', null);
+    clearError();
     return;
   }
 
-  store.commit('CORE_SET_PAGE_LOADING', true);
+  pageLoading.value = true;
   const examReportPromise = getExamReport(examId, tryIndex, questionNumber, questionInteraction);
   Promise.all([examReportPromise]).then(
     ([examReport]) => {
       store.commit('examReportViewer/SET_STATE', examReport);
-      store.commit('CORE_SET_ERROR', null);
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      clearError();
+      pageLoading.value = false;
     },
-    () =>
+    () => {
+      pageLoading.value = false;
       router.replace({
         name: ClassesPageNames.CLASS_ASSIGNMENTS,
         params: { classId },
-      }),
+      });
+    },
   );
 }

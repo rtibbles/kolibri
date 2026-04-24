@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import OrderedDict
 from datetime import timedelta
 from itertools import groupby
 from uuid import UUID
@@ -13,6 +14,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+from django.db import transaction
 from django.db.models import Func
 from django.db.models import OuterRef
 from django.db.models import Q
@@ -82,8 +85,10 @@ from kolibri.core.auth.constants.demographics import DEFERRED
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
 from kolibri.core.auth.permissions.general import _user_is_admin_for_own_facility
 from kolibri.core.auth.permissions.general import DenyAll
+from kolibri.core.auth.tasks import assign_picture_passwords_to_facility
 from kolibri.core.auth.tasks import cleanup_expired_deleted_users
 from kolibri.core.auth.utils.delete import delete_imported_user
+from kolibri.core.auth.utils.picture_passwords import are_picture_passwords_exhausted
 from kolibri.core.auth.utils.users import get_remote_users_info
 from kolibri.core.device.permissions import IsSuperuser
 from kolibri.core.device.utils import allow_guest_access
@@ -100,10 +105,10 @@ from kolibri.core.query import annotate_array_aggregate
 from kolibri.core.query import SQCount
 from kolibri.core.serializers import HexOnlyUUIDField
 from kolibri.core.tasks.exceptions import JobRunning
+from kolibri.core.tasks.main import job_storage
 from kolibri.core.utils.pagination import ValuesViewsetPageNumberPagination
 from kolibri.core.utils.token_generator import TokenGenerator
 from kolibri.core.utils.urls import reverse_path
-from kolibri.plugins.app.utils import interface
 from kolibri.utils.urls import validator
 
 logger = logging.getLogger(__name__)
@@ -233,6 +238,7 @@ class FacilityDatasetViewSet(ValuesViewset):
         "show_download_button_in_learn",
         "enable_mark_attendance",
         "extra_fields",
+        "picture_password_settings",
         "description",
         "location",
         "registered",
@@ -281,6 +287,83 @@ class FacilityDatasetViewSet(ValuesViewset):
             return Response(FacilityDatasetSerializer(dataset).data)
         except FacilityDataset.DoesNotExist:
             raise Http404("Facility not found")
+
+    @decorators.action(
+        methods=["patch"],
+        detail=True,
+        url_path="save-facility-login-settings",
+    )
+    def save_facility_login_settings(self, request, pk):
+        dataset = self.get_object()
+        facility = Facility.objects.get(dataset_id=dataset.id)
+
+        new_pps = request.data.get("picture_password_settings")
+        learner_can_login_with_no_password = request.data.get(
+            "learner_can_login_with_no_password"
+        )
+        learner_can_edit_password = request.data.get("learner_can_edit_password")
+
+        currently_enabled = dataset.picture_password_settings is not None
+        enabling = not currently_enabled and new_pps is not None
+
+        if enabling:
+            if are_picture_passwords_exhausted(dataset.id):
+                return Response(
+                    {"detail": "Picture passwords exhausted for this facility."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            dataset.picture_password_settings = new_pps
+            dataset.learner_can_login_with_no_password = True
+            dataset.learner_can_edit_password = False
+            dataset.save()
+
+            job, _ = assign_picture_passwords_to_facility.validate_job_data(
+                request.user,
+                data={"facility_id": facility.id},
+            )
+            job_id = assign_picture_passwords_to_facility.enqueue(job=job)
+            enqueued_job = job_storage.get_job(job_id)
+            return Response(
+                {
+                    "dataset": FacilityDatasetSerializer(dataset).data,
+                    "task": {
+                        "id": enqueued_job.job_id,
+                        "status": enqueued_job.state,
+                        "percentage": enqueued_job.percentage_progress,
+                        "cancellable": enqueued_job.cancellable,
+                        "facility_id": enqueued_job.facility_id,
+                        "extra_metadata": enqueued_job.extra_metadata,
+                    },
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        if currently_enabled and new_pps is not None:
+            dataset.picture_password_settings = new_pps
+            dataset.save()
+            return Response(
+                {"dataset": FacilityDatasetSerializer(dataset).data},
+                status=status.HTTP_200_OK,
+            )
+
+        if new_pps is None:
+            dataset.picture_password_settings = None
+            if learner_can_login_with_no_password:
+                dataset.learner_can_login_with_no_password = True
+                dataset.learner_can_edit_password = False
+            else:
+                dataset.learner_can_login_with_no_password = False
+                if learner_can_edit_password is not None:
+                    dataset.learner_can_edit_password = learner_can_edit_password
+            dataset.save()
+            return Response(
+                {"dataset": FacilityDatasetSerializer(dataset).data},
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"detail": "Invalid request."}, status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class IsPINValidView(views.APIView):
@@ -571,6 +654,7 @@ class FacilityUserViewSet(FacilityUserConsolidateMixin, ValuesViewset, BulkDelet
         "birth_year",
         "extra_demographics",
         "date_joined",
+        "picture_password",
     )
 
     ordering_fields = (
@@ -744,7 +828,9 @@ class FacilityUsernameViewSet(ReadOnlyValuesViewset):
             # the list display
             return FacilityUser.objects.all()
         return FacilityUser.objects.filter(
-            dataset__learner_can_login_with_no_password=True, roles=None
+            Q(dataset__learner_can_login_with_no_password=True)
+            | Q(dataset__picture_password_settings__isnull=False),
+            roles=None,
         ).filter(
             Q(devicepermissions__is_superuser=False) | Q(devicepermissions__isnull=True)
         )
@@ -796,6 +882,19 @@ class RoleViewSet(BulkDeleteMixin, BulkCreateMixin, viewsets.ModelViewSet):
     filterset_class = RoleFilter
     filterset_fields = ["user", "collection", "kind", "user_ids"]
 
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            super().perform_create(serializer)
+            instances = serializer.instance
+            if not isinstance(instances, list):
+                instances = [instances]
+            user_ids = [role.user_id for role in instances]
+            for user in FacilityUser.objects.filter(
+                id__in=user_ids, picture_password__isnull=False
+            ):
+                user.picture_password = None
+                user.save(update_fields=["picture_password"])
+
 
 dataset_keys = [
     "dataset__id",
@@ -807,6 +906,7 @@ dataset_keys = [
     "dataset__learner_can_login_with_no_password",
     "dataset__show_download_button_in_learn",
     "dataset__extra_fields",
+    "dataset__picture_password_settings",
     "dataset__description",
     "dataset__location",
     "dataset__registered",
@@ -822,6 +922,10 @@ def _map_dataset(facility):
         stripped_key = dataset_key.replace("dataset__", "")
         dataset[stripped_key] = facility.pop(dataset_key)
     return dataset
+
+
+def _picture_passwords_exhausted(facility):
+    return are_picture_passwords_exhausted(facility["dataset__id"])
 
 
 class FacilityViewSet(ValuesViewset):
@@ -841,7 +945,14 @@ class FacilityViewSet(ValuesViewset):
 
     values = tuple(facility_values + dataset_keys)
 
-    field_map = {"dataset": _map_dataset}
+    # regular dict can be used after removal for support of python3.6
+    field_map = OrderedDict(
+        [
+            # must precede _map_dataset since it depends on the dataset ID
+            ("picture_passwords_exhausted", _picture_passwords_exhausted),
+            ("dataset", _map_dataset),
+        ]
+    )
 
     def annotate_queryset(self, queryset):
         transfer_session_dataset_filter = Func(
@@ -1152,7 +1263,8 @@ class SetNonSpecifiedPasswordView(views.APIView):
 
 
 class CreateSessionSerializer(serializers.Serializer):
-    username = serializers.CharField(required=False, default=None)
+    # allow_blank so that picture-password requests can omit username entirely
+    username = serializers.CharField(required=False, default=None, allow_blank=True)
     user_id = HexOnlyUUIDField(required=False, default=None)
     password = serializers.CharField(
         default="",
@@ -1166,6 +1278,23 @@ class CreateSessionSerializer(serializers.Serializer):
         required=False,
     )
     auth_token = serializers.CharField(required=False, default=None)
+    picture_password = serializers.CharField(
+        required=False,
+        default=None,
+        allow_null=True,
+        allow_blank=False,
+        # Format is exactly three dot-separated integers, each 1–2 digits
+        # (icon indices 0–99), e.g. "3.7.12". min/max_length are a fast
+        # pre-check; the regex is the authoritative format constraint.
+        min_length=5,
+        max_length=8,
+        validators=[
+            RegexValidator(
+                r"^\d{1,2}\.\d{1,2}\.\d{1,2}$",
+                message="picture_password must be three dot-separated integers.",
+            )
+        ],
+    )
 
     def validate(self, attrs):
         username = attrs.get("username")
@@ -1173,13 +1302,14 @@ class CreateSessionSerializer(serializers.Serializer):
         facility = attrs.get("facility")
         user_id = attrs.get("user_id")
         auth_token = attrs.get("auth_token")
+        picture_password = attrs.get("picture_password")
 
         request = self.context.get("request")
 
         user = None
 
         # OS User authentication
-        if interface.enabled and valid_app_key_on_request(request):
+        if valid_app_key_on_request(request):
             # If we are in app context, then try to get the automatically created OS User
             # if it matches the username, without needing a password.
             user = self._check_os_user(request, username)
@@ -1191,17 +1321,27 @@ class CreateSessionSerializer(serializers.Serializer):
                     id=user_id, facility=facility
                 ).first()
 
-        # username/password authentication
-        if user is None:
-            # Otherwise attempt full authentication
-            user = authenticate(username=username, password=password, facility=facility)
+        # picture password authentication
+        if user is None and picture_password is not None:
+            user = authenticate(
+                request, picture_password=picture_password, facility=facility
+            )
+
+        # username/password authentication — intentionally skipped when
+        # picture_password was supplied (even if picture-password auth failed),
+        # so a failed picture-password attempt cannot fall through to a
+        # username/password login with whatever credentials were also sent.
+        if user is None and picture_password is None:
+            user = authenticate(
+                request, username=username, password=password, facility=facility
+            )
 
         if user is not None and user.is_active:
             attrs["user"] = user
             return attrs
 
         # Otherwise, throw a meaningful validation error
-        self._throw_validation_error(username, password, facility)
+        self._throw_validation_error(username, password, facility, picture_password)
 
     def _check_os_user(self, request, username):
         app_auth_token = request.COOKIES.get(APP_AUTH_TOKEN_COOKIE_NAME)
@@ -1213,11 +1353,27 @@ class CreateSessionSerializer(serializers.Serializer):
             except ValidationError as e:
                 logger.error(e)
 
-    def _throw_validation_error(self, username, password, facility):
+    def _throw_validation_error(
+        self, username, password, facility, picture_password=None
+    ):
         """
         Throw a RestValidationError with a helpful error message
         depending on what went wrong with authentication.
         """
+        if picture_password is not None:
+            raise RestValidationError(
+                detail={
+                    "picture_password": [
+                        {
+                            "id": error_constants.NOT_FOUND,
+                            "metadata": {
+                                "field": "picture_password",
+                                "message": "No learner found with that picture password.",
+                            },
+                        }
+                    ]
+                }
+            )
         # Find the FacilityUser we're looking for
         try:
             unauthenticated_user = FacilityUser.objects.get(
@@ -1303,10 +1459,8 @@ class CreateSessionSerializer(serializers.Serializer):
 class SessionViewSet(viewsets.ViewSet):
     def create(self, request):
         # Only enforce this when running in an app
-        if (
-            interface.enabled
-            and not allow_other_browsers_to_connect()
-            and not valid_app_key_on_request(request)
+        if not allow_other_browsers_to_connect() and not valid_app_key_on_request(
+            request
         ):
             return Response(
                 [{"id": error_constants.INVALID_CREDENTIALS, "metadata": {}}],
@@ -1333,7 +1487,10 @@ class SessionViewSet(viewsets.ViewSet):
         for field, field_errors in errors.items():
             for error in field_errors:
                 error_list.append(error)
-                if error.get("id") == error_constants.INVALID_CREDENTIALS:
+                if (
+                    isinstance(error, dict)
+                    and error.get("id") == error_constants.INVALID_CREDENTIALS
+                ):
                     response_status = status.HTTP_401_UNAUTHORIZED
 
         return Response(error_list, status=response_status)

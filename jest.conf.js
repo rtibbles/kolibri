@@ -1,3 +1,4 @@
+/* eslint-disable import-x/no-commonjs, import-x/no-amd, import-x/no-import-module-exports */
 const baseConfig = require('kolibri-jest-config/jest.conf');
 
 module.exports = Object.assign(baseConfig, {
@@ -10,8 +11,8 @@ module.exports = Object.assign(baseConfig, {
   ],
   collectCoverageFrom: [
     'kolibri/**/frontend/**/*.{js,vue}',
-    '!**/node_modules/**',
-    'kolibri/**/**/frontend/**/*.{js,vue}',
     'packages/*/src/*.js',
+    '!**/node_modules/**',
+    '!**/__fixtures__/**',
   ],
 });

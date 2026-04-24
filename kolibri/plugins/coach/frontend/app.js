@@ -4,14 +4,16 @@ import redirectBrowser from 'kolibri/utils/redirectBrowser';
 import router from 'kolibri/router';
 import ChannelResource from 'kolibri-common/apiResources/ChannelResource';
 import KolibriApp from 'kolibri-app';
+import { handleApiError } from 'kolibri/utils/appError';
 import useSnackbar from 'kolibri/composables/useSnackbar';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames } from './constants';
 import routes from './routes';
 import pluginModule from './modules/pluginModule';
 import HomeActivityPage from './views/home/HomeActivityPage';
 
-const { getFacilities, facilities } = useFacilities();
+const { fetchFacilities, facilities } = useFacilities();
 
 function _channelListState(data) {
   return data.map(channel => ({
@@ -34,7 +36,7 @@ export function setChannelInfo(store) {
       return channelsData;
     },
     error => {
-      store.dispatch('handleApiError', { error });
+      handleApiError({ error });
       return error;
     },
   );
@@ -103,7 +105,7 @@ class CoachToolsModule extends KolibriApp {
         !skipLoading.includes(to.name) &&
         !(to.params.quizId && from.params.quizId && to.name === from.name)
       ) {
-        this.store.dispatch('loading');
+        pageLoading.value = true;
       }
       const promises = [];
 
@@ -181,13 +183,13 @@ class CoachToolsModule extends KolibriApp {
       }
 
       if (get(isSuperuser) && facilities.value.length === 0) {
-        promises.push(getFacilities().catch(() => {}));
+        promises.push(fetchFacilities().catch(() => {}));
       }
 
       if (promises.length > 0) {
         Promise.all(promises)
           .catch(error => {
-            this.store.dispatch('handleApiError', { error });
+            handleApiError({ error });
           })
           .catch(() => {
             // We catch here because `handleApiError` throws the error back again, in this case,

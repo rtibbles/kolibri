@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     :appBarTitle="$tr('appBarTitle')"
     :authorized="$store.getters.userIsAuthorizedForCoach"
     authorizedRole="adminOrCoach"
@@ -27,7 +28,9 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { handleApiError } from 'kolibri/utils/appError';
   import useFacilities from 'kolibri-common/composables/useFacilities';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { coachStringsMixin } from '../../common/commonCoachStrings';
   import CoachImmersivePage from '../../CoachImmersivePage';
   import AssignmentDetailsModal from '../../common/assignments/AssignmentDetailsModal';
@@ -43,12 +46,14 @@
     setup() {
       const { createSnackbar } = useSnackbar();
       const { isSuperuser } = useUser();
-      const { getFacilities, facilities } = useFacilities();
+      const { fetchFacilities, facilities } = useFacilities();
       return {
         createSnackbar,
+        handleApiError,
         isSuperuser,
-        getFacilities,
+        fetchFacilities,
         facilities,
+        pageLoading,
       };
     },
     data() {
@@ -81,33 +86,32 @@
         'initClassInfo',
         this.$route.params.classId,
       );
-      const getFacilitiesPromise =
+      const fetchFacilitiesPromise =
         this.isSuperuser && this.facilities.length === 0
-          ? this.getFacilities().catch(() => {})
+          ? this.fetchFacilities().catch(() => {})
           : Promise.resolve();
 
-      Promise.all([initClassInfoPromise, getFacilitiesPromise])
+      Promise.all([initClassInfoPromise, fetchFacilitiesPromise])
         .then(() =>
           LessonResource.fetchModel({
             id: this.$route.params.lessonId,
           }),
         )
         .then(lesson => this.setData(lesson))
-        .catch(error => this.setError(error))
-        .then(() => this.$store.dispatch('notLoading'));
+        .catch(error => this.setError(error));
     },
     methods: {
       // @public
       setData(data) {
         this.lesson = data;
         this.loading = false;
-        this.$store.dispatch('notLoading');
+        pageLoading.value = false;
       },
       // @public
       setError(error) {
-        this.$store.dispatch('handleApiError', { error });
+        this.handleApiError({ error });
         this.loading = false;
-        this.$store.dispatch('notLoading');
+        pageLoading.value = false;
       },
       goBackToSummaryPage() {
         return this.$router.push(this.previousPageRoute);

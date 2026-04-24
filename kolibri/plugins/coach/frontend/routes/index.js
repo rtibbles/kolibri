@@ -1,9 +1,12 @@
 import store from 'kolibri/store';
 import router from 'kolibri/router';
+import { handleApiError } from 'kolibri/utils/appError';
 import useUser from 'kolibri/composables/useUser';
 import { get } from '@vueuse/core';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import useFacility from 'kolibri-common/composables/useFacility';
 import plugin_data from 'kolibri-plugin-data';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import AllFacilitiesPage from '../views/AllFacilitiesPage';
 import CoachClassListPage from '../views/CoachClassListPage';
 import ClassLearnersListPage from '../views/ClassLearnersListPage';
@@ -24,11 +27,11 @@ import coursesRoutes from './coursesRoutes';
 function showHomePage(toRoute) {
   const initClassInfoPromise = store.dispatch('initClassInfo', toRoute.params.classId);
   const { isSuperuser } = useUser();
-  const { getFacilities, facilities } = useFacilities();
+  const { fetchFacilities, facilities } = useFacilities();
 
   const getFacilitiesPromise =
     get(isSuperuser) && get(facilities).length === 0
-      ? getFacilities().catch(() => {})
+      ? fetchFacilities().catch(() => {})
       : Promise.resolve();
 
   return Promise.all([initClassInfoPromise, getFacilitiesPromise]);
@@ -47,7 +50,7 @@ export default [
     component: AllFacilitiesPage,
     props: true,
     handler() {
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
   },
   {
@@ -56,15 +59,16 @@ export default [
     props: true,
     async handler(toRoute) {
       // loading state is handled locally
-      store.dispatch('notLoading');
+      pageLoading.value = false;
       // if user only has access to one facility, facility_id will not be accessible from URL,
       // but always defaulting to userFacilityId would cause problems for multi-facility admins
       const { userFacilityId } = useUser();
-      const { facilities, getFacilities, userIsMultiFacilityAdmin } = useFacilities();
+      const { facilities, fetchFacilities, userIsMultiFacilityAdmin } = useFacilities();
+      const { setFacilityId } = useFacility();
       const facilityId = toRoute.params.facility_id || get(userFacilityId);
 
       if (facilities.value.length === 0) {
-        await getFacilities();
+        await fetchFacilities();
       }
 
       if (userIsMultiFacilityAdmin.value && !toRoute.params.facility_id) {
@@ -73,6 +77,8 @@ export default [
           params: { subtopicName: toRoute.params.subtopicName },
         });
       }
+
+      await setFacilityId(facilityId);
 
       store.dispatch('setClassList', facilityId).then(
         () => {
@@ -86,7 +92,7 @@ export default [
             return;
           }
         },
-        error => store.dispatch('handleApiError', { error, reloadOnReconnect: true }),
+        error => handleApiError({ error, reloadOnReconnect: true }),
       );
     },
     meta: {
@@ -102,7 +108,7 @@ export default [
         return;
       }
       await showHomePage(toRoute);
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
     meta: {
       titleParts: ['CLASS_NAME'],
@@ -113,7 +119,7 @@ export default [
     component: HomeActivityPage,
     handler: async toRoute => {
       await showHomePage(toRoute);
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
     meta: {
       titleParts: ['activityLabel', 'CLASS_NAME'],
@@ -124,21 +130,21 @@ export default [
     path: '/:classId/learners/devices',
     component: ClassLearnersListPage,
     handler() {
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
   },
   {
     path: '/about/statuses',
     component: StatusTestPage,
     handler() {
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
   },
   {
     path: '/coach-prompts',
     component: CoachPrompts,
     handler() {
-      store.dispatch('notLoading');
+      pageLoading.value = false;
     },
   },
   {

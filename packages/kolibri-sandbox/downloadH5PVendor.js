@@ -1,7 +1,7 @@
+/* eslint-disable import-x/no-commonjs, import-x/no-amd, import-x/no-import-module-exports */
 var fs = require('node:fs');
 var https = require('node:https');
 var path = require('node:path');
-var url = require('node:url');
 var JSZip = require('jszip');
 var { PurgeCSS } = require('purgecss');
 
@@ -31,7 +31,7 @@ const fileManifest = [
 ];
 
 function downloadFiles() {
-  https.get(url.parse(zipUrl), function (res) {
+  https.get(new URL(zipUrl), function (res) {
     if (res.statusCode !== 200) {
       logging.log(res);
       // handle error

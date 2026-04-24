@@ -7,24 +7,26 @@ import useUser, { useUserMock } from 'kolibri/composables/useUser'; // eslint-di
 import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 import useTotalProgress, { useTotalProgressMock } from 'kolibri/composables/useTotalProgress'; // eslint-disable-line
 import { ref } from 'vue';
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import useChannels, { useChannelsMock } from 'kolibri-common/composables/useChannels';
 import { ClassesPageNames, PageNames } from '../../../constants';
 import HomePage from '../index';
-/* eslint-disable import/named */
+/* eslint-disable import-x/named */
 import useDeviceSettings, { useDeviceSettingsMock } from '../../../composables/useDeviceSettings';
 import useLearnerResources, {
   useLearnerResourcesMock,
 } from '../../../composables/useLearnerResources';
-/* eslint-enable import/named */
+/* eslint-enable import-x/named */
 jest.mock('kolibri/client');
 jest.mock('kolibri/urls');
+jest.mock('kolibri/utils/appError');
 jest.mock('kolibri-common/components/syncComponentSet/SelectDeviceModalGroup/useDevices');
 jest.mock('kolibri-common/composables/useChannels');
 jest.mock('kolibri/composables/useUser');
 jest.mock('../../../composables/useDeviceSettings');
 jest.mock('../../../composables/useLearnerResources');
 jest.mock('../../../composables/useContentLink');
+jest.mock('kolibri-common/composables/usePageLoading');
 // Needed to test anything using mount() where children use this composable
 jest.mock('kolibri-common/composables/useLearningActivities');
 jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow');
@@ -36,18 +38,13 @@ localVue.use(VueRouter);
 
 function makeWrapper() {
   const mockStore = new Store({
-    state: { core: { loading: false }, welcomeModalVisible: false },
-    getters: {
-      isPageLoading: jest.fn(() => false),
-    },
+    state: { core: {}, welcomeModalVisible: false },
+    getters: {},
     mutations: {
       SET_WELCOME_MODAL_VISIBLE: jest.fn(),
       SET_PAGE_NAME: jest.fn(),
     },
-    actions: {
-      handleApiError: jest.fn(),
-      notLoading: jest.fn(),
-    },
+    actions: {},
   });
 
   const router = new VueRouter({
@@ -82,27 +79,27 @@ function makeWrapper() {
 }
 
 function getClassesSection(wrapper) {
-  return wrapper.find('[data-test="classes"]');
+  return wrapper.find('[data-testid="classes"]');
 }
 
 function getContinueLearningFromClassesSection(wrapper) {
-  return wrapper.find('[data-test="continueLearningFromClasses"]');
+  return wrapper.find('[data-testid="continueLearningFromClasses"]');
 }
 
 function getRecentLessonsSection(wrapper) {
-  return wrapper.find('[data-test="recentLessons"]');
+  return wrapper.find('[data-testid="recentLessons"]');
 }
 
 function getRecentQuizzesSection(wrapper) {
-  return wrapper.find('[data-test="recentQuizzes"]');
+  return wrapper.find('[data-testid="recentQuizzes"]');
 }
 
 function getContinueLearningOnYourOwnSection(wrapper) {
-  return wrapper.find('[data-test="continueLearningOnYourOwn"]');
+  return wrapper.find('[data-testid="continueLearningOnYourOwn"]');
 }
 
 function getExploreChannelsSection(wrapper) {
-  return wrapper.find('[data-test="exploreChannels"]');
+  return wrapper.find('[data-testid="exploreChannels"]');
 }
 
 describe(`HomePage`, () => {
@@ -176,7 +173,7 @@ describe(`HomePage`, () => {
         }),
       );
       const wrapper = makeWrapper();
-      const links = getClassesSection(wrapper).findAll('[data-test="classLink"]');
+      const links = getClassesSection(wrapper).findAll('[data-testid="classLink"]');
       expect(links.length).toBe(2);
       expect(links.at(0).text()).toBe('Class 1');
       expect(links.at(1).text()).toBe('Class 2');

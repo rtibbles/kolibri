@@ -1,7 +1,7 @@
 <template>
 
-  <CoachAppBarPage>
-    <KGrid v-if="!loading">
+  <CoachAppBarPage :loading="pageLoading">
+    <KGrid v-if="!pageLoading">
       <KGridItem>
         <QuizLessonDetailsHeader
           examOrLesson="lesson"
@@ -33,7 +33,7 @@
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 8 }">
         <KPageContainer
-          v-if="!loading"
+          v-if="!pageLoading"
           :topMargin="$isPrint ? 0 : 16"
         >
           <ReportsControls @export="exportCSV" />
@@ -90,6 +90,8 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useSnackbar from 'kolibri/composables/useSnackbar';
   import { computed, getCurrentInstance, watch } from 'vue';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
+  import { useRoute } from 'vue-router/composables';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import ReportsControls from '../../common/ReportsControls';
@@ -121,15 +123,15 @@
     mixins: [commonCoach, commonCoreStrings],
     setup() {
       const store = getCurrentInstance().proxy.$store;
-      const routeParams = computed(() => store.state.route.params);
-      const lessonId = computed(() => routeParams.value.lessonId);
+      const route = useRoute();
+      const lessonId = computed(() => route.params.lessonId);
 
-      showLessonSummaryPage(store, routeParams.value);
+      showLessonSummaryPage(store, route.params);
 
-      watch(lessonId, () => showLessonSummaryPage(store, routeParams.value));
+      watch(lessonId, () => showLessonSummaryPage(store, route.params));
 
       const { createSnackbar, clearSnackbar } = useSnackbar();
-      return { lessonId, createSnackbar, clearSnackbar };
+      return { lessonId, pageLoading, createSnackbar, clearSnackbar };
     },
     props: {
       editable: {
@@ -152,9 +154,6 @@
       ...mapState('lessonSummary', ['currentLesson', 'workingResources', 'resourceCache']),
       classId() {
         return this.currentLesson.classroom.id;
-      },
-      loading() {
-        return this.$store.state.core.loading;
       },
       lessonSelectionRootPage() {
         return this.classRoute(PageNames.LESSON_SELECT_RESOURCES, {
@@ -244,7 +243,7 @@
       },
     },
     watch: {
-      loading(newVal, oldVal) {
+      pageLoading(newVal, oldVal) {
         if (!newVal && oldVal) {
           this.workingResourcesBackup = [...this.$store.state.lessonSummary.workingResources];
         }

@@ -1,7 +1,10 @@
 <template>
 
   <NotificationsRoot>
-    <AppBarPage :title="coreString('profileLabel')">
+    <AppBarPage
+      :title="coreString('profileLabel')"
+      :loading="pageLoading"
+    >
       <KPageContainer>
         <KGrid>
           <KGridItem
@@ -198,6 +201,8 @@
   import BirthYearDisplayText from 'kolibri-common/components/userAccounts/BirthYearDisplayText';
   import useTotalProgress from 'kolibri/composables/useTotalProgress';
   import useFacilities from 'kolibri-common/composables/useFacilities';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { RoutesMap } from '../../constants';
   import useCurrentUser from '../../composables/useCurrentUser';
   import useOnMyOwnSetup from '../../composables/useOnMyOwnSetup';
@@ -235,11 +240,12 @@
       } = useUser();
       const { onMyOwnSetup } = useOnMyOwnSetup();
       const { fetchPoints, totalPoints } = useTotalProgress();
-      const { facilityConfig, facilities } = useFacilities();
-
+      const { facilities } = useFacilities();
+      const { facilityConfig } = useFacility();
       const userPermissions = computed(() => pickBy(_userPermissions));
 
       return {
+        pageLoading,
         currentUser,
         onMyOwnSetup,
         isLearnerOnlyImport,

@@ -110,6 +110,7 @@
   import get from 'lodash/get';
   import { currentLanguage } from 'kolibri/utils/i18n';
   import useSnackbar from 'kolibri/composables/useSnackbar';
+  import { handleApiError } from 'kolibri/utils/appError';
   import BottomAppBar from 'kolibri/components/BottomAppBar';
   import PasswordTextbox from 'kolibri-common/components/userAccounts/PasswordTextbox';
   import { TaskTypes } from 'kolibri-common/utils/syncTaskUtils';
@@ -121,6 +122,7 @@
   import FacilityUserResource from 'kolibri-common/apiResources/FacilityUserResource';
   import CatchErrors from 'kolibri/utils/CatchErrors';
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
   import commonProfileStrings from '../../../../../user_profile/frontend/views/commonProfileStrings';
   import { injectLodDeviceUsers } from '../composables/useLodDeviceUsers';
@@ -163,6 +165,8 @@
         selectedFacility,
         importLodMachineService,
         createSnackbar,
+        handleApiError,
+        pageLoading,
         isUserAlreadyImported,
         importUserError$,
         importUserLabel$,
@@ -257,10 +261,11 @@
               baseurl: data.device_address,
             };
             this.loadingNewAddress = false;
-            this.$store.dispatch('notLoading');
+            this.pageLoading = false;
           })
           .catch(error => {
             // TODO handle disconnected peers error more gracefully
+            this.pageLoading = false;
             this.$store.dispatch('showError', error);
           });
       },
@@ -385,7 +390,7 @@
             ]);
             if (errorsCaught) {
               this.error = true;
-            } else this.$store.dispatch('handleApiError', { error });
+            } else this.handleApiError({ error });
           });
       },
     },

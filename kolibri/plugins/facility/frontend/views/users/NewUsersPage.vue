@@ -8,6 +8,7 @@
       height: '100%',
       padding: windowIsSmall ? '0 0.5em' : '0 1em',
     }"
+    :loading="pageLoading"
   >
     <template #default="{ pageContentHeight }">
       <!--
@@ -151,6 +152,7 @@
           :dataLoading="dataLoading"
           :selectedUsers.sync="selectedUsers"
           :numAppliedFilters="numAppliedFilters"
+          :pictureLoginEnabled="pictureLoginEnabled"
           @clearSelectedUsers="clearSelectedUsers"
           @change="onChange"
         />
@@ -216,10 +218,12 @@
 
   import ImmersivePage from 'kolibri/components/pages/ImmersivePage';
   import usePreviousRoute from 'kolibri-common/composables/usePreviousRoute';
+  import useFacility from 'kolibri-common/composables/useFacility';
   import { bulkUserManagementStrings } from 'kolibri-common/strings/bulkUserManagementStrings';
 
   import { UserKinds } from 'kolibri/constants';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import useUsersTableSearch from '../../composables/useUsersTableSearch';
   import usePagination from '../../composables/usePagination';
   import useUserManagement from '../../composables/useUserManagement';
@@ -249,6 +253,7 @@
       const route = useRoute();
       const router = useRouter();
       const { currentUserId, isSuperuser, isAdmin } = useUser();
+      const { setFacilityId, facilityConfig } = useFacility();
       const isMoveToTrashModalOpen = ref(false);
 
       const activeFacilityId = route.params.facility_id || store.getters.activeFacilityId;
@@ -275,7 +280,6 @@
       });
 
       const { windowIsSmall, windowIsShort } = useKResponsiveWindow();
-
       const showUsersTable = computed(
         () =>
           facilityUsers.value.length > 0 ||
@@ -299,6 +303,9 @@
       // Use our new composables
       const { searchTerm, filterTextboxRef } = useUsersTableSearch();
       const { currentPage, itemsPerPage } = usePagination({ usersCount, totalPages });
+      const pictureLoginEnabled = computed(() =>
+        Boolean(facilityConfig.value.picture_password_settings),
+      );
 
       const {
         newUser$,
@@ -353,11 +360,14 @@
       }
 
       onMounted(() => {
+        setFacilityId(activeFacilityId);
         fetchClasses();
       });
 
       return {
+        pageLoading,
         usersTableStyles,
+        pictureLoginEnabled,
         // Route utilities
         overrideRoute,
         PageNames,

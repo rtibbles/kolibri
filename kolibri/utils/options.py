@@ -316,8 +316,6 @@ def cache_option(value):
 class LazyImportFunction:
     """
     A function wrapper that will import a module when called.
-    We may be able to drop this when Python 2.7 support is dropped
-    and use Python LazyLoader module machinery instead.
     """
 
     def __init__(self, module_name):
@@ -782,16 +780,6 @@ base_option_spec = {
                 Allowing deployed Kolibri servers to specify additional hosts from which content can be loaded.
             """,
         },
-    },
-    "Python": {
-        "PICKLE_PROTOCOL": {
-            "type": "integer",
-            "default": 2,
-            "description": """
-                Which Python pickle protocol to use. Pinned to 2 for now to provide maximal cross-Python version compatibility.
-                Can safely be set to a higher value for deployments that will never change Python versions.
-            """,
-        }
     },
     "Tasks": {
         "USE_WORKER_MULTIPROCESSING": {

@@ -19,7 +19,10 @@
       :deviceId="deviceId"
       :route="back"
     >
-      <main class="main-grid">
+      <main
+        class="main-grid"
+        :style="gridOffset"
+      >
         <!-- Search bar at top of content area -->
         <LibrarySearchBar
           v-if="!isLocalLibraryEmpty || deviceId"
@@ -70,7 +73,7 @@
         />
         <div
           v-else-if="!displayingSearchResults && !rootNodesLoading"
-          data-test="channels"
+          data-testid="channels"
         >
           <div>
             <h1
@@ -88,7 +91,7 @@
                 {{ channelsLabel }}
               </h1>
               <p
-                data-test="nothing-in-lib-label"
+                data-testid="nothing-in-lib-label"
                 class="nothing-in-lib-label"
               >
                 {{ coreString('nothingInLibraryLearner') }}
@@ -99,7 +102,7 @@
 
           <ChannelCardGroupGrid
             v-if="!isLocalLibraryEmpty"
-            data-test="channel-cards"
+            data-testid="channel-cards"
             class="grid"
             :contents="rootNodes"
             :deviceId="deviceId"
@@ -108,7 +111,7 @@
           <!-- but we conditionalize it based on whether we are on another device's library page!-->
           <ResumableContentGrid
             v-if="!deviceId"
-            data-test="resumable-content"
+            data-testid="resumable-content"
             :currentCardViewStyle="currentCardViewStyle"
             @setCardStyle="style => (currentCardViewStyle = style)"
             @setSidePanelMetadataContent="content => (metadataSidePanelContent = content)"
@@ -116,7 +119,7 @@
           <!-- Other Libraries -->
           <OtherLibraries
             v-if="showOtherLibraries"
-            data-test="other-libraries"
+            data-testid="other-libraries"
             :injectedtr="injecttr"
             @availableNetworkDevices="availableNetworkDevices"
             @isLoadingLibraries="isLoadingLibraries"
@@ -125,7 +128,7 @@
 
         <SearchResultsGrid
           v-else-if="displayingSearchResults"
-          data-test="search-results"
+          data-testid="search-results"
           :allowDownloads="allowDownloads"
           :results="results"
           :removeFilterTag="removeFilterTag"
@@ -164,7 +167,7 @@
       <!-- Side Panel for metadata -->
       <SidePanelModal
         v-if="metadataSidePanelContent && !rootNodesLoading"
-        data-test="side-panel-modal"
+        data-testid="side-panel-modal"
         alignment="right"
         @closePanel="metadataSidePanelContent = null"
         @shouldFocusFirstEl="findFirstEl()"
@@ -218,14 +221,15 @@
   import { get, set } from '@vueuse/core';
 
   import { onMounted, getCurrentInstance, ref, watch } from 'vue';
+  import pluginData from 'kolibri-plugin-data';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useUser from 'kolibri/composables/useUser';
+  import { handleApiError, clearError } from 'kolibri/utils/appError';
   import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator';
   import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
   import { mapState } from 'vuex';
-  import MeteredConnectionNotificationModal from 'kolibri-common/components/MeteredConnectionNotificationModal.vue';
-  import appCapabilities, { checkCapability } from 'kolibri/utils/appCapabilities';
+  import checkMeteredConnection from 'kolibri-common/utils/checkMeteredConnection';
   import LearningActivityChip from 'kolibri-common/components/ResourceDisplayAndSearch/LearningActivityChip.vue';
   import { searchKeys } from 'kolibri-common/composables/useBaseSearch';
   import SidePanelModal from 'kolibri-common/components/SidePanelModal';
@@ -235,6 +239,7 @@
   import HorizontalFilterPills from './HorizontalFilterPills';
   import TooltipTour from 'kolibri/components/onboarding/TooltipTour';
   import useTour from 'kolibri/composables/useTour';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import { KolibriStudioId, PageNames } from '../../constants';
   import useCardViewStyle from '../../composables/useCardViewStyle';
   import useContentLink from '../../composables/useContentLink';
@@ -253,6 +258,7 @@
   import SearchResultsGrid from '../SearchResultsGrid';
   import LearnAppBarPage from '../LearnAppBarPage';
   import PostSetupModalGroup from '../../../../device/frontend/views/PostSetupModalGroup.vue';
+  import MeteredConnectionNotificationModal from './MeteredConnectionNotificationModal.vue';
   import ResumableContentGrid from './ResumableContentGrid';
   import OtherLibraries from './OtherLibraries';
   import NoResourcePage from './NoResourcePage';
@@ -290,7 +296,6 @@
       const router = currentInstance.$router;
       const { tourActive, isTourActive, startTour, endTour, resumeTour } = useTour();
       const { isUserLoggedIn, isCoach, isAdmin, isSuperuser, isLearner, user_id } = useUser();
-
       const { allowDownloadOnMeteredConnection } = useDeviceSettings();
       const {
         searchTerms,
@@ -334,7 +339,7 @@
         if (get(isUserLoggedIn) && !baseurl) {
           fetchResumableContentNodes();
         }
-        const shouldResolve = samePageCheckGenerator(store);
+        const shouldResolve = samePageCheckGenerator();
         return ContentNodeResource.fetchCollection({
           getParams: {
             parent__isnull: true,
@@ -363,16 +368,17 @@
                   .filter(Boolean),
               );
 
-              store.commit('CORE_SET_PAGE_LOADING', false);
-              store.commit('CORE_SET_ERROR', null);
+              pageLoading.value = false;
+              clearError();
               store.commit('SET_PAGE_NAME', PageNames.LIBRARY);
               set(rootNodesLoading, false);
             }
           },
           error => {
-            shouldResolve()
-              ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-              : null;
+            pageLoading.value = false;
+            if (shouldResolve()) {
+              handleApiError({ error, reloadOnReconnect: true });
+            }
             set(rootNodesLoading, false);
           },
         );
@@ -390,8 +396,8 @@
           if (searchKeys.some(key => query[key])) {
             // If currently on a route with search terms
             // just finish early and let the component handle loading
-            store.commit('CORE_SET_PAGE_LOADING', false);
-            store.commit('CORE_SET_ERROR', null);
+            pageLoading.value = false;
+            clearError();
             store.commit('SET_PAGE_NAME', PageNames.LIBRARY);
             set(rootNodesLoading, false);
             return Promise.resolve();
@@ -402,7 +408,7 @@
 
       function showLibrary() {
         set(rootNodesLoading, true);
-        store.commit('CORE_SET_PAGE_LOADING', true);
+        pageLoading.value = true;
         if (props.deviceId) {
           return setCurrentDevice(props.deviceId)
             .then(device => {
@@ -455,6 +461,7 @@
         back,
         rootNodesLoading,
         rootNodes,
+        pageLoading,
         isUserLoggedIn,
         isLearner,
         tourActive,
@@ -505,7 +512,7 @@
         if (!validUser) {
           return false;
         }
-        if (!checkCapability('check_is_metered')) {
+        if (!pluginData.canCheckMeteredConnection) {
           return true;
         }
         if (this.allowDownloadOnMeteredConnection) {
@@ -572,7 +579,7 @@
       searchTerms() {
         this.showFilterModal = false;
       },
-      loading(newVal, oldVal) {
+      pageLoading(newVal, oldVal) {
         if (oldVal && !newVal) {
           const isTourStarted = this.resumeTour(this.userId, 'LibraryPage');
           if (isTourStarted) {
@@ -595,9 +602,9 @@
         !this.deviceId &&
         this.isUserLoggedIn &&
         !this.allowDownloadOnMeteredConnection &&
-        checkCapability('check_is_metered')
+        pluginData.canCheckMeteredConnection
       ) {
-        appCapabilities.checkIsMetered().then(isMetered => {
+        checkMeteredConnection().then(isMetered => {
           this.usingMeteredConnection = isMetered;
         });
       }

@@ -3,26 +3,28 @@ import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator'
 import LearnerGroupResource from 'kolibri-common/apiResources/LearnerGroupResource';
 import FacilityUserResource from 'kolibri-common/apiResources/FacilityUserResource';
 import useUser from 'kolibri/composables/useUser';
+import { handleApiError, clearError } from 'kolibri/utils/appError';
 import useFacilities from 'kolibri-common/composables/useFacilities';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 
 // Place outside the function to keep the state
 const groupsAreLoading = ref(false);
-const { getFacilities, facilities } = useFacilities();
+const { fetchFacilities, facilities } = useFacilities();
 
 export function useGroups() {
   function setGroupsLoading(loading) {
     groupsAreLoading.value = loading;
   }
 
-  async function showGroupsPage(store, classId) {
+  async function showGroupsPage(store, classId, route) {
     const initClassInfoPromise = store.dispatch('initClassInfo', classId);
-    const getFacilitiesPromise =
+    const fetchFacilitiesPromise =
       useUser().isSuperuser.value && facilities.value.length === 0
-        ? getFacilities().catch(() => {})
+        ? fetchFacilities().catch(() => {})
         : Promise.resolve();
 
-    await Promise.all([initClassInfoPromise, getFacilitiesPromise]);
-    store.dispatch('notLoading');
+    await Promise.all([initClassInfoPromise, fetchFacilitiesPromise]);
+    pageLoading.value = false;
 
     setGroupsLoading(true);
 
@@ -36,7 +38,7 @@ export function useGroups() {
         force: true,
       }),
     ];
-    const shouldResolve = samePageCheckGenerator(store);
+    const shouldResolve = samePageCheckGenerator(route);
     return Promise.all(promises).then(
       ([classUsers, groupsCollection]) => {
         if (shouldResolve()) {
@@ -60,20 +62,15 @@ export function useGroups() {
                   groupModalShown: false,
                 });
                 setGroupsLoading(false);
-                store.dispatch('clearError');
+                clearError();
               }
             },
-            error =>
-              shouldResolve()
-                ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-                : null,
+            error => (shouldResolve() ? handleApiError({ error, reloadOnReconnect: true }) : null),
           );
         }
       },
       error => {
-        shouldResolve()
-          ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-          : null;
+        shouldResolve() ? handleApiError({ error, reloadOnReconnect: true }) : null;
       },
     );
   }

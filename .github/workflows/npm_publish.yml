@@ -1,62 +1,94 @@
-name: Publish package to npm
+name: Publish packages to npm
 
 on:
-    workflow_dispatch:
-      # Inputs the workflow accepts.
-      inputs:
-        npm_package:
-          description: 'Package to publish to NPM'
-          required: true
-          type: choice
-          options:
-            - 'browserslist-config-kolibri'
-            - 'eslint-plugin-kolibri'
-            - 'kolibri'
-            - 'kolibri-app'
-            - 'kolibri-build'
-            - 'kolibri-format'
-            - 'kolibri-glob'
-            - 'kolibri-i18n'
-            - 'kolibri-jest-config'
-            - 'kolibri-logging'
-            - 'kolibri-module'
-            - 'kolibri-plugin-data'
-            - 'kolibri-tools'
-            - 'kolibri-viewer'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'packages/browserslist-config-kolibri/package.json'
+      - 'packages/eslint-plugin-kolibri/package.json'
+      - 'packages/kolibri/package.json'
+      - 'packages/kolibri-app/package.json'
+      - 'packages/kolibri-build/package.json'
+      - 'packages/kolibri-format/package.json'
+      - 'packages/kolibri-glob/package.json'
+      - 'packages/kolibri-i18n/package.json'
+      - 'packages/kolibri-jest-config/package.json'
+      - 'packages/kolibri-logging/package.json'
+      - 'packages/kolibri-module/package.json'
+      - 'packages/kolibri-plugin-data/package.json'
+      - 'packages/kolibri-viewer/package.json'
+  workflow_dispatch:
+    inputs:
+      npm_package:
+        description: 'Package to publish (or "all" to auto-detect)'
+        required: true
+        type: choice
+        default: 'all'
+        options:
+          - 'all'
+          - 'browserslist-config-kolibri'
+          - 'eslint-plugin-kolibri'
+          - 'kolibri'
+          - 'kolibri-app'
+          - 'kolibri-build'
+          - 'kolibri-format'
+          - 'kolibri-glob'
+          - 'kolibri-i18n'
+          - 'kolibri-jest-config'
+          - 'kolibri-logging'
+          - 'kolibri-module'
+          - 'kolibri-plugin-data'
+          - 'kolibri-viewer'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write  # Required for npm provenance
+      contents: read   # Required for npm provenance attestation
+      id-token: write  # Required for npm OIDC trusted publishing
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version-file: 'package.json'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Create tag
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const packageJson = require(`./packages/${{ github.event.inputs.npm_package }}/package.json`)
-            const version = packageJson.version
-            const tagname = `npm/${{ github.event.inputs.npm_package }}/${version}`
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tagname}`,
-              sha: context.sha
-            })
-      - name: Build package
-        run: pnpm --filter ${{ github.event.inputs.npm_package }} run build || true
+        uses: pnpm/action-setup@v5
+      - name: Link workspace packages
+        run: pnpm install --ignore-scripts --no-optional
       - name: Publish to npm
-        run: pnpm --filter ${{ github.event.inputs.npm_package }} publish --provenance --access public --no-git-checks
-        env:
-          # NPM_API_TOKEN is an organization-level secret
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_TOKEN }}
+        id: publish
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.npm_package }}" != "all" ]; then
+            ./scripts/npm_publish.sh "${{ github.event.inputs.npm_package }}"
+          else
+            ./scripts/npm_publish.sh
+          fi
+          if [ -f publish_summary.md ]; then
+            cat publish_summary.md >> "$GITHUB_STEP_SUMMARY"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No packages needed publishing — all versions match npm." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build Slack message
+        if: steps.publish.outputs.published == 'true'
+        id: slack_message
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "text<<SLACKEOF"
+            echo ":package: *npm packages published* (<${run_url}|workflow run>)"
+            sed -n 's#^| *\[\([^]]*\)\](\([^)]*\)) *| *\([^ |]*\) *|$#• <\2|\1> v\3#p' publish_summary.md
+            echo "SLACKEOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Notify Slack
+        if: steps.publish.outputs.published == 'true'
+        uses: slackapi/slack-github-action@v3
+        with:
+          webhook: ${{ secrets.SLACK_NPM_PACKAGES_WEBHOOK }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ${{ toJSON(steps.slack_message.outputs.text) }}
+            }

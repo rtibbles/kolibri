@@ -1,10 +1,6 @@
 import KolibriApp from '../index';
 import coreModule from '../../../../kolibri/core/frontend/state/modules/core';
 
-jest.mock('vuex-router-sync', () => ({
-  sync() {},
-}));
-
 jest.mock(
   'kolibri',
   () => {
@@ -20,6 +16,22 @@ jest.mock('kolibri/heartbeat', () => ({
     return Promise.resolve();
   },
 }));
+
+jest.mock('kolibri/router', () => {
+  const VueRouter = jest.requireActual('vue-router');
+  return {
+    _vueRouter: null,
+    initRouter() {
+      if (!this._vueRouter) {
+        this._vueRouter = new VueRouter();
+      }
+    },
+    initRoutes() {
+      this.initRouter();
+      return this._vueRouter;
+    },
+  };
+});
 
 class TestApp extends KolibriApp {
   get pluginModule() {

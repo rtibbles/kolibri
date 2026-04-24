@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KGrid gutter="16">
       <KGridItem>
         <OverviewBlock />
@@ -30,7 +30,8 @@
 <script>
 
   import { currentLanguage } from 'kolibri/utils/i18n';
-  import useFacilities from 'kolibri-common/composables/useFacilities';
+  import useFacility from 'kolibri-common/composables/useFacility';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import commonCoach from '../../common';
   import AttendanceBlock from './AttendanceBlock';
@@ -51,11 +52,10 @@
     },
     mixins: [commonCoach],
     setup() {
-      const { getFacilityConfig, facilityConfig } = useFacilities();
-
-      getFacilityConfig();
+      const { facilityConfig } = useFacility();
 
       return {
+        pageLoading,
         facilityConfig,
         currentLanguage,
       };

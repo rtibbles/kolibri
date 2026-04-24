@@ -217,7 +217,7 @@ This release includes HTML5 Article Renderer improvements, performance optimizat
 ## 0.19.0
 
 ### High level overview
-Release 0.19.0 updates user management capabilities to make it easier for administrators to manage user accounts. The changes reduce the number of repetitive tasks required for class enrollment and unenrollment of learners, and general account management. This makes both setting up new programs and and year-over-year user management simpler and more efficient.
+Release 0.19.0 updates user management capabilities to make it easier for administrators to manage user accounts. The changes reduce the number of repetitive tasks required for class enrollment and unenrollment of learners, and general account management. This makes both setting up new programs and year-over-year user management simpler and more efficient.
 
 ### Added
 

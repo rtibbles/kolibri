@@ -18,7 +18,7 @@ jobs:
         run: |
           mkdir -p ./pr
           echo $PR_NUMBER > ./pr/pr_number
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: pr_number
           path: pr/
@@ -34,10 +34,10 @@ jobs:
   dmg:
     name: Build DMG file
     needs: whl
-    uses: learningequality/kolibri-app/.github/workflows/build_mac.yml@v0.4.5
+    uses: learningequality/kolibri-app/.github/workflows/build_mac.yml@v0.5.0
     with:
       whl-file-name: ${{ needs.whl.outputs.whl-file-name }}
-      ref: v0.4.5
+      ref: v0.5.0
   deb:
     name: Build DEB file
     needs: whl
@@ -55,10 +55,10 @@ jobs:
   apk:
     name: Build APK file
     needs: whl
-    uses: learningequality/kolibri-installer-android/.github/workflows/build_apk.yml@v0.1.7
+    uses: learningequality/kolibri-installer-android/.github/workflows/build_apk.yml@v0.1.10
     with:
       tar-file-name: ${{ needs.whl.outputs.tar-file-name }}
-      ref: v0.1.7
+      ref: v0.1.10
   zip:
     name: Build Raspberry Pi Image
     needs: deb
@@ -77,7 +77,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.whl.outputs.whl-file-name }}
           path: dist
@@ -95,7 +95,7 @@ jobs:
         run: python ${{ github.workspace }}/integration_testing/smoke_test.py
       - name: Upload screenshot
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: smoke_test_screenshot
           path: ${{ runner.temp }}/smoke_test_screenshot.png
@@ -113,7 +113,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.whl.outputs.whl-file-name }}
           path: dist
@@ -134,7 +134,7 @@ jobs:
     container:
       image: python:${{ matrix.python-version }}-buster
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.whl.outputs.whl-file-name }}
           path: dist

@@ -1,16 +1,16 @@
 import { shallowMount, createLocalVue } from '@vue/test-utils';
 import flushPromises from 'flush-promises';
-// eslint-disable-next-line import/named
+// eslint-disable-next-line import-x/named
 import useChannels, { useChannelsMock } from 'kolibri-common/composables/useChannels';
 import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
 import makeStore from '../../__tests__/utils/makeStore';
 import TopicsContentPage from '../TopicsContentPage';
-/* eslint-disable import/named */
+/* eslint-disable import-x/named */
 import useDownloadRequests, {
   useDownloadRequestsMock,
 } from '../../composables/useDownloadRequests';
 import useCoreLearn, { useCoreLearnMock } from '../../composables/useCoreLearn';
-/* eslint-enable import/named */
+/* eslint-enable import-x/named */
 
 jest.mock('kolibri/urls');
 jest.mock('kolibri/client');
@@ -19,6 +19,11 @@ jest.mock('../../composables/useDownloadRequests');
 jest.mock('kolibri-common/composables/useChannels');
 jest.mock('../../composables/useCoreLearn');
 jest.mock('../../composables/useDevices');
+jest.mock('vue-router/composables', () => ({
+  useRoute: jest.fn(() => ({ params: {}, query: {}, name: null })),
+  useRouter: jest.fn(() => ({ push: jest.fn(), currentRoute: {} })),
+}));
+jest.mock('kolibri-common/utils/samePageCheckGenerator', () => jest.fn(() => () => true));
 
 const CONTENT_ID = 'content-id';
 const CHANNEL_ID = 'channel-id';
@@ -134,12 +139,12 @@ describe('TopicsContentPage', () => {
 
   it('shows the Learning Activity Bar', async () => {
     const wrapper = await makeWrapper();
-    expect(wrapper.find('[data-test="learningActivityBar"]').exists()).toBeTruthy();
+    expect(wrapper.find('[data-testid="learningActivityBar"]').exists()).toBeTruthy();
   });
 
   it('shows the Content Page', async () => {
     const wrapper = await makeWrapper();
-    expect(wrapper.find('[data-test="contentPage"]').exists()).toBeTruthy();
+    expect(wrapper.find('[data-testid="contentPage"]').exists()).toBeTruthy();
   });
 
   describe(`remote download and bookmark`, () => {

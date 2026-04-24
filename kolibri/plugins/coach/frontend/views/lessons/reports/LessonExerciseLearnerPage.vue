@@ -1,6 +1,7 @@
 <template>
 
   <CoachImmersivePage
+    :loading="pageLoading"
     :appBarTitle="exercise.title"
     icon="back"
     :primary="false"
@@ -15,6 +16,7 @@
 <script>
 
   import { mapState } from 'vuex';
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachImmersivePage from '../../CoachImmersivePage';
   import LearnerExerciseReport from '../../common/LearnerExerciseReport';
@@ -27,6 +29,9 @@
       LearnerExerciseReport,
     },
     mixins: [commonCoach],
+    setup() {
+      return { pageLoading };
+    },
     data() {
       return {
         prevRoute: null,

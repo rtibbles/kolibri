@@ -5,7 +5,7 @@
       <KButton
         class="go-back-btn"
         appearance="basic-link"
-        data-test="goback"
+        data-testid="goback"
         @click="goBack"
       >
         <template #icon>
@@ -36,7 +36,7 @@
         :text="coreString('continueAction')"
         style="display: block; width: 100%; margin: 24px auto 0"
         :disabled="busy"
-        data-test="submit"
+        data-testid="submit"
         @click="updatePassword"
       />
     </div>
@@ -52,6 +52,7 @@
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useUser from 'kolibri/composables/useUser';
   import { ComponentMap } from '../../constants';
+  import { setUnspecifiedPassword } from '../../api';
   import AuthBase from '../AuthBase';
 
   export default {
@@ -97,7 +98,7 @@
         if (this.passwordIsValid) {
           this.busy = true;
           try {
-            await this.$store.dispatch('kolibriSetUnspecifiedPassword', this.credentials);
+            await setUnspecifiedPassword(this.credentials);
             await this.signIn();
           } catch {
             // In case user has already set password or user does not exist,

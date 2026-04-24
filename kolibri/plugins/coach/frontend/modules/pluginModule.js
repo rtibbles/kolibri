@@ -1,7 +1,10 @@
 import ClassroomResource from 'kolibri-common/apiResources/ClassroomResource';
 import logger from 'kolibri-logging';
 import useUser from 'kolibri/composables/useUser';
+import { handleApiError, clearError } from 'kolibri/utils/appError';
 import { get } from '@vueuse/core';
+import { getReactiveRoute } from 'kolibri/router';
+import { pageLoading } from 'kolibri-common/composables/usePageLoading';
 import { PageNames, pageNameToModuleMap } from '../constants';
 import examReportDetail from './examReportDetail';
 import exerciseDetail from './exerciseDetail';
@@ -56,15 +59,13 @@ export default {
       // otherwise show the whole class list
       return state.classList.length !== 1;
     },
-    userIsAuthorizedForCoach(state, getters, rootState) {
+    userIsAuthorizedForCoach() {
       const { isAdmin, isSuperuser, isCoach, userFacilityId } = useUser();
       if (get(isSuperuser)) {
         return true;
       } else if (get(isCoach) || get(isAdmin)) {
-        return (
-          rootState.route.params.facilityId === get(userFacilityId) ||
-          !rootState.route.params.facilityId
-        );
+        const routeParams = getReactiveRoute().params || {};
+        return routeParams.facilityId === get(userFacilityId) || !routeParams.facilityId;
       }
       return false;
     },
@@ -92,7 +93,7 @@ export default {
           store.commit('SET_DATA_LOADING', false);
         })
         .catch(error => {
-          store.dispatch('handleApiError', { error });
+          handleApiError({ error });
           store.commit('SET_DATA_LOADING', false);
         });
     },
@@ -105,9 +106,9 @@ export default {
       const authErrorCodes = [401, 403, 404, 407];
       logging.error(errorObject);
       if (errorObject.response.status && authErrorCodes.includes(errorObject.response.status)) {
-        store.dispatch('handleApiError', { error: '' });
+        handleApiError({ error: '' });
       } else {
-        store.dispatch('handleApiError', { error: errorObject, reloadOnReconnect: true });
+        handleApiError({ error: errorObject, reloadOnReconnect: true });
       }
     },
     resetModuleState(store, { toRoute, fromRoute }) {
@@ -125,10 +126,10 @@ export default {
       }
     },
     initClassInfo(store, classId) {
-      store.dispatch('clearError');
+      clearError();
       // only wait around for the results if the class is switching
       if (store.state.classSummary.id !== classId) {
-        store.dispatch('loading');
+        pageLoading.value = true;
         return Promise.all([
           // Make sure we load any class list data, so that we know
           // whether this user has access to multiple classes or not.
@@ -139,13 +140,14 @@ export default {
           }),
           store.dispatch('coachNotifications/fetchNotificationsForClass', classId),
         ]).catch(error => {
-          store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          pageLoading.value = false;
+          handleApiError({ error, reloadOnReconnect: true });
         });
       } else {
         // otherwise refresh but don't block
         return store
           .dispatch('classSummary/loadClassSummary', classId)
-          .catch(error => store.dispatch('handleApiError', { error }));
+          .catch(error => handleApiError({ error }));
       }
     },
   },

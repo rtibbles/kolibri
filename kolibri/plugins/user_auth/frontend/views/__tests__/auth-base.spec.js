@@ -1,52 +1,73 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { render, screen } from '@testing-library/vue';
+import '@testing-library/jest-dom';
+import { ref } from 'vue';
 import VueRouter from 'vue-router';
-import AuthBase from '../AuthBase';
+import useUser, { useUserMock } from 'kolibri/composables/useUser'; // eslint-disable-line import-x/named
+import useFacility, { useFacilityMock } from 'kolibri-common/composables/useFacility'; // eslint-disable-line import-x/named
+import { createTranslator } from 'kolibri/utils/i18n';
+import pluginData from 'kolibri-plugin-data';
+import AuthBase from '../AuthBase.vue';
+import { userString } from '../commonUserStrings';
 import makeStore from '../../__tests__/utils/makeStore';
-import useFacilities, { useFacilitiesMock } from 'kolibri-common/composables/useFacilities'; // eslint-disable-line
 
-jest.mock('kolibri-common/composables/useFacilities');
+const { restrictedAccess$ } = createTranslator(AuthBase.name, AuthBase.$trs);
+
+jest.mock('kolibri/composables/useUser');
+jest.mock('kolibri-common/composables/useFacility');
 jest.mock('kolibri/urls');
+jest.mock('kolibri-plugin-data', () => ({
+  __esModule: true,
+  default: {
+    allowRemoteAccess: true,
+    oidcProviderEnabled: false,
+    allowGuestAccess: false,
+    deviceUnusableReason: null,
+  },
+}));
 
-const localVue = createLocalVue();
-localVue.use(VueRouter);
-const router = new VueRouter({
-  routes: [{ name: 'SIGN_UP', path: '/signup' }],
-});
-router.getRoute = jest.fn();
+const routes = [{ name: 'SignUpPage', path: '/signup' }];
 
-const store = makeStore();
+VueRouter.prototype.getRoute = jest.fn((name, params = {}, query = {}) => ({
+  name,
+  params,
+  query,
+}));
 
-useFacilities.mockImplementation(() =>
-  useFacilitiesMock({
-    facilityConfig: { learner_can_sign_up: true },
+useFacility.mockReturnValue(
+  useFacilityMock({
+    facilityConfig: ref({ learner_can_sign_up: true, is_full_facility_import: true }),
   }),
 );
 
-function makeWrapper(allowAccess = true) {
-  store.getters = { ...store.getters, allowAccess: allowAccess };
-
-  return mount(AuthBase, {
-    store: store,
-    localVue,
-    router,
+function renderComponent({ allowRemoteAccess = true, isAppContext = false } = {}) {
+  pluginData.allowRemoteAccess = allowRemoteAccess;
+  useUser.mockImplementation(() => useUserMock({ isAppContext }));
+  const store = makeStore();
+  return render(AuthBase, {
+    store,
+    routes,
   });
 }
 
-describe.skip('auth base component', () => {
-  it('access_disallowed', () => {
-    const wrapper = makeWrapper(false);
-    const restrictedParagraph = wrapper.find('[data-test="restrictedAccess"]');
-    expect(restrictedParagraph.exists()).toBeTruthy();
+describe('auth base component', () => {
+  it('shows restricted access message when remote access is disallowed and not app context', () => {
+    renderComponent({ allowRemoteAccess: false, isAppContext: false });
+    expect(screen.getByText(restrictedAccess$())).toBeInTheDocument();
   });
 
-  it('access_allowed', () => {
-    const wrapper = makeWrapper();
-    const restrictedParagraph = wrapper.find('[data-test="restrictedAccess"]');
-    expect(restrictedParagraph.exists()).toBeFalsy();
+  it('does not show restricted access message when remote access is allowed', () => {
+    renderComponent({ allowRemoteAccess: true, isAppContext: false });
+    expect(screen.queryByText(restrictedAccess$())).not.toBeInTheDocument();
   });
-  it('create_session_link', () => {
-    const wrapper = makeWrapper();
-    const createLink = wrapper.find('[data-test="createUser"]');
-    expect(createLink.attributes().href).toBe('#/signup');
+
+  it('does not show restricted access message in app context even when remote access is disallowed', () => {
+    renderComponent({ allowRemoteAccess: false, isAppContext: true });
+    expect(screen.queryByText(restrictedAccess$())).not.toBeInTheDocument();
+  });
+
+  it('shows a create account link', () => {
+    renderComponent();
+    const link = screen.getByRole('link', { name: userString('createAccountAction') });
+    expect(link).toHaveAttribute('href', '#/signup');
   });
 });

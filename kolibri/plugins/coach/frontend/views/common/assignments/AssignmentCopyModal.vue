@@ -19,7 +19,7 @@
           v-model="selectedClassroomId"
           :label="classroomLabel(classroom)"
           :buttonValue="classroom.id"
-          data-test="radio-button"
+          data-testid="radio-button"
         />
       </KRadioButtonGroup>
     </div>
@@ -35,7 +35,7 @@
         :groups="availableGroups"
         :classId="selectedClassroomId"
         :initialAdHocLearners="[]"
-        data-test="recipient-selector"
+        data-testid="recipient-selector"
         @updateLearners="learners => (adHocLearners = learners)"
       />
     </div>
@@ -51,7 +51,8 @@
   import logging from 'kolibri-logging';
   import LearnerGroupResource from 'kolibri-common/apiResources/LearnerGroupResource';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import { coachStringsMixin } from '../../common/commonCoachStrings';
+  import { handleApiError } from 'kolibri/utils/appError';
+  import { coachStringsMixin } from '../commonCoachStrings';
   import RecipientSelector from './RecipientSelector';
 
   const logger = logging.getLogger(__filename);
@@ -69,6 +70,9 @@
       RecipientSelector,
     },
     mixins: [coachStringsMixin, commonCoreStrings],
+    setup() {
+      return { handleApiError };
+    },
     props: {
       modalTitle: {
         type: String,
@@ -156,7 +160,7 @@
             this.blockControls = false;
           })
           .catch(error => {
-            this.$store.dispatch('handleApiError', { error });
+            this.handleApiError({ error });
             logger.error(error);
             this.blockControls = false;
           });

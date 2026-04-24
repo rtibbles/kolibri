@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage>
+  <CoachAppBarPage :loading="pageLoading">
     <KPageContainer>
       <p>
         <BackLink
@@ -99,6 +99,7 @@
 
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
 
+  import { pageLoading } from 'kolibri-common/composables/usePageLoading';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import CSVExporter from '../../../csv/exporter';
@@ -112,6 +113,9 @@
       ReportsControls,
     },
     mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      return { pageLoading };
+    },
     computed: {
       emptyMessage() {
         return this.coachString('noResourcesInLessonLabel');
