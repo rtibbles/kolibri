@@ -1,81 +1,88 @@
-import { shallowMount } from '@vue/test-utils';
+import { render, screen, fireEvent } from '@testing-library/vue';
 import AIResponseSection from '../AIResponseSection.vue';
 
-function makeWrapper(propsData = {}) {
-  return shallowMount(AIResponseSection, {
-    propsData: {
+function renderComponent(props = {}) {
+  return render(AIResponseSection, {
+    props: {
       messages: [],
       categoryChips: [],
-      ...propsData,
+      ...props,
     },
   });
 }
 
 describe('AIResponseSection', () => {
-  it('renders nothing when no messages', () => {
-    const wrapper = makeWrapper();
-    expect(wrapper.find('[data-test="ai-response-section"]').exists()).toBe(false);
+  test('renders nothing when no messages', () => {
+    renderComponent();
+    expect(screen.queryByTestId('ai-response-section')).not.toBeInTheDocument();
   });
 
-  it('renders messages when provided', () => {
-    const wrapper = makeWrapper({
+  test('renders messages when provided', () => {
+    renderComponent({
       messages: [
         'You can calculate a square root by finding the number that, when multiplied by itself, equals the original number.',
       ],
     });
-    expect(wrapper.find('[data-test="ai-response-section"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('You can calculate a square root');
+    expect(screen.getByTestId('ai-response-section')).toBeInTheDocument();
+    expect(screen.getByText(/You can calculate a square root/)).toBeInTheDocument();
   });
 
-  it('renders multiple messages', () => {
-    const wrapper = makeWrapper({
+  test('renders multiple messages', () => {
+    renderComponent({
       messages: ['First message.', 'Second message.'],
     });
-    const messageDivs = wrapper.findAll('[data-test="ai-message"]');
-    expect(messageDivs.length).toBe(2);
+    expect(screen.getAllByTestId('ai-message')).toHaveLength(2);
   });
 
-  it('renders category chips when provided', () => {
-    const wrapper = makeWrapper({
+  test('renders category chips when provided', () => {
+    renderComponent({
       messages: ['Some AI response'],
       categoryChips: [
         { label: 'Exponents', value: 'exponents_id' },
         { label: 'Algebra', value: 'algebra_id' },
       ],
     });
-    const chips = wrapper.findAll('[data-test="category-chip"]');
-    expect(chips.length).toBe(2);
+    expect(screen.getAllByTestId('category-chip')).toHaveLength(2);
   });
 
-  it('emits selectCategory when a category chip is clicked', async () => {
-    const wrapper = makeWrapper({
+  test('emits selectCategory when a category chip is clicked', async () => {
+    const { emitted } = renderComponent({
       messages: ['Some response'],
       categoryChips: [{ label: 'Exponents', value: 'exponents_id' }],
     });
-    const chip = wrapper.findAll('[data-test="category-chip"]').at(0);
-    chip.vm.$emit('click');
-    await wrapper.vm.$nextTick();
-    expect(wrapper.emitted('selectCategory')).toBeTruthy();
-    expect(wrapper.emitted('selectCategory')[0][0]).toEqual({
+    await fireEvent.click(screen.getByTestId('category-chip'));
+    expect(emitted()).toHaveProperty('selectCategory');
+    expect(emitted().selectCategory[0][0]).toEqual({
       label: 'Exponents',
       value: 'exponents_id',
     });
   });
 
-  it('has a dismiss button', () => {
-    const wrapper = makeWrapper({
-      messages: ['Some response'],
-    });
-    expect(wrapper.find('[data-test="dismiss-button"]').exists()).toBe(true);
+  test('has a dismiss button', () => {
+    renderComponent({ messages: ['Some response'] });
+    expect(screen.getByTestId('dismiss-button')).toBeInTheDocument();
   });
 
-  it('hides content when dismiss button is clicked', async () => {
-    const wrapper = makeWrapper({
-      messages: ['Some response'],
+  test('hides content when dismiss button is clicked', async () => {
+    renderComponent({ messages: ['Some response'] });
+    await fireEvent.click(screen.getByTestId('dismiss-button'));
+    expect(screen.queryByTestId('ai-response-section')).not.toBeInTheDocument();
+  });
+
+  test('renders markdown bold in messages', () => {
+    const { container } = renderComponent({
+      messages: ['This is **bold** text.'],
     });
-    const dismissBtn = wrapper.find('[data-test="dismiss-button"]');
-    dismissBtn.vm.$emit('click');
-    await wrapper.vm.$nextTick();
-    expect(wrapper.find('[data-test="ai-response-section"]').exists()).toBe(false);
+    const strong = container.querySelector('[data-testid="ai-message"] strong');
+    expect(strong).not.toBeNull();
+    expect(strong.textContent).toBe('bold');
+  });
+
+  test('renders LaTeX math in messages', () => {
+    const { container } = renderComponent({
+      messages: ['The formula is \\(x^2 + y^2 = z^2\\).'],
+    });
+    const katex = container.querySelector('[data-testid="ai-message"] .katex');
+    expect(katex).not.toBeNull();
   });
 });

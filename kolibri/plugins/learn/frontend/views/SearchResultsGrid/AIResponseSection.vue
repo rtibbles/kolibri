@@ -2,12 +2,12 @@
 
   <div
     v-if="messages.length && !dismissed"
-    data-test="ai-response-section"
+    data-testid="ai-response-section"
     class="ai-response-section tex2jax_ignore"
     :style="{ backgroundColor: $themePalette.yellow.v_100 }"
   >
     <KIconButton
-      data-test="dismiss-button"
+      data-testid="dismiss-button"
       icon="close"
       size="small"
       class="dismiss-button"
@@ -20,7 +20,7 @@
       <div
         v-for="(message, idx) in messages"
         :key="idx"
-        data-test="ai-message"
+        data-testid="ai-message"
         class="message-text"
         v-html="renderMessage(message)"
       ></div>
@@ -33,7 +33,7 @@
       <KButton
         v-for="(chip, idx) in categoryChips"
         :key="'chip-' + idx"
-        data-test="category-chip"
+        data-testid="category-chip"
         :text="chip.label"
         appearance="flat-button"
         :appearanceOverrides="chipStyles"
