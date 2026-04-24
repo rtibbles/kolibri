@@ -49,13 +49,7 @@
           </p>
         </div>
 
-        <!-- Suggested questions and filter pills shown when not searching -->
-        <SuggestedQuestionChips
-          v-if="!displayingSearchResults && !rootNodesLoading"
-          data-test="suggested-questions"
-          :questions="suggestedQuestions"
-          @selectQuestion="handleSelectQuestion"
-        />
+        <!-- Filter pills shown when not searching -->
         <HorizontalFilterPills
           v-if="!displayingSearchResults && !rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
           data-test="horizontal-filter-pills"
@@ -143,12 +137,10 @@
           :searchLoading="searchLoading"
           :more="more"
           :messages="messages"
-          :relatedQuestions="relatedQuestions"
           :exploreGroups="exploreGroups"
           :categoryChips="categoryChips"
           @setCardStyle="style => (currentCardViewStyle = style)"
           @setSidePanelMetadataContent="content => (metadataSidePanelContent = content)"
-          @searchQuestion="handleSelectQuestion"
         />
       </main>
 
@@ -240,7 +232,6 @@
   import SearchFiltersPanel from 'kolibri-common/components/SearchFiltersPanel';
   import useChannels from 'kolibri-common/composables/useChannels';
   import LibrarySearchBar from './LibrarySearchBar';
-  import SuggestedQuestionChips from './SuggestedQuestionChips';
   import HorizontalFilterPills from './HorizontalFilterPills';
   import TooltipTour from 'kolibri/components/onboarding/TooltipTour';
   import useTour from 'kolibri/composables/useTour';
@@ -290,7 +281,6 @@
       NoResourcePage,
       TooltipTour,
       LibrarySearchBar,
-      SuggestedQuestionChips,
       HorizontalFilterPills,
     },
     mixins: [commonLearnStrings, commonCoreStrings],
@@ -492,7 +482,6 @@
         usingMeteredConnection: true,
         isNetworkLibraryAvailable: true,
         isLoadingNetworkLibraries: true,
-        suggestedQuestions: [],
       };
     },
     computed: {
@@ -540,10 +529,6 @@
       },
       loading() {
         return this.$store.state.core.loading;
-      },
-      relatedQuestions() {
-        // Will be populated from AI response `related_questions` field once backend is extended
-        return [];
       },
       exploreGroups() {
         // Group results by category metadata for "More to explore" section
@@ -636,10 +621,6 @@
       handleClearSearch() {
         this.keywordsInput = '';
         this.searchTerms = { ...this.searchTerms, keywords: '' };
-      },
-      handleSelectQuestion(question) {
-        this.keywordsInput = question;
-        this.searchTerms = { ...this.searchTerms, keywords: question };
       },
       handleSelectContent(item) {
         const link = this.genContentLinkBackLinkCurrentPage(item.id, true);

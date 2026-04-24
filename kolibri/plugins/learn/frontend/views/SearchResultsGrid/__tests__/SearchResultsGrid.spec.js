@@ -66,31 +66,6 @@ describe('SearchResultsGrid restructured', () => {
     });
   });
 
-  describe('RelatedQuestionsSection', () => {
-    it('renders RelatedQuestionsSection', () => {
-      const wrapper = makeWrapper({
-        relatedQuestions: ['What is algebra?'],
-      });
-      expect(wrapper.findComponent({ name: 'RelatedQuestionsSection' }).exists()).toBe(true);
-    });
-
-    it('passes relatedQuestions prop', () => {
-      const questions = ['Q1', 'Q2'];
-      const wrapper = makeWrapper({ relatedQuestions: questions });
-      const section = wrapper.findComponent({ name: 'RelatedQuestionsSection' });
-      expect(section.props('questions')).toEqual(questions);
-    });
-
-    it('emits search event when a related question is selected', async () => {
-      const wrapper = makeWrapper({ relatedQuestions: ['Q1'] });
-      const section = wrapper.findComponent({ name: 'RelatedQuestionsSection' });
-      section.vm.$emit('selectQuestion', 'Q1');
-      await wrapper.vm.$nextTick();
-      expect(wrapper.emitted('searchQuestion')).toBeTruthy();
-      expect(wrapper.emitted('searchQuestion')[0][0]).toBe('Q1');
-    });
-  });
-
   describe('MoreToExploreSection', () => {
     it('renders MoreToExploreSection', () => {
       const wrapper = makeWrapper({
@@ -108,10 +83,9 @@ describe('SearchResultsGrid restructured', () => {
   });
 
   describe('graceful degradation', () => {
-    it('works without AI data - no messages, questions, or groups', () => {
+    it('works without AI data - no messages or groups', () => {
       const wrapper = makeWrapper({
         messages: [],
-        relatedQuestions: [],
         exploreGroups: [],
       });
       // Core elements still render

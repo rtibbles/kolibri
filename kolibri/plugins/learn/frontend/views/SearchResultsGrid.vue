@@ -71,12 +71,6 @@
       @click="searchMore"
     />
 
-    <!-- Related questions from AI response -->
-    <RelatedQuestionsSection
-      :questions="relatedQuestions"
-      @selectQuestion="$emit('searchQuestion', $event)"
-    />
-
     <!-- More to explore - results grouped by category -->
     <MoreToExploreSection :groups="exploreGroups" />
 
@@ -98,7 +92,6 @@
   import CopiesModal from './CopiesModal';
   import LibraryAndChannelBrowserMainContent from './LibraryAndChannelBrowserMainContent';
   import AIResponseSection from './SearchResultsGrid/AIResponseSection';
-  import RelatedQuestionsSection from './SearchResultsGrid/RelatedQuestionsSection';
   import MoreToExploreSection from './SearchResultsGrid/MoreToExploreSection';
 
   export default {
@@ -108,7 +101,6 @@
       LibraryAndChannelBrowserMainContent,
       SearchChips,
       AIResponseSection,
-      RelatedQuestionsSection,
       MoreToExploreSection,
     },
     mixins: [commonCoreStrings],
@@ -169,10 +161,6 @@
         default: () => [],
       },
       categoryChips: {
-        type: Array,
-        default: () => [],
-      },
-      relatedQuestions: {
         type: Array,
         default: () => [],
       },
