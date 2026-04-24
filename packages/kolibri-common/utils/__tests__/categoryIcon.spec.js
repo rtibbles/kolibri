@@ -23,9 +23,7 @@ describe('getCategoryIcon', () => {
     });
 
     it('maps LOGIC_AND_CRITICAL_THINKING to logicCriticalThinkingResource', () => {
-      expect(getCategoryIcon('LOGIC_AND_CRITICAL_THINKING')).toBe(
-        'logicCriticalThinkingResource',
-      );
+      expect(getCategoryIcon('LOGIC_AND_CRITICAL_THINKING')).toBe('logicCriticalThinkingResource');
     });
   });
 

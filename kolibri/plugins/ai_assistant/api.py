@@ -6,14 +6,13 @@ from functools import reduce
 
 from django.db import models
 
-from kolibri.core.content.api import ContentNodeSearchFilter
-from kolibri.core.content.api import ContentNodeViewset
-
+from .llm import _get_inference_server_url
 from .llm import _rag_pipeline
 from .llm import get_ai_chat_settings  # noqa: F401 – re-exported for kolibri_plugin
-from .llm import _get_inference_server_url
 from .llm import load_prompt
 from .llm import query_ai
+from kolibri.core.content.api import ContentNodeSearchFilter
+from kolibri.core.content.api import ContentNodeViewset
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +25,8 @@ contentnode_viewset = ContentNodeViewset()
 # Search filter
 # ---------------------------------------------------------------------------
 
-class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
 
+class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
     def filter_queryset(self, request, queryset, view):
         message = request.query_params.get("question", "")
 
@@ -61,7 +60,8 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
 
         logger.info(
             "RAG pipeline: %d results, timing=%s",
-            len(content_ids), timing,
+            len(content_ids),
+            timing,
         )
 
         setattr(request, "messages", messages)
@@ -90,9 +90,11 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             default=len(content_ids),
             output_field=IntegerField(),
         )
-        return queryset.filter(id__in=deduped_pks).annotate(
-            _pipeline_order=ordering
-        ).order_by("_pipeline_order")
+        return (
+            queryset.filter(id__in=deduped_pks)
+            .annotate(_pipeline_order=ordering)
+            .order_by("_pipeline_order")
+        )
 
     def _filter_with_keywords(self, request, queryset, view, message):
         """Fallback: keyword-based search with two LLM calls (original flow)."""
@@ -130,7 +132,12 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
                 (models.Q(**{orm_lookup: keyword}) for orm_lookup in orm_lookups),
             )
 
-            new_candidates = queryset.filter(query).exclude(kind="topic").exclude(coach_content=True).values()[:5]
+            new_candidates = (
+                queryset.filter(query)
+                .exclude(kind="topic")
+                .exclude(coach_content=True)
+                .values()[:5]
+            )
 
             candidate_content_list.extend(new_candidates)
 
@@ -139,7 +146,12 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         }
 
         candidate_content_minimal = [
-            {"id": node["content_id"][:6], "title": node["title"], "description": node["description"][:350], "kind": node["kind"]}
+            {
+                "id": node["content_id"][:6],
+                "title": node["title"],
+                "description": node["description"][:350],
+                "kind": node["kind"],
+            }
             for node in candidate_content.values()
         ]
 
@@ -149,7 +161,9 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
             resources=json.dumps(candidate_content_minimal, indent=2),
         )
         try:
-            result = query_ai(prompt=prompt, system_prompt=load_prompt("search_results_system.txt"))
+            result = query_ai(
+                prompt=prompt, system_prompt=load_prompt("search_results_system.txt")
+            )
             content_intro = result.get("content_intro", "")
             relevant_content_ids = result.get("relevant_resources", [])
         except Exception as e:

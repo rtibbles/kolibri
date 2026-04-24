@@ -309,7 +309,7 @@ describe(`useBaseSearch`, () => {
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
         getParams: {
-          keywords: `this is just a test`,
+          question: `this is just a test`,
           max_results: 25,
           include_coach_content: false,
           exclude_modalities: Modalities.COURSE,

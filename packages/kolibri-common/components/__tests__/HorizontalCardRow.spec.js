@@ -23,12 +23,12 @@ function makeWrapper(propsData = {}) {
 describe('HorizontalCardRow', () => {
   it('renders the scroll container', () => {
     const wrapper = makeWrapper({ items: mockItems });
-    expect(wrapper.find('[data-test="scroll-container"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="scroll-container"]').exists()).toBe(true);
   });
 
   it('renders nothing when items is empty', () => {
     const wrapper = makeWrapper({ items: [] });
-    expect(wrapper.find('[data-test="scroll-container"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="scroll-container"]').exists()).toBe(false);
   });
 
   it('uses scoped slot to render items', () => {
@@ -39,7 +39,7 @@ describe('HorizontalCardRow', () => {
 
   it('renders navigation buttons', () => {
     const wrapper = makeWrapper({ items: mockItems });
-    expect(wrapper.find('[data-test="scroll-left-button"]').exists()).toBe(true);
-    expect(wrapper.find('[data-test="scroll-right-button"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="scroll-left-button"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="scroll-right-button"]').exists()).toBe(true);
   });
 });

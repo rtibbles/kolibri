@@ -38,9 +38,13 @@
           v-for="(seg, idx) in highlightSegments"
           :key="idx"
           :class="{ 'highlight-matched': seg.matched }"
-          :style="seg.matched ? {
-            backgroundColor: $themeBrand.primary.v_100,
-          } : {}"
+          :style="
+            seg.matched
+              ? {
+                backgroundColor: $themeBrand.primary.v_100,
+              }
+              : {}
+          "
         >{{ seg.text }}</span>
       </div>
       <div class="search-actions">
@@ -49,18 +53,18 @@
           icon="clear"
           :color="$themeTokens.text"
           size="small"
-          data-test="search-clear-button"
+          data-testid="search-clear-button"
           :ariaLabel="coreString('clearAction')"
           @click="handleClear"
         />
         <KButton
-          data-test="all-filters-button"
+          data-testid="all-filters-button"
           appearance="flat-button"
           :text="$tr('allFilters')"
           @click="$emit('openFilters')"
         />
         <KButton
-          data-test="search-submit-button"
+          data-testid="search-submit-button"
           :primary="true"
           type="submit"
           :appearanceOverrides="searchButtonStyles"
@@ -110,12 +114,6 @@
       SearchAutocompleteDropdown,
     },
     mixins: [commonCoreStrings],
-    props: {
-      value: {
-        type: String,
-        default: '',
-      },
-    },
     setup() {
       const { user_id } = useUser();
       const { keyWordAutoCompleteHandler, autoCompleteSuggestions } = injectBaseSearch();
@@ -133,6 +131,12 @@
         isFocused,
         hoveredFilter,
       };
+    },
+    props: {
+      value: {
+        type: String,
+        default: '',
+      },
     },
     computed: {
       inputId() {
@@ -220,9 +224,6 @@
         }
         this.$refs.searchInput.focus();
       },
-      focus() {
-        this.$refs.searchInput.focus();
-      },
     },
     $trs: {
       allFilters: {
@@ -257,7 +258,7 @@
     padding: 0 12px;
     font-size: 16px;
     background: transparent;
-    border: none;
+    border: 0;
     outline: none;
 
     &::placeholder {

@@ -71,7 +71,6 @@ const mockLabels = {
   ],
 };
 
-
 describe('useFuzzyMetadataSearch', () => {
   let searchableLabels;
   let fuzzySearch;
@@ -191,25 +190,19 @@ describe('useFuzzyMetadataSearch', () => {
       };
       fuzzySearch = useFuzzyMetadataSearch(searchableLabels);
       const results = fuzzySearch.search('video');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'WATCH',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'WATCH');
       expect(match).toBeDefined();
     });
 
     it('matches LISTEN when typing "audio"', () => {
       const results = fuzzySearch.search('audio');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'LISTEN',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'LISTEN');
       expect(match).toBeDefined();
     });
 
     it('matches READ when typing "book"', () => {
       const results = fuzzySearch.search('book');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'READ',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'READ');
       expect(match).toBeDefined();
     });
 
@@ -223,25 +216,19 @@ describe('useFuzzyMetadataSearch', () => {
 
     it('matches CREATE when typing "draw"', () => {
       const results = fuzzySearch.search('draw');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'CREATE',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'CREATE');
       expect(match).toBeDefined();
     });
 
     it('matches EXPLORE when typing "interactive"', () => {
       const results = fuzzySearch.search('interactive');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'EXPLORE',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'EXPLORE');
       expect(match).toBeDefined();
     });
 
     it('still shows the translated label, not the synonym', () => {
       const results = fuzzySearch.search('audio');
-      const match = results.find(
-        r => r.filterKey === 'learning_activities' && r.key === 'LISTEN',
-      );
+      const match = results.find(r => r.filterKey === 'learning_activities' && r.key === 'LISTEN');
       expect(match).toBeDefined();
       expect(match.label).toBe('Listen');
     });
@@ -284,7 +271,12 @@ describe('useFuzzyMetadataSearch', () => {
         },
       };
       fuzzySearch = useFuzzyMetadataSearch(searchableLabels);
-      const filter = { label: 'Watch', type: 'activity', key: 'WATCH', filterKey: 'learning_activities' };
+      const filter = {
+        label: 'Watch',
+        type: 'activity',
+        key: 'WATCH',
+        filterKey: 'learning_activities',
+      };
       expect(fuzzySearch.removeMatchedWords('video', filter)).toBe('');
     });
 
@@ -321,7 +313,12 @@ describe('getMatchedWordSegments', () => {
   });
 
   it('marks synonym matches for activities', () => {
-    const filter = { label: 'Watch', type: 'activity', key: 'WATCH', filterKey: 'learning_activities' };
+    const filter = {
+      label: 'Watch',
+      type: 'activity',
+      key: 'WATCH',
+      filterKey: 'learning_activities',
+    };
     const segments = getMatchedWordSegments('fun video stuff', filter);
     expect(segments).toEqual([
       { text: 'fun', matched: false },

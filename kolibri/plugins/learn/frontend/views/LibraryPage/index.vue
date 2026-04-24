@@ -26,7 +26,7 @@
         <!-- Search bar at top of content area -->
         <LibrarySearchBar
           v-if="!isLocalLibraryEmpty || deviceId"
-          data-test="library-search-bar"
+          data-testid="library-search-bar"
           :value="keywordsInput"
           @input="handleSearchInput"
           @search="handleSearch"
@@ -40,7 +40,7 @@
         <div
           v-if="messages && messages.length && !rootNodesLoading && !displayingSearchResults"
           class="ai-info-banner"
-          data-test="ai-info-banner"
+          data-testid="ai-info-banner"
           :style="{ backgroundColor: $themePalette.yellow.v_100 }"
         >
           <p
@@ -55,7 +55,7 @@
         <!-- Filter pills shown when not searching -->
         <HorizontalFilterPills
           v-if="!displayingSearchResults && !rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
-          data-test="horizontal-filter-pills"
+          data-testid="horizontal-filter-pills"
           @toggleFilter="handleToggleFilter"
         />
 
@@ -150,7 +150,7 @@
       <!-- Filter modal replaces sidebar -->
       <KModal
         v-if="showFilterModal"
-        data-test="filter-modal"
+        data-testid="filter-modal"
         :title="$tr('allFilters')"
         :cancelText="coreString('closeAction')"
         size="large"
@@ -159,7 +159,7 @@
         <SearchFiltersPanel
           ref="filterPanel"
           v-model="searchTerms"
-          data-test="filter-panel"
+          data-testid="filter-panel"
           :hideKeywords="true"
         />
       </KModal>
@@ -223,7 +223,6 @@
   import { onMounted, getCurrentInstance, ref, watch } from 'vue';
   import pluginData from 'kolibri-plugin-data';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useUser from 'kolibri/composables/useUser';
   import { handleApiError, clearError } from 'kolibri/utils/appError';
   import samePageCheckGenerator from 'kolibri-common/utils/samePageCheckGenerator';
@@ -235,8 +234,6 @@
   import SidePanelModal from 'kolibri-common/components/SidePanelModal';
   import SearchFiltersPanel from 'kolibri-common/components/SearchFiltersPanel';
   import useChannels from 'kolibri-common/composables/useChannels';
-  import LibrarySearchBar from './LibrarySearchBar';
-  import HorizontalFilterPills from './HorizontalFilterPills';
   import TooltipTour from 'kolibri/components/onboarding/TooltipTour';
   import useTour from 'kolibri/composables/useTour';
   import { pageLoading } from 'kolibri-common/composables/usePageLoading';
@@ -258,6 +255,8 @@
   import SearchResultsGrid from '../SearchResultsGrid';
   import LearnAppBarPage from '../LearnAppBarPage';
   import PostSetupModalGroup from '../../../../device/frontend/views/PostSetupModalGroup.vue';
+  import HorizontalFilterPills from './HorizontalFilterPills';
+  import LibrarySearchBar from './LibrarySearchBar';
   import MeteredConnectionNotificationModal from './MeteredConnectionNotificationModal.vue';
   import ResumableContentGrid from './ResumableContentGrid';
   import OtherLibraries from './OtherLibraries';
@@ -315,8 +314,6 @@
       search();
       const { fetchResumableContentNodes } = useLearnerResources();
 
-      const { windowBreakpoint, windowIsLarge, windowIsMedium, windowIsSmall } =
-        useKResponsiveWindow();
       const { canAddDownloads, canDownloadExternally } = useCoreLearn();
       const { currentCardViewStyle } = useCardViewStyle();
       const { back, genContentLinkBackLinkCurrentPage } = useContentLink();
@@ -447,15 +444,10 @@
         moreLoading,
         results,
         more,
-        search,
         searchMore,
         removeFilterTag,
         removeMatchedWords,
         clearSearch,
-        windowBreakpoint,
-        windowIsLarge,
-        windowIsMedium,
-        windowIsSmall,
         currentCardViewStyle,
         deviceName,
         back,
@@ -533,9 +525,6 @@
       },
       studioId() {
         return KolibriStudioId;
-      },
-      loading() {
-        return this.$store.state.core.loading;
       },
       exploreGroups() {
         // Group results by category metadata for "More to explore" section
@@ -650,8 +639,12 @@
       },
       handleToggleFilter({ key, value }) {
         const validKeys = [
-          'learning_activities', 'categories', 'learner_needs',
-          'accessibility_labels', 'languages', 'grade_levels',
+          'learning_activities',
+          'categories',
+          'learner_needs',
+          'accessibility_labels',
+          'languages',
+          'grade_levels',
         ];
         if (!validKeys.includes(key)) {
           return;

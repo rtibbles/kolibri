@@ -96,25 +96,25 @@ describe('LibraryPage', () => {
   describe('search bar', () => {
     it('is visible when channels are available', async () => {
       const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="library-search-bar"').element).toBeTruthy();
+      expect(wrapper.find('[data-testid="library-search-bar"').element).toBeTruthy();
     });
     it('is hidden when library is empty and no deviceId', async () => {
       const wrapper = await makeWrapper({ rootNodes: [] });
       await wrapper.setData({ isLocalLibraryEmpty: true });
-      expect(wrapper.find('[data-test="library-search-bar"').element).toBeFalsy();
+      expect(wrapper.find('[data-testid="library-search-bar"').element).toBeFalsy();
     });
   });
 
   describe('filter modal', () => {
     it('filter modal is not displayed by default', async () => {
       const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="filter-modal"]').element).toBeFalsy();
+      expect(wrapper.find('[data-testid="filter-modal"]').element).toBeFalsy();
     });
     it('displays filter modal when showFilterModal is true', async () => {
       const wrapper = await makeWrapper();
       await wrapper.setData({ showFilterModal: true });
-      expect(wrapper.find('[data-test="filter-modal"]').element).toBeTruthy();
-      expect(wrapper.find('[data-test="filter-panel"]').element).toBeTruthy();
+      expect(wrapper.find('[data-testid="filter-modal"]').element).toBeTruthy();
+      expect(wrapper.find('[data-testid="filter-panel"]').element).toBeTruthy();
     });
   });
 
@@ -340,7 +340,7 @@ describe('LibraryPage', () => {
     });
     it('displays horizontal filter pills when not searching and library not empty', async () => {
       const wrapper = await makeWrapper();
-      expect(wrapper.find('[data-test="horizontal-filter-pills"').element).toBeTruthy();
+      expect(wrapper.find('[data-testid="horizontal-filter-pills"').element).toBeTruthy();
     });
   });
 

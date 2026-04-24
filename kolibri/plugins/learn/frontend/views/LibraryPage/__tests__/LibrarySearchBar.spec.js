@@ -60,13 +60,13 @@ describe('LibrarySearchBar', () => {
 
     it('renders an "All filters" button', () => {
       const wrapper = makeWrapper();
-      const filterBtn = wrapper.find('[data-test="all-filters-button"]');
+      const filterBtn = wrapper.find('[data-testid="all-filters-button"]');
       expect(filterBtn.exists()).toBe(true);
     });
 
     it('renders a search submit button', () => {
       const wrapper = makeWrapper();
-      const searchBtn = wrapper.find('[data-test="search-submit-button"]');
+      const searchBtn = wrapper.find('[data-testid="search-submit-button"]');
       expect(searchBtn.exists()).toBe(true);
     });
 
@@ -79,13 +79,13 @@ describe('LibrarySearchBar', () => {
   describe('clear button', () => {
     it('shows clear button when input has text', () => {
       const wrapper = makeWrapper({ value: 'fraction' });
-      const clearBtn = wrapper.find('[data-test="search-clear-button"]');
+      const clearBtn = wrapper.find('[data-testid="search-clear-button"]');
       expect(clearBtn.exists()).toBe(true);
     });
 
     it('emits clear event when clear button is clicked', async () => {
       const wrapper = makeWrapper({ value: 'fraction' });
-      const clearBtn = wrapper.find('[data-test="search-clear-button"]');
+      const clearBtn = wrapper.find('[data-testid="search-clear-button"]');
       clearBtn.vm.$emit('click');
       await wrapper.vm.$nextTick();
       expect(wrapper.emitted('clear')).toBeTruthy();
@@ -93,7 +93,7 @@ describe('LibrarySearchBar', () => {
 
     it('calls autocomplete handler with empty string on clear', async () => {
       const wrapper = makeWrapper({ value: 'fraction' });
-      const clearBtn = wrapper.find('[data-test="search-clear-button"]');
+      const clearBtn = wrapper.find('[data-testid="search-clear-button"]');
       clearBtn.vm.$emit('click');
       await wrapper.vm.$nextTick();
       expect(mockAutoCompleteHandler).toHaveBeenCalledWith('');
@@ -131,7 +131,7 @@ describe('LibrarySearchBar', () => {
 
     it('emits openFilters event when "All filters" button is clicked', async () => {
       const wrapper = makeWrapper();
-      const filterBtn = wrapper.find('[data-test="all-filters-button"]');
+      const filterBtn = wrapper.find('[data-testid="all-filters-button"]');
       filterBtn.vm.$emit('click');
       await wrapper.vm.$nextTick();
       expect(wrapper.emitted('openFilters')).toBeTruthy();

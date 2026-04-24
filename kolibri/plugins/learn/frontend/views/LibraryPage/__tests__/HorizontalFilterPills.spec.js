@@ -35,13 +35,13 @@ describe('HorizontalFilterPills', () => {
   describe('activity pills', () => {
     it('renders activity pill buttons', () => {
       const wrapper = makeWrapper();
-      const activityPills = wrapper.findAll('[data-test="activity-pill"]');
+      const activityPills = wrapper.findAll('[data-testid="activity-pill"]');
       expect(activityPills.length).toBe(3);
     });
 
     it('emits toggleFilter when an activity pill is clicked', async () => {
       const wrapper = makeWrapper();
-      const activityPills = wrapper.findAll('[data-test="activity-pill"]');
+      const activityPills = wrapper.findAll('[data-testid="activity-pill"]');
       activityPills.at(0).vm.$emit('click');
       await wrapper.vm.$nextTick();
       expect(wrapper.emitted('toggleFilter')).toBeTruthy();
@@ -54,13 +54,13 @@ describe('HorizontalFilterPills', () => {
   describe('category pills', () => {
     it('renders category pill buttons', () => {
       const wrapper = makeWrapper();
-      const categoryPills = wrapper.findAll('[data-test="category-pill"]');
+      const categoryPills = wrapper.findAll('[data-testid="category-pill"]');
       expect(categoryPills.length).toBe(2);
     });
 
     it('emits toggleFilter when a category pill is clicked', async () => {
       const wrapper = makeWrapper();
-      const categoryPills = wrapper.findAll('[data-test="category-pill"]');
+      const categoryPills = wrapper.findAll('[data-testid="category-pill"]');
       categoryPills.at(0).vm.$emit('click');
       await wrapper.vm.$nextTick();
       expect(wrapper.emitted('toggleFilter')).toBeTruthy();
@@ -75,14 +75,14 @@ describe('HorizontalFilterPills', () => {
       const wrapper = makeWrapper({
         availableLearningActivities: ref({}),
       });
-      expect(wrapper.findAll('[data-test="activity-pill"]').length).toBe(0);
+      expect(wrapper.findAll('[data-testid="activity-pill"]').length).toBe(0);
     });
 
     it('renders no category pills when categories empty', () => {
       const wrapper = makeWrapper({
         availableLibraryCategories: ref({}),
       });
-      expect(wrapper.findAll('[data-test="category-pill"]').length).toBe(0);
+      expect(wrapper.findAll('[data-testid="category-pill"]').length).toBe(0);
     });
   });
 });

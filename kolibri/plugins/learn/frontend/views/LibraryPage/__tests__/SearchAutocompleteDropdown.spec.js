@@ -55,41 +55,41 @@ describe('SearchAutocompleteDropdown', () => {
   describe('visibility', () => {
     it('is hidden when show is false', () => {
       const wrapper = makeWrapper({ show: false });
-      expect(wrapper.find('[data-test="autocomplete-dropdown"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="autocomplete-dropdown"]').exists()).toBe(false);
     });
 
     it('is visible when show is true', () => {
       const wrapper = makeWrapper({ show: true });
-      expect(wrapper.find('[data-test="autocomplete-dropdown"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="autocomplete-dropdown"]').exists()).toBe(true);
     });
   });
 
   describe('focus state (no query)', () => {
     it('renders history section header when history items exist', () => {
       const wrapper = makeWrapper({ historyItems: mockHistoryItems });
-      expect(wrapper.find('[data-test="history-section"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="history-section"]').exists()).toBe(true);
     });
 
     it('renders history items', () => {
       const wrapper = makeWrapper({ historyItems: mockHistoryItems });
-      const items = wrapper.findAll('[data-test="history-item"]');
+      const items = wrapper.findAll('[data-testid="history-item"]');
       expect(items.length).toBe(2);
     });
 
     it('renders recent searches section when recent searches exist', () => {
       const wrapper = makeWrapper({ recentSearches: mockRecentSearches });
-      expect(wrapper.find('[data-test="recent-searches-section"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="recent-searches-section"]').exists()).toBe(true);
     });
 
     it('renders recent search items', () => {
       const wrapper = makeWrapper({ recentSearches: mockRecentSearches });
-      const items = wrapper.findAll('[data-test="recent-search-item"]');
+      const items = wrapper.findAll('[data-testid="recent-search-item"]');
       expect(items.length).toBe(2);
     });
 
     it('emits selectContent when a history item is clicked', async () => {
       const wrapper = makeWrapper({ historyItems: mockHistoryItems });
-      const item = wrapper.findAll('[data-test="history-item"]').at(0);
+      const item = wrapper.findAll('[data-testid="history-item"]').at(0);
       await item.trigger('click');
       expect(wrapper.emitted('selectContent')).toBeTruthy();
       expect(wrapper.emitted('selectContent')[0][0]).toEqual(mockHistoryItems[0]);
@@ -97,7 +97,7 @@ describe('SearchAutocompleteDropdown', () => {
 
     it('emits selectSearch when a recent search is clicked', async () => {
       const wrapper = makeWrapper({ recentSearches: mockRecentSearches });
-      const item = wrapper.findAll('[data-test="recent-search-item"]').at(0);
+      const item = wrapper.findAll('[data-testid="recent-search-item"]').at(0);
       await item.trigger('click');
       expect(wrapper.emitted('selectSearch')).toBeTruthy();
       expect(wrapper.emitted('selectSearch')[0][0]).toBe('fraction videos');
@@ -105,8 +105,8 @@ describe('SearchAutocompleteDropdown', () => {
 
     it('renders nothing when no history or recent searches', () => {
       const wrapper = makeWrapper();
-      expect(wrapper.findAll('[data-test="history-item"]').length).toBe(0);
-      expect(wrapper.findAll('[data-test="recent-search-item"]').length).toBe(0);
+      expect(wrapper.findAll('[data-testid="history-item"]').length).toBe(0);
+      expect(wrapper.findAll('[data-testid="recent-search-item"]').length).toBe(0);
     });
   });
 
@@ -116,8 +116,9 @@ describe('SearchAutocompleteDropdown', () => {
         query: 'frac',
         suggestions: mockSuggestions,
       });
-      const items = wrapper.findAll('[data-test="suggestion-item"]');
-      expect(items.length).toBe(2);
+      const contentItems = wrapper.findAll('[data-testid="suggestion-item"]');
+      const filterPills = wrapper.findAll('[data-testid="filter-suggestion-pill"]');
+      expect(contentItems.length + filterPills.length).toBe(2);
     });
 
     it('does not render history or recent searches when query is present', () => {
@@ -127,8 +128,8 @@ describe('SearchAutocompleteDropdown', () => {
         historyItems: mockHistoryItems,
         recentSearches: mockRecentSearches,
       });
-      expect(wrapper.find('[data-test="history-section"]').exists()).toBe(false);
-      expect(wrapper.find('[data-test="recent-searches-section"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="history-section"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="recent-searches-section"]').exists()).toBe(false);
     });
 
     it('emits selectContent when a content suggestion is clicked', async () => {
@@ -136,7 +137,7 @@ describe('SearchAutocompleteDropdown', () => {
         query: 'frac',
         suggestions: mockSuggestions,
       });
-      const items = wrapper.findAll('[data-test="suggestion-item"]');
+      const items = wrapper.findAll('[data-testid="suggestion-item"]');
       await items.at(0).trigger('click');
       expect(wrapper.emitted('selectContent')).toBeTruthy();
       expect(wrapper.emitted('selectContent')[0][0]).toMatchObject({ id: 'node-3' });
@@ -147,8 +148,8 @@ describe('SearchAutocompleteDropdown', () => {
         query: 'frac',
         suggestions: mockSuggestions,
       });
-      const items = wrapper.findAll('[data-test="suggestion-item"]');
-      await items.at(1).trigger('click');
+      const pills = wrapper.findAll('[data-testid="filter-suggestion-pill"]');
+      await pills.at(0).trigger('click');
       expect(wrapper.emitted('selectFilter')).toBeTruthy();
       expect(wrapper.emitted('selectFilter')[0][0]).toMatchObject({
         filterKey: 'learning_activities',
@@ -161,7 +162,7 @@ describe('SearchAutocompleteDropdown', () => {
         query: 'xyznoexist',
         suggestions: [],
       });
-      expect(wrapper.findAll('[data-test="suggestion-item"]').length).toBe(0);
+      expect(wrapper.findAll('[data-testid="suggestion-item"]').length).toBe(0);
     });
   });
 
@@ -170,16 +171,14 @@ describe('SearchAutocompleteDropdown', () => {
       const wrapper = makeWrapper({
         historyItems: mockHistoryItems,
       });
-      expect(wrapper.find('[data-test="autocomplete-dropdown"]').attributes('role')).toBe(
-        'menu',
-      );
+      expect(wrapper.find('[data-testid="autocomplete-dropdown"]').attributes('role')).toBe('menu');
     });
 
     it('items have role="menuitem"', () => {
       const wrapper = makeWrapper({
         historyItems: mockHistoryItems,
       });
-      const items = wrapper.findAll('[data-test="history-item"]');
+      const items = wrapper.findAll('[data-testid="history-item"]');
       expect(items.at(0).attributes('role')).toBe('menuitem');
     });
   });

@@ -2,7 +2,7 @@
 
   <div
     v-if="groups.length"
-    data-test="more-to-explore"
+    data-testid="more-to-explore"
     class="more-to-explore"
   >
     <h2 class="section-header">
@@ -11,7 +11,7 @@
     <div
       v-for="(group, idx) in groups"
       :key="'group-' + idx"
-      data-test="explore-group"
+      data-testid="explore-group"
       class="explore-group"
     >
       <div class="group-header">
@@ -28,7 +28,7 @@
           <slot
             name="card"
             :item="item"
-          />
+          ></slot>
         </template>
       </HorizontalCardRow>
     </div>

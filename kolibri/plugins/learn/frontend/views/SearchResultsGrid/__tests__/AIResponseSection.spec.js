@@ -12,29 +12,26 @@ function renderComponent(props = {}) {
 }
 
 describe('AIResponseSection', () => {
-  test('renders nothing when no messages', () => {
+  it('renders nothing when no messages', () => {
     renderComponent();
     expect(screen.queryByTestId('ai-response-section')).not.toBeInTheDocument();
   });
 
-  test('renders messages when provided', () => {
-    renderComponent({
-      messages: [
-        'You can calculate a square root by finding the number that, when multiplied by itself, equals the original number.',
-      ],
-    });
+  it('renders messages when provided', () => {
+    const message = 'A sample AI-generated response message.';
+    renderComponent({ messages: [message] });
     expect(screen.getByTestId('ai-response-section')).toBeInTheDocument();
-    expect(screen.getByText(/You can calculate a square root/)).toBeInTheDocument();
+    expect(screen.getByTestId('ai-message')).toHaveTextContent(new RegExp(message));
   });
 
-  test('renders multiple messages', () => {
+  it('renders multiple messages', () => {
     renderComponent({
       messages: ['First message.', 'Second message.'],
     });
     expect(screen.getAllByTestId('ai-message')).toHaveLength(2);
   });
 
-  test('renders category chips when provided', () => {
+  it('renders category chips when provided', () => {
     renderComponent({
       messages: ['Some AI response'],
       categoryChips: [
@@ -45,7 +42,7 @@ describe('AIResponseSection', () => {
     expect(screen.getAllByTestId('category-chip')).toHaveLength(2);
   });
 
-  test('emits selectCategory when a category chip is clicked', async () => {
+  it('emits selectCategory when a category chip is clicked', async () => {
     const { emitted } = renderComponent({
       messages: ['Some response'],
       categoryChips: [{ label: 'Exponents', value: 'exponents_id' }],
@@ -58,27 +55,27 @@ describe('AIResponseSection', () => {
     });
   });
 
-  test('has a dismiss button', () => {
+  it('has a dismiss button', () => {
     renderComponent({ messages: ['Some response'] });
     expect(screen.getByTestId('dismiss-button')).toBeInTheDocument();
   });
 
-  test('hides content when dismiss button is clicked', async () => {
+  it('hides content when dismiss button is clicked', async () => {
     renderComponent({ messages: ['Some response'] });
     await fireEvent.click(screen.getByTestId('dismiss-button'));
     expect(screen.queryByTestId('ai-response-section')).not.toBeInTheDocument();
   });
 
-  test('renders markdown bold in messages', () => {
+  it('renders markdown bold in messages', () => {
     const { container } = renderComponent({
       messages: ['This is **bold** text.'],
     });
     const strong = container.querySelector('[data-testid="ai-message"] strong');
     expect(strong).not.toBeNull();
-    expect(strong.textContent).toBe('bold');
+    expect(strong).toHaveTextContent('bold');
   });
 
-  test('renders LaTeX math in messages', () => {
+  it('renders LaTeX math in messages', () => {
     const { container } = renderComponent({
       messages: ['The formula is \\(x^2 + y^2 = z^2\\).'],
     });

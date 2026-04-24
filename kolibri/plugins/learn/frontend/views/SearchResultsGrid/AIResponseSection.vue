@@ -3,7 +3,7 @@
   <div
     v-if="messages.length && !dismissed"
     data-testid="ai-response-section"
-    class="ai-response-section tex2jax_ignore"
+    class="ai-response-section"
     :style="{ backgroundColor: $themePalette.yellow.v_100 }"
   >
     <KIconButton
@@ -101,10 +101,7 @@
         // This prevents currency like "$3 per gallon" from being
         // matched as math. Inside $...$, \$ is kept as-is for KaTeX
         // (renders as literal $). Outside math, \$ becomes plain $.
-        const s = text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
+        const s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         let result = '';
         let i = 0;
         while (i < s.length) {
@@ -112,7 +109,11 @@
             const end = s.indexOf('\\)', i + 2);
             if (end !== -1) {
               const html = this.renderKatex(s.substring(i + 2, end));
-              if (html) { result += html; i = end + 2; continue; }
+              if (html) {
+                result += html;
+                i = end + 2;
+                continue;
+              }
             }
           }
           if (s[i] === '$' && i + 1 < s.length && s[i + 1] !== ' ' && s[i + 1] !== '$') {
@@ -121,23 +122,34 @@
             let found = false;
             while (j < s.length) {
               if (s[j] === '\\' && s[j + 1] === '$') {
-                math += '\\$'; j += 2;
+                math += '\\$';
+                j += 2;
               } else if (s[j] === '$') {
-                if (s[j - 1] !== ' ') { found = true; }
+                if (s[j - 1] !== ' ') {
+                  found = true;
+                }
                 break;
               } else {
-                math += s[j]; j++;
+                math += s[j];
+                j++;
               }
             }
             if (found) {
               const html = this.renderKatex(math);
-              if (html) { result += html; i = j + 1; continue; }
+              if (html) {
+                result += html;
+                i = j + 1;
+                continue;
+              }
             }
           }
           if (s[i] === '\\' && s[i + 1] === '$') {
-            result += '$'; i += 2; continue;
+            result += '$';
+            i += 2;
+            continue;
           }
-          result += s[i]; i++;
+          result += s[i];
+          i++;
         }
         return result;
       },
@@ -154,8 +166,14 @@
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed === '') {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (inUl) { result += '</ul>'; inUl = false; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
             result += '<br>';
             continue;
           }
@@ -163,16 +181,34 @@
           const ulMatch = trimmed.match(/^[-*]\s+(.*)/);
 
           if (olMatch) {
-            if (inUl) { result += '</ul>'; inUl = false; }
-            if (!inOl) { result += '<ol>'; inOl = true; }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
+            if (!inOl) {
+              result += '<ol>';
+              inOl = true;
+            }
             result += '<li>' + olMatch[2] + '</li>';
           } else if (ulMatch) {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (!inUl) { result += '<ul>'; inUl = true; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (!inUl) {
+              result += '<ul>';
+              inUl = true;
+            }
             result += '<li>' + ulMatch[1] + '</li>';
           } else {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (inUl) { result += '</ul>'; inUl = false; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
             result += trimmed + '<br>';
           }
         }
@@ -197,17 +233,19 @@
 
 
 <style>
+
   @import '~katex/dist/katex.min.css';
 
   .ai-response-section .message-text ol,
   .ai-response-section .message-text ul {
-    margin: 4px 0;
     padding-left: 24px;
+    margin: 4px 0;
   }
 
   .ai-response-section .message-text li {
     margin: 2px 0;
   }
+
 </style>
 
 
@@ -223,8 +261,8 @@
 
   .dismiss-button {
     position: absolute;
-    top: 8px;
     inset-inline-end: 8px;
+    top: 8px;
   }
 
   .message-text {

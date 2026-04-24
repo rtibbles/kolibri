@@ -2,7 +2,7 @@
 
   <div
     v-if="show"
-    data-test="autocomplete-dropdown"
+    data-testid="autocomplete-dropdown"
     class="autocomplete-dropdown"
     role="menu"
     :style="{ backgroundColor: $themeTokens.surface }"
@@ -11,7 +11,7 @@
     <template v-if="!query">
       <div
         v-if="historyItems.length"
-        data-test="history-section"
+        data-testid="history-section"
         class="section"
       >
         <h3
@@ -23,11 +23,10 @@
         <div
           v-for="item in historyItems"
           :key="item.id"
-          data-test="history-item"
+          data-testid="history-item"
           class="dropdown-item"
           role="menuitem"
           tabindex="-1"
-
           @click="$emit('selectContent', item)"
         >
           <LearningActivityIcon
@@ -74,7 +73,7 @@
 
       <div
         v-if="recentSearches.length"
-        data-test="recent-searches-section"
+        data-testid="recent-searches-section"
         class="section"
       >
         <h3
@@ -86,11 +85,10 @@
         <div
           v-for="(term, idx) in recentSearches"
           :key="'search-' + idx"
-          data-test="recent-search-item"
+          data-testid="recent-search-item"
           class="dropdown-item"
           role="menuitem"
           tabindex="-1"
-
           @click="$emit('selectSearch', term)"
         >
           <KIcon
@@ -115,7 +113,7 @@
         <button
           v-for="(item, idx) in filterSuggestions"
           :key="'filter-' + idx"
-          data-test="filter-suggestion-pill"
+          data-testid="filter-suggestion-pill"
           class="filter-pill"
           :style="{
             backgroundColor: $themeBrand.primary.v_100,
@@ -153,7 +151,7 @@
       <div
         v-for="(item, idx) in contentSuggestions"
         :key="'content-' + idx"
-        data-test="suggestion-item"
+        data-testid="suggestion-item"
         class="dropdown-item"
         role="menuitem"
         tabindex="-1"
@@ -255,7 +253,11 @@
        * or null if the item isn't activity-related.
        */
       getActivityKind(item) {
-        if (item.type === 'content' && item.learning_activities && item.learning_activities.length) {
+        if (
+          item.type === 'content' &&
+          item.learning_activities &&
+          item.learning_activities.length
+        ) {
           return item.learning_activities;
         }
         if (item.type === 'activity' && item.key) {

@@ -5,7 +5,7 @@
     class="horizontal-card-row"
   >
     <KIconButton
-      data-test="scroll-left-button"
+      data-testid="scroll-left-button"
       icon="chevronLeft"
       size="small"
       class="scroll-button scroll-left"
@@ -15,7 +15,7 @@
     />
     <div
       ref="scrollContainer"
-      data-test="scroll-container"
+      data-testid="scroll-container"
       class="scroll-container"
       @scroll="updateScrollState"
     >
@@ -24,11 +24,11 @@
         :key="item.id || idx"
         class="card-slot"
       >
-        <slot :item="item" />
+        <slot :item="item"></slot>
       </div>
     </div>
     <KIconButton
-      data-test="scroll-right-button"
+      data-testid="scroll-right-button"
       icon="chevronRight"
       size="small"
       class="scroll-button scroll-right"

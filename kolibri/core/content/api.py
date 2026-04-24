@@ -45,7 +45,6 @@ from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.fields import CharField
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -184,7 +183,9 @@ def metadata_cache(view_func, cache_key_func=get_cache_key):
 
 
 def get_remote_cache_key(request, *args, **kwargs):
-    if (request.GET.get("search") or request.GET.get("keywords")) and getattr(settings, "DEBUG", False):
+    if (request.GET.get("search") or request.GET.get("keywords")) and getattr(
+        settings, "DEBUG", False
+    ):
         # In dev mode, don't cache search results so that changes to
         # AI prompts and models take effect immediately.
         return None
@@ -676,7 +677,10 @@ class ContentNodeSearchFilter(filters.SearchFilter):
 
     def get_cleaned_search_value(self, request):
         value = request.query_params.get(
-            self.search_param, request.query_params.get("keywords", "")
+            self.search_param,
+            request.query_params.get(
+                "question", request.query_params.get("keywords", "")
+            ),
         )
         field = CharField(trim_whitespace=False, allow_blank=True)
         return field.run_validation(value)

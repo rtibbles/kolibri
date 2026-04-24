@@ -47,7 +47,7 @@ describe('SearchResultsGrid restructured', () => {
   describe('core search results', () => {
     it('still renders search results title', () => {
       const wrapper = makeWrapper();
-      expect(wrapper.find('[data-test="search-results-title"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="search-results-title"]').exists()).toBe(true);
     });
 
     it('still renders SearchChips', () => {
@@ -57,12 +57,12 @@ describe('SearchResultsGrid restructured', () => {
 
     it('still renders the results grid', () => {
       const wrapper = makeWrapper();
-      expect(wrapper.find('[data-test="search-results-card-grid"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="search-results-card-grid"]').exists()).toBe(true);
     });
 
     it('still renders more button when more results exist', () => {
       const wrapper = makeWrapper({ more: { next: true } });
-      expect(wrapper.find('[data-test="more-results-button"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="more-results-button"]').exists()).toBe(true);
     });
   });
 
@@ -89,8 +89,8 @@ describe('SearchResultsGrid restructured', () => {
         exploreGroups: [],
       });
       // Core elements still render
-      expect(wrapper.find('[data-test="search-results-title"]').exists()).toBe(true);
-      expect(wrapper.find('[data-test="search-results-card-grid"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="search-results-title"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="search-results-card-grid"]').exists()).toBe(true);
     });
   });
 

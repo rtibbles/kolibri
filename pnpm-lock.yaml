@@ -485,6 +485,9 @@ importers:
       frame-throttle:
         specifier: ^3.0.0
         version: 3.0.0
+      katex:
+        specifier: ^0.16.22
+        version: 0.16.27
       kolibri:
         specifier: workspace:*
         version: link:../../../packages/kolibri

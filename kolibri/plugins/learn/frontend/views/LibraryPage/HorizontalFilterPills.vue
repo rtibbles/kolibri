@@ -9,14 +9,12 @@
       <KButton
         v-for="(activity, index) in activityEntries"
         :key="'activity-' + index"
-        data-test="activity-pill"
+        data-testid="activity-pill"
         :text="coreString(activity.key)"
         appearance="flat-button"
         :icon="activityIconMap[activity.key] || null"
         :appearanceOverrides="
-          isActivityActive(activity.value)
-            ? { ...pillStyles, ...activePillStyles }
-            : pillStyles
+          isActivityActive(activity.value) ? { ...pillStyles, ...activePillStyles } : pillStyles
         "
         :disabled="loading"
         @click="handleActivityClick(activity)"
@@ -31,14 +29,12 @@
       <KButton
         v-for="(category, index) in categoryEntries"
         :key="'category-' + index"
-        data-test="category-pill"
+        data-testid="category-pill"
         :text="category.label"
         appearance="flat-button"
         :icon="getCategoryIcon(category.key)"
         :appearanceOverrides="
-          isCategoryActive(category.value)
-            ? { ...pillStyles, ...activePillStyles }
-            : pillStyles
+          isCategoryActive(category.value) ? { ...pillStyles, ...activePillStyles } : pillStyles
         "
         :disabled="loading"
         @click="handleCategoryClick(category)"

@@ -2,7 +2,7 @@
 
   <div
     v-if="messages.length && !messagesDismissed"
-    class="search-messages tex2jax_ignore"
+    class="search-messages"
     :style="{
       backgroundColor: $themePalette.grey.v_100,
     }"
@@ -27,8 +27,10 @@
       }"
     >
       <!-- eslint-disable-next-line vue/no-v-html -->
-      <div class="search-message-text" v-html="renderMessage(message)">
-      </div>
+      <div
+        class="search-message-text"
+        v-html="renderMessage(message)"
+      ></div>
     </div>
   </div>
 
@@ -71,10 +73,7 @@
         // This prevents currency like "$3 per gallon" from being
         // matched as math. Inside $...$, \$ is kept as-is for KaTeX
         // (renders as literal $). Outside math, \$ becomes plain $.
-        const s = text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
+        const s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         let result = '';
         let i = 0;
         while (i < s.length) {
@@ -83,7 +82,11 @@
             const end = s.indexOf('\\)', i + 2);
             if (end !== -1) {
               const html = this.renderKatex(s.substring(i + 2, end));
-              if (html) { result += html; i = end + 2; continue; }
+              if (html) {
+                result += html;
+                i = end + 2;
+                continue;
+              }
             }
           }
           // $...$ delimiters (tight: non-space after open, non-space before close)
@@ -93,24 +96,35 @@
             let found = false;
             while (j < s.length) {
               if (s[j] === '\\' && s[j + 1] === '$') {
-                math += '\\$'; j += 2;
+                math += '\\$';
+                j += 2;
               } else if (s[j] === '$') {
-                if (s[j - 1] !== ' ') { found = true; }
+                if (s[j - 1] !== ' ') {
+                  found = true;
+                }
                 break;
               } else {
-                math += s[j]; j++;
+                math += s[j];
+                j++;
               }
             }
             if (found) {
               const html = this.renderKatex(math);
-              if (html) { result += html; i = j + 1; continue; }
+              if (html) {
+                result += html;
+                i = j + 1;
+                continue;
+              }
             }
           }
           // \$ outside math becomes plain $
           if (s[i] === '\\' && s[i + 1] === '$') {
-            result += '$'; i += 2; continue;
+            result += '$';
+            i += 2;
+            continue;
           }
-          result += s[i]; i++;
+          result += s[i];
+          i++;
         }
         return result;
       },
@@ -133,8 +147,14 @@
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed === '') {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (inUl) { result += '</ul>'; inUl = false; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
             result += '<br>';
             continue;
           }
@@ -142,16 +162,34 @@
           const ulMatch = trimmed.match(/^[-*]\s+(.*)/);
 
           if (olMatch) {
-            if (inUl) { result += '</ul>'; inUl = false; }
-            if (!inOl) { result += '<ol>'; inOl = true; }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
+            if (!inOl) {
+              result += '<ol>';
+              inOl = true;
+            }
             result += '<li>' + olMatch[2] + '</li>';
           } else if (ulMatch) {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (!inUl) { result += '<ul>'; inUl = true; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (!inUl) {
+              result += '<ul>';
+              inUl = true;
+            }
             result += '<li>' + ulMatch[1] + '</li>';
           } else {
-            if (inOl) { result += '</ol>'; inOl = false; }
-            if (inUl) { result += '</ul>'; inUl = false; }
+            if (inOl) {
+              result += '</ol>';
+              inOl = false;
+            }
+            if (inUl) {
+              result += '</ul>';
+              inUl = false;
+            }
             result += trimmed + '<br>';
           }
         }
@@ -173,17 +211,19 @@
 
 
 <style>
+
   @import '~katex/dist/katex.min.css';
 
   .search-message-text ol,
   .search-message-text ul {
-    margin: 4px 0;
     padding-left: 24px;
+    margin: 4px 0;
   }
 
   .search-message-text li {
     margin: 2px 0;
   }
+
 </style>
 
 
