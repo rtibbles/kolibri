@@ -27,12 +27,6 @@ contentnode_viewset = ContentNodeViewset()
 # ---------------------------------------------------------------------------
 
 class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
-    _search_terms = None
-
-    def get_search_terms(self, request):
-        if self._search_terms:
-            return self._search_terms
-        return super().get_search_terms(request)
 
     def filter_queryset(self, request, queryset, view):
         message = request.query_params.get("question", "")
