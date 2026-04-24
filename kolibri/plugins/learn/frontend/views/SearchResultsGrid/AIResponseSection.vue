@@ -3,7 +3,7 @@
   <div
     v-if="messages.length && !dismissed"
     data-test="ai-response-section"
-    class="ai-response-section"
+    class="ai-response-section tex2jax_ignore"
     :style="{ backgroundColor: $themePalette.yellow.v_100 }"
   >
     <KIconButton
@@ -16,14 +16,15 @@
       @click="dismissed = true"
     />
     <div class="messages">
-      <p
+      <!-- eslint-disable vue/no-v-html -->
+      <div
         v-for="(message, idx) in messages"
         :key="idx"
         data-test="ai-message"
         class="message-text"
-      >
-        {{ message }}
-      </p>
+        v-html="renderMessage(message)"
+      ></div>
+      <!-- eslint-enable vue/no-v-html -->
     </div>
     <div
       v-if="categoryChips.length"
@@ -45,6 +46,8 @@
 
 
 <script>
+
+  import katex from 'katex';
 
   export default {
     name: 'AIResponseSection',
@@ -82,6 +85,106 @@
         this.dismissed = false;
       },
     },
+    methods: {
+      renderKatex(latex) {
+        try {
+          return katex.renderToString(latex, { throwOnError: false });
+        } catch (e) {
+          return null;
+        }
+      },
+      renderMath(text) {
+        // Escape HTML, then parse for math delimiters.
+        // Supports \(...\) and $...$ with tight-delimiter rules:
+        //   - opening $ must be followed by a non-space character
+        //   - closing $ must be preceded by a non-space character
+        // This prevents currency like "$3 per gallon" from being
+        // matched as math. Inside $...$, \$ is kept as-is for KaTeX
+        // (renders as literal $). Outside math, \$ becomes plain $.
+        const s = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        let result = '';
+        let i = 0;
+        while (i < s.length) {
+          if (s[i] === '\\' && s[i + 1] === '(') {
+            const end = s.indexOf('\\)', i + 2);
+            if (end !== -1) {
+              const html = this.renderKatex(s.substring(i + 2, end));
+              if (html) { result += html; i = end + 2; continue; }
+            }
+          }
+          if (s[i] === '$' && i + 1 < s.length && s[i + 1] !== ' ' && s[i + 1] !== '$') {
+            let j = i + 1;
+            let math = '';
+            let found = false;
+            while (j < s.length) {
+              if (s[j] === '\\' && s[j + 1] === '$') {
+                math += '\\$'; j += 2;
+              } else if (s[j] === '$') {
+                if (s[j - 1] !== ' ') { found = true; }
+                break;
+              } else {
+                math += s[j]; j++;
+              }
+            }
+            if (found) {
+              const html = this.renderKatex(math);
+              if (html) { result += html; i = j + 1; continue; }
+            }
+          }
+          if (s[i] === '\\' && s[i + 1] === '$') {
+            result += '$'; i += 2; continue;
+          }
+          result += s[i]; i++;
+        }
+        return result;
+      },
+      renderMarkdown(html) {
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/(?<!\*)\*([^\s*][^*]*?[^\s*])\*(?!\*)/g, '<em>$1</em>');
+        html = html.replace(/(?<!\*)\*([^\s*])\*(?!\*)/g, '<em>$1</em>');
+
+        const lines = html.split('\n');
+        let result = '';
+        let inOl = false;
+        let inUl = false;
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed === '') {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (inUl) { result += '</ul>'; inUl = false; }
+            result += '<br>';
+            continue;
+          }
+          const olMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+          const ulMatch = trimmed.match(/^[-*]\s+(.*)/);
+
+          if (olMatch) {
+            if (inUl) { result += '</ul>'; inUl = false; }
+            if (!inOl) { result += '<ol>'; inOl = true; }
+            result += '<li>' + olMatch[2] + '</li>';
+          } else if (ulMatch) {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (!inUl) { result += '<ul>'; inUl = true; }
+            result += '<li>' + ulMatch[1] + '</li>';
+          } else {
+            if (inOl) { result += '</ol>'; inOl = false; }
+            if (inUl) { result += '</ul>'; inUl = false; }
+            result += trimmed + '<br>';
+          }
+        }
+        if (inOl) result += '</ol>';
+        if (inUl) result += '</ul>';
+
+        return result.replace(/(<br>)+$/, '');
+      },
+      renderMessage(text) {
+        return this.renderMarkdown(this.renderMath(text));
+      },
+    },
     $trs: {
       dismissMessages: {
         message: 'Dismiss AI response',
@@ -91,6 +194,21 @@
   };
 
 </script>
+
+
+<style>
+  @import '~katex/dist/katex.min.css';
+
+  .ai-response-section .message-text ol,
+  .ai-response-section .message-text ul {
+    margin: 4px 0;
+    padding-left: 24px;
+  }
+
+  .ai-response-section .message-text li {
+    margin: 2px 0;
+  }
+</style>
 
 
 <style lang="scss" scoped>
