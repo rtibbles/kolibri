@@ -35,7 +35,7 @@ class LLMContentNodeSearchFilter(ContentNodeSearchFilter):
         return super().get_search_terms(request)
 
     def filter_queryset(self, request, queryset, view):
-        message = self.get_cleaned_search_value(request)
+        message = request.query_params.get("question", "")
 
         if not message:
             return super().filter_queryset(request, queryset, view)
