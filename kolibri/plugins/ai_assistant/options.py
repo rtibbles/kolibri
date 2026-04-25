@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 option_spec = {
     "Assistant": {
         "AI_ASSISTANT_API_KEY": {
@@ -11,14 +12,20 @@ option_spec = {
             "description": "Model identifier for the AI assistant (e.g., openai/gpt-4o-mini, anthropic/claude-2, litert/gemma-4-E2B-it)",
         },
         "AI_ASSISTANT_MODEL_PATH": {
-            "type": "string",
+            "type": "path",
             "default": "",
-            "description": "Path to local model file for litert provider (e.g., /home/user/models/gemma-4-E2B-it.litertlm)",
+            "description": "Path to local model file for litert provider, absolute or relative to KOLIBRI_HOME (e.g., ai_models/gemma-3n-E2B-it-int4.litertlm)",
         },
         "AI_ASSISTANT_RAG_DATA_PATH": {
-            "type": "string",
+            "type": "path",
             "default": "",
-            "description": "Path to precomputed RAG index directory (containing doc_embeddings.npy, model/, etc.)",
+            "description": "Path to precomputed RAG index directory (containing doc_embeddings.npy, model/, etc.), absolute or relative to KOLIBRI_HOME",
+        },
+        "AI_ASSISTANT_INFERENCE_BACKEND": {
+            "type": "option",
+            "options": ("cpu", "gpu"),
+            "default": "gpu",
+            "description": "LiteRT-LM inference backend. 'gpu' is the default and requires a compatible GPU and drivers; set to 'cpu' for hosts without GPU support.",
         },
         "AI_ASSISTANT_RAG_QUERY_ENRICHMENT": {
             "type": "boolean",

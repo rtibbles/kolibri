@@ -63,23 +63,29 @@ def _remove_pid_file():
 # Model loading helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_litert_engine():
-    """Load the LiteRT-LM engine with GPU backend."""
+    """Load the LiteRT-LM engine with the configured backend."""
     assistant_settings = OPTIONS.get("Assistant", {})
     model_path = assistant_settings.get("AI_ASSISTANT_MODEL_PATH", "")
     if not model_path:
-        logger.warning("AI_ASSISTANT_MODEL_PATH not set; LLM endpoint will be unavailable")
+        logger.warning(
+            "AI_ASSISTANT_MODEL_PATH not set; LLM endpoint will be unavailable"
+        )
         return None
 
     import litert_lm
 
+    backend_name = assistant_settings.get("AI_ASSISTANT_INFERENCE_BACKEND", "gpu")
+    backend = litert_lm.Backend.CPU if backend_name == "cpu" else litert_lm.Backend.GPU
+
     litert_lm.set_min_log_severity(litert_lm.LogSeverity.ERROR)
     engine = litert_lm.Engine(
         model_path,
-        backend=litert_lm.Backend.GPU,
+        backend=backend,
         cache_dir="/tmp/litert-lm-cache",
     )
-    logger.info("LiteRT-LM engine loaded (GPU): %s", model_path)
+    logger.info("LiteRT-LM engine loaded (%s): %s", backend_name.upper(), model_path)
     return engine
 
 
@@ -88,7 +94,9 @@ def _load_rag_index():
     assistant_settings = OPTIONS.get("Assistant", {})
     data_path = assistant_settings.get("AI_ASSISTANT_RAG_DATA_PATH", "")
     if not data_path:
-        logger.warning("AI_ASSISTANT_RAG_DATA_PATH not set; RAG endpoint will be unavailable")
+        logger.warning(
+            "AI_ASSISTANT_RAG_DATA_PATH not set; RAG endpoint will be unavailable"
+        )
         return None
 
     from kolibri.plugins.ai_assistant.rag import RAGIndex
@@ -99,6 +107,7 @@ def _load_rag_index():
 # ---------------------------------------------------------------------------
 # HTTP handler
 # ---------------------------------------------------------------------------
+
 
 def _read_json_body(handler):
     """Read and parse a JSON request body."""
@@ -144,19 +153,28 @@ def make_handler(engine, rag_index, model_name):
         # -- endpoints -------------------------------------------------
 
         def _handle_health(self):
-            _send_json(self, {
-                "status": "ok",
-                "models": {
-                    "llm": {
-                        "loaded": engine is not None,
-                        "model": model_name if engine else None,
-                        "backend": "GPU" if engine else None,
-                    },
-                    "rag": {
-                        "loaded": rag_index is not None,
+            _send_json(
+                self,
+                {
+                    "status": "ok",
+                    "models": {
+                        "llm": {
+                            "loaded": engine is not None,
+                            "model": model_name if engine else None,
+                            "backend": (
+                                OPTIONS.get("Assistant", {})
+                                .get("AI_ASSISTANT_INFERENCE_BACKEND", "gpu")
+                                .upper()
+                                if engine
+                                else None
+                            ),
+                        },
+                        "rag": {
+                            "loaded": rag_index is not None,
+                        },
                     },
                 },
-            })
+            )
 
         def _handle_chat(self):
             if engine is None:
@@ -183,45 +201,62 @@ def make_handler(engine, rag_index, model_name):
 
             litert_messages = []
             if system_parts:
-                litert_messages.append({
-                    "role": "system",
-                    "content": [{"type": "text", "text": "\n\n".join(system_parts)}],
-                })
+                litert_messages.append(
+                    {
+                        "role": "system",
+                        "content": [
+                            {"type": "text", "text": "\n\n".join(system_parts)}
+                        ],
+                    }
+                )
 
-            logger.info("LLM prompt:\n--- SYSTEM ---\n%s\n--- USER ---\n%s\n--- END PROMPT ---",
-                        "\n\n".join(system_parts) if system_parts else "(none)",
-                        user_prompt)
+            logger.info(
+                "LLM prompt:\n--- SYSTEM ---\n%s\n--- USER ---\n%s\n--- END PROMPT ---",
+                "\n\n".join(system_parts) if system_parts else "(none)",
+                user_prompt,
+            )
 
             try:
                 t0 = time.perf_counter()
-                with engine.create_conversation(messages=litert_messages) as conversation:
+                with engine.create_conversation(
+                    messages=litert_messages
+                ) as conversation:
                     response = conversation.send_message(user_prompt)
                 elapsed = time.perf_counter() - t0
                 text = response["content"][0]["text"]
-                logger.info("LLM response (%.1fs, %d chars):\n--- RESPONSE ---\n%s\n--- END RESPONSE ---",
-                            elapsed, len(text), text)
+                logger.info(
+                    "LLM response (%.1fs, %d chars):\n--- RESPONSE ---\n%s\n--- END RESPONSE ---",
+                    elapsed,
+                    len(text),
+                    text,
+                )
             except Exception:
                 logger.exception("LLM inference failed")
                 _send_json(self, {"error": "LLM inference failed"}, 500)
                 return
 
             # OpenAI-compatible response envelope
-            _send_json(self, {
-                "id": "chatcmpl-local",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": model_name or "litert",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": text},
-                    "finish_reason": "stop",
-                }],
-                "usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0,
+            _send_json(
+                self,
+                {
+                    "id": "chatcmpl-local",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": model_name or "litert",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": text},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                    },
                 },
-            })
+            )
 
         def _handle_rag_search(self):
             if rag_index is None:
@@ -236,14 +271,22 @@ def make_handler(engine, rag_index, model_name):
 
             queries = body.get("queries", [])
             if not queries or not isinstance(queries, list):
-                _send_json(self, {"error": "missing or invalid 'queries' (expected list of strings)"}, 400)
+                _send_json(
+                    self,
+                    {
+                        "error": "missing or invalid 'queries' (expected list of strings)"
+                    },
+                    400,
+                )
                 return
 
             top_docs = body.get("top_docs", 6)
             sub_chunks = body.get("sub_chunks", 2)
 
             try:
-                results = rag_index.search_batch(queries, top_docs=top_docs, sub_chunks=sub_chunks)
+                results = rag_index.search_batch(
+                    queries, top_docs=top_docs, sub_chunks=sub_chunks
+                )
             except Exception:
                 logger.exception("RAG batch search failed")
                 _send_json(self, {"error": "RAG search failed"}, 500)
@@ -262,7 +305,9 @@ class Command(BaseCommand):
             "--port",
             type=int,
             default=DEFAULT_PORT,
-            help="Preferred port (falls back to OS-assigned if unavailable). Default: {}".format(DEFAULT_PORT),
+            help="Preferred port (falls back to OS-assigned if unavailable). Default: {}".format(
+                DEFAULT_PORT
+            ),
         )
         parser.add_argument(
             "--host",
