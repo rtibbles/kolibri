@@ -375,9 +375,10 @@
     display: inline-flex;
     gap: 6px;
     align-items: center;
-    padding: 6px 14px;
-    font-size: 14px;
-    font-weight: 500;
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: normal;
+    line-height: 1;
     cursor: pointer;
     border-radius: 20px;
   }
@@ -386,11 +387,10 @@
     white-space: nowrap;
   }
 
-  /* KIcon's SVG uses position: relative; top: 0.125em for inline text flow.
-     Inside a flex container with align-items: center, that offset shifts the
-     icon down from true center. A matching negative margin corrects this. */
+  // KIcon's SVG uses position: relative; top: 0.125em for inline text flow;
+  // undo it inside the flex pill so the icon sits at true centre.
   .filter-pill .pill-icon {
-    margin-top: -0.125em;
+    top: 0;
   }
 
 </style>

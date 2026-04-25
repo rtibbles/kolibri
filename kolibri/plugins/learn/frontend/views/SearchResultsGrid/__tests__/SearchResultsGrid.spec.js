@@ -20,30 +20,6 @@ function makeWrapper(propsData = {}) {
 }
 
 describe('SearchResultsGrid restructured', () => {
-  describe('AIResponseSection', () => {
-    it('renders AIResponseSection when messages are provided', () => {
-      const wrapper = makeWrapper({
-        messages: ['AI response text'],
-      });
-      expect(wrapper.findComponent({ name: 'AIResponseSection' }).exists()).toBe(true);
-    });
-
-    it('does not render AIResponseSection when no messages', () => {
-      const wrapper = makeWrapper({ messages: [] });
-      expect(wrapper.findComponent({ name: 'AIResponseSection' }).exists()).toBe(true);
-      // AIResponseSection handles empty messages internally (renders nothing)
-    });
-
-    it('passes messages and categoryChips to AIResponseSection', () => {
-      const messages = ['AI says hello'];
-      const categoryChips = [{ label: 'Math', value: 'math_id' }];
-      const wrapper = makeWrapper({ messages, categoryChips });
-      const section = wrapper.findComponent({ name: 'AIResponseSection' });
-      expect(section.props('messages')).toEqual(messages);
-      expect(section.props('categoryChips')).toEqual(categoryChips);
-    });
-  });
-
   describe('core search results', () => {
     it('still renders search results title', () => {
       const wrapper = makeWrapper();
@@ -83,9 +59,8 @@ describe('SearchResultsGrid restructured', () => {
   });
 
   describe('graceful degradation', () => {
-    it('works without AI data - no messages or groups', () => {
+    it('works without AI data - no groups', () => {
       const wrapper = makeWrapper({
-        messages: [],
         exploreGroups: [],
       });
       // Core elements still render

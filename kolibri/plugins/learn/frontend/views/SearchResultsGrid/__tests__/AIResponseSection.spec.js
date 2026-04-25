@@ -55,17 +55,6 @@ describe('AIResponseSection', () => {
     });
   });
 
-  it('has a dismiss button', () => {
-    renderComponent({ messages: ['Some response'] });
-    expect(screen.getByTestId('dismiss-button')).toBeInTheDocument();
-  });
-
-  it('hides content when dismiss button is clicked', async () => {
-    renderComponent({ messages: ['Some response'] });
-    await fireEvent.click(screen.getByTestId('dismiss-button'));
-    expect(screen.queryByTestId('ai-response-section')).not.toBeInTheDocument();
-  });
-
   it('renders markdown bold in messages', () => {
     const { container } = renderComponent({
       messages: ['This is **bold** text.'],

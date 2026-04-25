@@ -397,6 +397,71 @@ export default function useBaseSearch({
     }
   }
 
+  function toggleFilter({ key, value }) {
+    // The keyword search term is a free-text string rather than a set, so
+    // toggling collapses to "clear it" — the pill represents an applied query
+    // and clicking the pill removes that query.
+    if (key === 'keywords') {
+      set(searchTerms, { ...get(searchTerms), keywords: '' });
+      return;
+    }
+    const current = { ...(get(searchTerms)[key] || {}) };
+    if (current[value]) {
+      delete current[value];
+    } else {
+      current[value] = true;
+    }
+    set(searchTerms, {
+      ...get(searchTerms),
+      [key]: current,
+    });
+  }
+
+  function isFilterActive(key, value) {
+    const terms = get(searchTerms);
+    if (!terms) {
+      return false;
+    }
+    if (key === 'keywords') {
+      return Boolean(terms.keywords) && terms.keywords === value;
+    }
+    return Boolean(terms[key] && terms[key][value]);
+  }
+
+  // Flat list of every currently selected term across dimensions, in the order
+  // a UI typically wants to render them (keyword first, then everything else).
+  // Lets consumers iterate applied filters without rebuilding the same shape
+  // from `searchTerms` themselves.
+  function appliedFilters() {
+    const terms = get(searchTerms) || {};
+    const out = [];
+    if (terms.keywords) {
+      out.push({ key: 'keywords', value: terms.keywords });
+    }
+    for (const [key, values] of Object.entries(terms)) {
+      if (key === 'keywords' || !values || typeof values !== 'object') {
+        continue;
+      }
+      for (const value of Object.keys(values)) {
+        if (values[value]) {
+          out.push({ key, value });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Returns true if the given filter value can still yield results within the
+  // current search context. Before any search runs, `labels` is null and we
+  // treat every value as available.
+  function isLabelAvailable(key, value) {
+    const scoped = get(labels);
+    if (!scoped || !Array.isArray(scoped[key])) {
+      return true;
+    }
+    return scoped[key].includes(value);
+  }
+
   function clearSearch() {
     set(searchTerms, {});
   }
@@ -513,6 +578,14 @@ export default function useBaseSearch({
   // Currently selected search terms
   provide('activeSearchTerms', searchTerms);
 
+  // Filter helpers — share the same `searchTerms`/`labels` source so any
+  // consumer that needs to know "is this filter active?" or "is this label
+  // still selectable in the current search?" can ask one place.
+  provide('isFilterActive', isFilterActive);
+  provide('isLabelAvailable', isLabelAvailable);
+  provide('toggleFilter', toggleFilter);
+  provide('appliedFilters', appliedFilters);
+
   // Handling for search autocomplete
   provide('keyWordAutoCompleteHandler', keyWordAutoCompleteHandler);
   provide('autoCompleteSuggestions', autoCompleteSuggestions);
@@ -531,6 +604,10 @@ export default function useBaseSearch({
     search,
     searchMore,
     removeFilterTag,
+    toggleFilter,
+    isFilterActive,
+    isLabelAvailable,
+    appliedFilters,
     removeMatchedWords: fuzzyMetadataSearch.removeMatchedWords,
     clearSearch,
   };
@@ -549,6 +626,10 @@ export function injectBaseSearch() {
   const availableLanguages = inject('availableLanguages');
   const searchableLabels = inject('searchableLabels');
   const activeSearchTerms = inject('activeSearchTerms');
+  const isFilterActive = inject('isFilterActive');
+  const isLabelAvailable = inject('isLabelAvailable');
+  const toggleFilter = inject('toggleFilter');
+  const appliedFilters = inject('appliedFilters');
   const searchLoading = inject('searchLoading');
   const keyWordAutoCompleteHandler = inject('keyWordAutoCompleteHandler');
   const autoCompleteSuggestions = inject('autoCompleteSuggestions');
@@ -562,6 +643,10 @@ export function injectBaseSearch() {
     availableLanguages,
     searchableLabels,
     activeSearchTerms,
+    isFilterActive,
+    isLabelAvailable,
+    toggleFilter,
+    appliedFilters,
     searchLoading,
     keyWordAutoCompleteHandler,
     autoCompleteSuggestions,

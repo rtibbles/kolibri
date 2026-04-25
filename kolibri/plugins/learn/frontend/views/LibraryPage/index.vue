@@ -19,45 +19,38 @@
       :deviceId="deviceId"
       :route="back"
     >
-      <main
-        class="main-grid"
-        :style="gridOffset"
-      >
-        <!-- Search bar at top of content area -->
-        <LibrarySearchBar
-          v-if="!isLocalLibraryEmpty || deviceId"
-          data-testid="library-search-bar"
-          :value="keywordsInput"
-          @input="handleSearchInput"
-          @search="handleSearch"
-          @clear="handleClearSearch"
-          @openFilters="showFilterModal = true"
-          @selectContent="handleSelectContent"
-          @selectFilter="handleSelectFilter"
-        />
-
-        <!-- AI info banner -->
+      <main class="main-grid">
+        <!-- Search header: search bar + AI response message grouped together -->
         <div
-          v-if="messages && messages.length && !rootNodesLoading && !displayingSearchResults"
-          class="ai-info-banner"
-          data-testid="ai-info-banner"
-          :style="{ backgroundColor: $themePalette.yellow.v_100 }"
+          class="search-header"
+          :style="{
+            backgroundColor: $themeTokens.surface,
+            borderColor: $themePalette.grey.v_300,
+          }"
         >
-          <p
-            v-for="(message, idx) in messages"
-            :key="idx"
-            class="ai-info-message"
-          >
-            {{ message }}
-          </p>
-        </div>
+          <LibrarySearchBar
+            v-if="!isLocalLibraryEmpty || deviceId"
+            data-testid="library-search-bar"
+            :value="keywordsInput"
+            @input="handleSearchInput"
+            @search="handleSearch"
+            @clear="handleClearSearch"
+            @openFilters="showFilterModal = true"
+            @selectContent="handleSelectContent"
+            @selectFilter="handleSelectFilter"
+          />
 
-        <!-- Filter pills shown when not searching -->
-        <HorizontalFilterPills
-          v-if="!displayingSearchResults && !rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
-          data-testid="horizontal-filter-pills"
-          @toggleFilter="handleToggleFilter"
-        />
+          <AIResponseSection
+            v-if="!rootNodesLoading"
+            :messages="messages"
+            :categoryChips="categoryChips"
+          />
+
+          <HorizontalFilterPills
+            v-if="!rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
+            data-testid="horizontal-filter-pills"
+          />
+        </div>
 
         <!--
           - If search is loading, show loader.
@@ -131,17 +124,12 @@
           data-testid="search-results"
           :allowDownloads="allowDownloads"
           :results="results"
-          :removeFilterTag="removeFilterTag"
-          :clearSearch="clearSearch"
           :moreLoading="moreLoading"
           :searchMore="searchMore"
           :currentCardViewStyle="currentCardViewStyle"
-          :searchTerms="searchTerms"
           :searchLoading="searchLoading"
           :more="more"
-          :messages="messages"
           :exploreGroups="exploreGroups"
-          :categoryChips="categoryChips"
           @setCardStyle="style => (currentCardViewStyle = style)"
           @setSidePanelMetadataContent="content => (metadataSidePanelContent = content)"
         />
@@ -253,6 +241,7 @@
   import commonLearnStrings from '../commonLearnStrings';
   import ChannelCardGroupGrid from '../ChannelCardGroupGrid';
   import SearchResultsGrid from '../SearchResultsGrid';
+  import AIResponseSection from '../SearchResultsGrid/AIResponseSection';
   import LearnAppBarPage from '../LearnAppBarPage';
   import PostSetupModalGroup from '../../../../device/frontend/views/PostSetupModalGroup.vue';
   import HorizontalFilterPills from './HorizontalFilterPills';
@@ -272,6 +261,7 @@
       };
     },
     components: {
+      AIResponseSection,
       BrowseResourceMetadata,
       ChannelCardGroupGrid,
       SidePanelModal,
@@ -305,9 +295,7 @@
         more,
         search,
         searchMore,
-        removeFilterTag,
         removeMatchedWords,
-        clearSearch,
         currentRoute,
         messages,
       } = useSearch();
@@ -445,9 +433,7 @@
         results,
         more,
         searchMore,
-        removeFilterTag,
         removeMatchedWords,
-        clearSearch,
         currentCardViewStyle,
         deviceName,
         back,
@@ -637,26 +623,6 @@
           };
         }
       },
-      handleToggleFilter({ key, value }) {
-        const validKeys = [
-          'learning_activities',
-          'categories',
-          'learner_needs',
-          'accessibility_labels',
-          'languages',
-          'grade_levels',
-        ];
-        if (!validKeys.includes(key)) {
-          return;
-        }
-        const current = { ...(this.searchTerms[key] || {}) };
-        if (current[value]) {
-          delete current[value];
-        } else {
-          current[value] = true;
-        }
-        this.searchTerms = { ...this.searchTerms, [key]: current };
-      },
       injecttr(...args) {
         return this.$tr(...args);
       },
@@ -770,16 +736,14 @@
     margin-left: 8px;
   }
 
-  .ai-info-banner {
-    padding: 12px 16px;
-    margin: 8px 0;
+  .search-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border: 1px solid;
     border-radius: 8px;
-  }
-
-  .ai-info-message {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.4;
   }
 
 </style>

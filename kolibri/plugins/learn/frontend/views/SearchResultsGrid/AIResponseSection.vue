@@ -1,20 +1,14 @@
 <template>
 
   <div
-    v-if="messages.length && !dismissed"
+    v-if="messages.length"
     data-testid="ai-response-section"
     class="ai-response-section"
-    :style="{ backgroundColor: $themePalette.yellow.v_100 }"
+    :style="{
+      backgroundColor: $themeTokens.surface,
+      borderColor: $themePalette.grey.v_300,
+    }"
   >
-    <KIconButton
-      data-testid="dismiss-button"
-      icon="close"
-      size="small"
-      class="dismiss-button"
-      :ariaLabel="$tr('dismissMessages')"
-      :style="{ opacity: 0.7 }"
-      @click="dismissed = true"
-    />
     <div class="messages">
       <!-- eslint-disable vue/no-v-html -->
       <div
@@ -40,6 +34,28 @@
         @click="$emit('selectCategory', chip)"
       />
     </div>
+    <div
+      class="disclaimer"
+      :style="{
+        color: $themeTokens.annotation,
+        borderTopColor: $themePalette.grey.v_300,
+      }"
+    >
+      <svg
+        class="ai-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        :style="{ fill: $themeTokens.primary }"
+        aria-hidden="true"
+      >
+        <!-- eslint-disable max-len, vue/max-len -->
+        <path
+          d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"
+        />
+        <!-- eslint-enable max-len, vue/max-len -->
+      </svg>
+      <span>{{ $tr('aiDisclaimer') }}</span>
+    </div>
   </div>
 
 </template>
@@ -61,11 +77,6 @@
         default: () => [],
       },
     },
-    data() {
-      return {
-        dismissed: false,
-      };
-    },
     computed: {
       chipStyles() {
         return {
@@ -78,11 +89,6 @@
           color: this.$themeTokens.primary,
           border: `1px solid ${this.$themeTokens.primary}`,
         };
-      },
-    },
-    watch: {
-      messages() {
-        this.dismissed = false;
       },
     },
     methods: {
@@ -222,9 +228,10 @@
       },
     },
     $trs: {
-      dismissMessages: {
-        message: 'Dismiss AI response',
-        context: 'Accessible label for the button to dismiss the AI response banner',
+      aiDisclaimer: {
+        message:
+          'This response is generated with AI; verify any critical information for accuracy.',
+        context: 'Disclaimer shown beneath an AI-generated response.',
       },
     },
   };
@@ -252,17 +259,10 @@
 <style lang="scss" scoped>
 
   .ai-response-section {
-    position: relative;
-    padding: 16px;
-    padding-inline-end: 40px;
-    margin-bottom: 16px;
+    max-width: 800px;
+    padding: 16px 20px;
+    border: 1px solid;
     border-radius: 8px;
-  }
-
-  .dismiss-button {
-    position: absolute;
-    inset-inline-end: 8px;
-    top: 8px;
   }
 
   .message-text {
@@ -280,6 +280,23 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+  }
+
+  .disclaimer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-top: 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    border-top: 1px solid;
+  }
+
+  .ai-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
   }
 
 </style>

@@ -49,6 +49,10 @@ const MOCK_DEFAULTS = {
   search: jest.fn(),
   searchMore: jest.fn(),
   removeFilterTag: jest.fn(),
+  toggleFilter: jest.fn(),
+  isFilterActive: jest.fn(() => false),
+  isLabelAvailable: jest.fn(() => true),
+  appliedFilters: jest.fn(() => []),
   clearSearch: jest.fn(),
   currentRoute: jest.fn(() => {
     // return a $route-flavored object to avoid undefined errors
@@ -82,6 +86,10 @@ export const injectBaseSearch = jest.fn(() => ({
   availableChannels: [],
   searchableLabels: [],
   activeSearchTerms: [],
+  isFilterActive: jest.fn(() => false),
+  isLabelAvailable: jest.fn(() => true),
+  toggleFilter: jest.fn(),
+  appliedFilters: jest.fn(() => []),
 }));
 
 export const searchKeys = [];

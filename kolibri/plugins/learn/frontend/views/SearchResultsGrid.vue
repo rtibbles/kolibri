@@ -1,14 +1,6 @@
 <template>
 
   <div v-if="!searchLoading">
-    <!-- AI response section - replaces SearchMessages for Learn plugin -->
-    <AIResponseSection
-      :messages="messages"
-      :categoryChips="categoryChips"
-      @selectCategory="$emit('selectCategory', $event)"
-    />
-
-    <!-- Results count and search chips -->
     <h2
       class="results-title"
       data-testid="search-results-title"
@@ -19,11 +11,6 @@
           : $tr('results', { results: results.length })
       }}
     </h2>
-    <SearchChips
-      :searchTerms="searchTerms"
-      @removeItem="removeFilterTag"
-      @clearSearch="clearSearch"
-    />
 
     <!-- Toggle view buttons -->
     <div
@@ -88,10 +75,8 @@
 
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import SearchChips from 'kolibri-common/components/SearchChips';
   import CopiesModal from './CopiesModal';
   import LibraryAndChannelBrowserMainContent from './LibraryAndChannelBrowserMainContent';
-  import AIResponseSection from './SearchResultsGrid/AIResponseSection';
   import MoreToExploreSection from './SearchResultsGrid/MoreToExploreSection';
 
   export default {
@@ -99,8 +84,6 @@
     components: {
       CopiesModal,
       LibraryAndChannelBrowserMainContent,
-      SearchChips,
-      AIResponseSection,
       MoreToExploreSection,
     },
     mixins: [commonCoreStrings],
@@ -124,10 +107,6 @@
         type: Boolean,
         default: false,
       },
-      clearSearch: {
-        type: Function,
-        default: () => {},
-      },
       more: {
         type: Object,
         default: null,
@@ -140,10 +119,6 @@
         type: Array,
         default: () => [],
       },
-      removeFilterTag: {
-        type: Function,
-        default: () => {},
-      },
       searchLoading: {
         type: Boolean,
         default: false,
@@ -151,18 +126,6 @@
       searchMore: {
         type: Function,
         default: () => {},
-      },
-      searchTerms: {
-        type: Object,
-        default: () => {},
-      },
-      messages: {
-        type: Array,
-        default: () => [],
-      },
-      categoryChips: {
-        type: Array,
-        default: () => [],
       },
       exploreGroups: {
         type: Array,
