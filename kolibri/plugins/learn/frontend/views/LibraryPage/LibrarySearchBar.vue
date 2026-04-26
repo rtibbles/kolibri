@@ -23,7 +23,7 @@
         class="search-input"
         :style="{ color: $themeTokens.text }"
         dir="auto"
-        :placeholder="coreString('findSomethingToLearn')"
+        :placeholder="placeholder || coreString('findSomethingToLearn')"
         @input="handleInput"
         @keydown.enter.prevent="handleSubmit"
         @focus="handleFocus"
@@ -134,6 +134,10 @@
     },
     props: {
       value: {
+        type: String,
+        default: '',
+      },
+      placeholder: {
         type: String,
         default: '',
       },

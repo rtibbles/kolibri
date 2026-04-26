@@ -469,6 +469,10 @@
 
   .section {
     margin-top: 40px;
+
+    &:first-child {
+      margin-top: 0;
+    }
   }
 
   .card-grid {

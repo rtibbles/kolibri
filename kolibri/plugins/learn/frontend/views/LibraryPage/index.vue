@@ -135,22 +135,25 @@
         />
       </main>
 
-      <!-- Filter modal replaces sidebar -->
-      <KModal
+      <!-- All filters side panel -->
+      <SidePanelModal
         v-if="showFilterModal"
         data-testid="filter-modal"
-        :title="$tr('allFilters')"
-        :cancelText="coreString('closeAction')"
-        size="large"
-        @cancel="showFilterModal = false"
+        alignment="right"
+        closeButtonIconType="close"
+        @closePanel="showFilterModal = false"
       >
+        <template #header>
+          <h1 class="side-panel-title">{{ $tr('allFilters') }}</h1>
+        </template>
         <SearchFiltersPanel
           ref="filterPanel"
           v-model="searchTerms"
           data-testid="filter-panel"
+          accordion
           :hideKeywords="true"
         />
-      </KModal>
+      </SidePanelModal>
 
       <!-- Side Panel for metadata -->
       <SidePanelModal
@@ -744,6 +747,14 @@
     margin-bottom: 24px;
     border: 1px solid;
     border-radius: 8px;
+  }
+
+  .side-panel-title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
 </style>
