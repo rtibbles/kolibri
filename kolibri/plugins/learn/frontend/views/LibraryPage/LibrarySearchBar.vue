@@ -58,6 +58,7 @@
           @click="handleClear"
         />
         <KButton
+          v-if="!windowIsSmall"
           data-testid="all-filters-button"
           appearance="flat-button"
           :text="$tr('allFilters')"
@@ -100,6 +101,7 @@
 <script>
 
   import { ref } from 'vue';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useUser from 'kolibri/composables/useUser';
   import { injectBaseSearch } from 'kolibri-common/composables/useBaseSearch';
@@ -119,6 +121,7 @@
       const { keyWordAutoCompleteHandler, autoCompleteSuggestions } = injectBaseSearch();
       const { recentSearches, addSearch } = useRecentSearches(user_id);
       const { resumableContentNodes } = useLearnerResources();
+      const { windowIsSmall } = useKResponsiveWindow();
       const isFocused = ref(false);
       const hoveredFilter = ref(null);
 
@@ -128,6 +131,7 @@
         recentSearches,
         addSearch,
         resumableContentNodes,
+        windowIsSmall,
         isFocused,
         hoveredFilter,
       };
@@ -258,6 +262,7 @@
 
   .search-input {
     flex: 1;
+    min-width: 0;
     height: 100%;
     padding: 0 12px;
     font-size: 16px;

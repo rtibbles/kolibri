@@ -1,6 +1,6 @@
 <template>
 
-  <div :style="{ maxWidth: '1700px' }">
+  <div :style="{ maxWidth: '1700px', margin: '0 auto' }">
     <transition name="delay-entry">
       <PostSetupModalGroup
         v-if="!(rootNodesLoading || searchLoading) && welcomeModalVisible"
@@ -41,7 +41,7 @@
           />
 
           <AIResponseSection
-            v-if="!rootNodesLoading"
+            v-if="!rootNodesLoading && !searchLoading"
             :messages="messages"
             :categoryChips="categoryChips"
           />
@@ -50,6 +50,19 @@
             v-if="!rootNodesLoading && (!isLocalLibraryEmpty || deviceId)"
             data-testid="horizontal-filter-pills"
           />
+
+          <div
+            v-if="windowIsSmall"
+            class="all-filters-row"
+          >
+            <KButton
+              data-testid="all-filters-button-mobile"
+              appearance="flat-button"
+              icon="filter"
+              :text="$tr('allFilters')"
+              @click="showFilterModal = true"
+            />
+          </div>
         </div>
 
         <!--
@@ -212,6 +225,7 @@
   import { get, set } from '@vueuse/core';
 
   import { onMounted, getCurrentInstance, ref, watch } from 'vue';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import pluginData from 'kolibri-plugin-data';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
   import useUser from 'kolibri/composables/useUser';
@@ -310,6 +324,7 @@
       const { back, genContentLinkBackLinkCurrentPage } = useContentLink();
       const { deviceName } = currentDeviceData();
       const { fetchChannels } = useChannels();
+      const { windowIsSmall } = useKResponsiveWindow();
 
       onMounted(() => {
         const keywords = currentRoute().query.keywords;
@@ -453,6 +468,7 @@
         userId: user_id,
         messages,
         keywordsInput,
+        windowIsSmall,
         genContentLinkBackLinkCurrentPage,
       };
     },
@@ -747,6 +763,11 @@
     margin-bottom: 24px;
     border: 1px solid;
     border-radius: 8px;
+  }
+
+  .all-filters-row {
+    display: flex;
+    justify-content: center;
   }
 
   .side-panel-title {

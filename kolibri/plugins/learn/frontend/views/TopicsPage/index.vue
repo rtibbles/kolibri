@@ -56,7 +56,7 @@
               @selectFilter="handleSelectFilter"
             />
             <AIResponseSection
-              v-if="!loading"
+              v-if="!loading && !searchLoading"
               :messages="messages"
               :categoryChips="[]"
             />
