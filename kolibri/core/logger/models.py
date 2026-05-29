@@ -158,6 +158,16 @@ class ContentSummaryLog(BaseLogModel):
     kind = models.CharField(max_length=200, validators=[MinLengthValidator(1)])
     extra_fields = JSONField(default={}, blank=True)
 
+    class Meta:
+        # Progress lookups and the per-content-node progress subqueries filter on
+        # (content_id, user); a composite index turns those into index seeks.
+        indexes = [
+            models.Index(
+                fields=["content_id", "user"],
+                name="contentsummarylog_cid_user",
+            ),
+        ]
+
     def calculate_source_id(self):
         return self.content_id
 
