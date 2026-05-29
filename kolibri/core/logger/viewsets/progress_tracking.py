@@ -939,13 +939,10 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         return update_fields
 
     def _update_summary_log(
-        self, user, sessionlog, end_timestamp, validated_data, context
+        self, user, sessionlog, summarylog, end_timestamp, validated_data, context
     ):
         if user.is_anonymous:
             return
-        summarylog = ContentSummaryLog.objects.get(
-            content_id=sessionlog.content_id, user=user
-        )
         was_complete = summarylog.progress >= 1
 
         update_fields = self._update_content_log(
@@ -963,21 +960,16 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         summarylog.save(update_fields=update_fields)
         return summarylog
 
-    def _update_session(self, session_id, user, end_timestamp, validated_data):
-        sessionlog = self._get_session_log(session_id, user)
-
-        context = LogContext(**sessionlog.extra_fields.get("context", {}))
-
-        if "quiz_id" in context:
-            self._check_quiz_permissions(user, context["quiz_id"])
-
+    def _update_session(
+        self, sessionlog, summarylog, user, end_timestamp, validated_data, context
+    ):
         update_fields = self._update_content_log(
             sessionlog, end_timestamp, validated_data
         )
         sessionlog.save(update_fields=update_fields)
 
         summarylog = self._update_summary_log(
-            user, sessionlog, end_timestamp, validated_data, context
+            user, sessionlog, summarylog, end_timestamp, validated_data, context
         )
 
         if summarylog is not None:
@@ -1033,15 +1025,30 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         end_timestamp = local_now()
         validated_data = serializer.validated_data
+        user = request.user
+
+        # Fetch the existing logs and run permission checks outside the write
+        # transaction. The SQLite backend uses BEGIN IMMEDIATE, so the global
+        # write lock is acquired the moment the transaction opens; keeping these
+        # reads out of it means the lock is only held for the writes below.
+        sessionlog = self._get_session_log(pk, user)
+        context = LogContext(**sessionlog.extra_fields.get("context", {}))
+        if "quiz_id" in context:
+            self._check_quiz_permissions(user, context["quiz_id"])
+        summarylog = None
+        if not user.is_anonymous:
+            summarylog = ContentSummaryLog.objects.get(
+                content_id=sessionlog.content_id, user=user
+            )
 
         with transaction.atomic(), dataset_cache:
-            self._precache_dataset_id(request.user)
+            self._precache_dataset_id(user)
 
             output, summarylog_id, context = self._update_session(
-                pk, request.user, end_timestamp, validated_data
+                sessionlog, summarylog, user, end_timestamp, validated_data, context
             )
             masterylog_id = self._update_and_return_mastery_log_id(
-                request.user,
+                user,
                 output["complete"],
                 validated_data.get("time_spent_delta"),
                 summarylog_id,
@@ -1052,7 +1059,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
                 attempt_output = self._update_or_create_attempts(
                     pk,
                     masterylog_id,
-                    request.user,
+                    user,
                     validated_data["interactions"],
                     end_timestamp,
                     context,
