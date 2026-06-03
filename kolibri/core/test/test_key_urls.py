@@ -3,11 +3,14 @@ from unittest.mock import patch
 
 import requests
 from django.conf import settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils.translation import LANGUAGE_SESSION_KEY
 
 from kolibri.core.auth.constants import role_kinds
+from kolibri.core.auth.models import Role
 from kolibri.core.auth.test.helpers import clear_process_cache
 from kolibri.core.auth.test.helpers import create_superuser
 from kolibri.core.auth.test.helpers import KolibriAPITestCase as APITestCase
@@ -161,6 +164,46 @@ class KolibriTagNavigationTestCase(APITestCase):
     def test_class_coach_is_redirected_to_coach_plugin(self):
         self.client.login(username=self.class_coach.username, password=DUMMY_PASSWORD)
         self._assert_location_reverse_url("kolibri:kolibri.plugins.coach:coach")
+
+    def _login_via_session_endpoint(self, user):
+        self.client.post(
+            reverse("kolibri:core:session-list"),
+            data={
+                "username": user.username,
+                "password": DUMMY_PASSWORD,
+                "facility": self.facility.id,
+            },
+            format="json",
+        )
+
+    def test_session_heartbeat_refreshes_identity_used_by_root_redirect(self):
+        user = FacilityUserFactory.create(facility=self.facility)
+        self._login_via_session_endpoint(user)
+        self.facility.add_role(user, role_kinds.COACH)
+        self.client.put(
+            reverse("kolibri:core:session-detail", kwargs={"pk": "current"}),
+            format="json",
+        )
+        self._assert_location_reverse_url("kolibri:kolibri.plugins.coach:coach")
+
+    def test_root_redirect_reuses_session_identity_without_requerying_roles(self):
+        self._login_via_session_endpoint(self.facility_coach)
+        role_table = Role._meta.db_table
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("kolibri:core:root_redirect"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.get("location"),
+            reverse("kolibri:kolibri.plugins.coach:coach"),
+        )
+        role_queries = [
+            query for query in queries.captured_queries if role_table in query["sql"]
+        ]
+        self.assertEqual(
+            role_queries,
+            [],
+            "root redirect should reuse the roles resolved at login, not re-query them",
+        )
 
 
 class AllUrlsTest(APITestCase):

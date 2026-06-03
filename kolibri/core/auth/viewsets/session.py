@@ -295,6 +295,11 @@ class SessionViewSet(viewsets.ViewSet):
         # Set last activity on session to the current time to prevent session timeout
         # Only do this for logged in users, as anonymous users cannot get logged out!
         request.session["last_session_request"] = int(time.time())
+        request.session["kind"] = session["kind"]
+        request.session["full_facility_import"] = session["full_facility_import"]
+        request.session["full_facility_on_my_own_setup"] = (
+            user.full_facility_on_my_own_setup
+        )
         # Default to active, only assume not active when explicitly set.
         active = request.data.get("active", False)
 
