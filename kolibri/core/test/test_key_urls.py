@@ -1,10 +1,13 @@
 import requests
 from django.conf import settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
 from mock import patch
 
 from kolibri.core.auth.constants import role_kinds
+from kolibri.core.auth.models import Role
 from kolibri.core.auth.test.helpers import clear_process_cache
 from kolibri.core.auth.test.helpers import create_superuser
 from kolibri.core.auth.test.helpers import KolibriAPITestCase as APITestCase
@@ -154,6 +157,36 @@ class KolibriTagNavigationTestCase(APITestCase):
     def test_class_coach_is_redirected_to_coach_plugin(self):
         self.client.login(username=self.class_coach.username, password=DUMMY_PASSWORD)
         self._assert_location_reverse_url("kolibri:kolibri.plugins.coach:coach")
+
+    def test_root_redirect_reuses_session_identity_without_requerying_roles(self):
+        # Logging in through the session endpoint resolves the user's roles and
+        # stores them on the session. The root redirect should reuse them rather
+        # than re-running the role query it already paid for at login.
+        self.client.post(
+            reverse("kolibri:core:session-list"),
+            data={
+                "username": self.facility_coach.username,
+                "password": DUMMY_PASSWORD,
+                "facility": self.facility.id,
+            },
+            format="json",
+        )
+        role_table = Role._meta.db_table
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("kolibri:core:root_redirect"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.get("location"),
+            reverse("kolibri:kolibri.plugins.coach:coach"),
+        )
+        role_queries = [
+            query for query in queries.captured_queries if role_table in query["sql"]
+        ]
+        self.assertEqual(
+            role_queries,
+            [],
+            "root redirect should reuse the roles resolved at login, not re-query them",
+        )
 
 
 class AllUrlsTest(APITestCase):

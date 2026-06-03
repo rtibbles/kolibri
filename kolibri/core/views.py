@@ -118,8 +118,63 @@ def get_url_by_role(role, full_facility_import=False, on_my_own_device=False):
         return obj.url
 
 
+def get_url_by_kinds(kinds, full_facility_import=False, on_my_own_device=False):
+    """
+    Returns the redirect URL for the highest-priority kind the user holds,
+    falling back to the learner landing page.
+    """
+
+    def url_for(role):
+        return get_url_by_role(
+            role,
+            full_facility_import=full_facility_import,
+            on_my_own_device=on_my_own_device,
+        )
+
+    url = None
+    if user_kinds.SUPERUSER in kinds:
+        url = url_for(user_kinds.SUPERUSER)
+    if user_kinds.ADMIN in kinds:
+        url = url or url_for(user_kinds.ADMIN)
+    if user_kinds.COACH in kinds or user_kinds.ASSIGNABLE_COACH in kinds:
+        url = url or url_for(user_kinds.COACH)
+    return url or url_for(user_kinds.LEARNER)
+
+
 class RootURLRedirectView(RedirectView):
     permanent = False
+
+    def _user_identity(self):
+        """
+        Returns the (kinds, full_facility_import, on_my_own_device) needed to
+        resolve the landing page. The session endpoint stores these at login, so
+        each is reused from the session when present rather than re-resolved;
+        sessions that predate login or were not created via the session endpoint
+        fall back to querying.
+        """
+        session = self.request.session
+        user = self.request.user
+        if "kind" in session:
+            kinds = session["kind"]
+        else:
+            kinds = list(
+                Role.objects.filter(user_id=user.id)
+                .values_list("kind", flat=True)
+                .distinct()
+            )
+            if user.is_superuser:
+                kinds.insert(0, user_kinds.SUPERUSER)
+        full_facility_import = (
+            session["full_facility_import"]
+            if "full_facility_import" in session
+            else user.full_facility_import
+        )
+        on_my_own_device = (
+            session["full_facility_on_my_own_setup"]
+            if "full_facility_on_my_own_setup" in session
+            else user.full_facility_on_my_own_setup
+        )
+        return kinds, full_facility_import, on_my_own_device
 
     def get_redirect_url(self, *args, **kwargs):
         """
@@ -130,35 +185,13 @@ class RootURLRedirectView(RedirectView):
         if not device_provisioned() and SetupHook.provision_url:
             return SetupHook.provision_url()
 
-        if self.request.user.is_authenticated:
-            url = None
-            if self.request.user.is_superuser:
-                url = url or get_url_by_role(
-                    user_kinds.SUPERUSER,
-                    full_facility_import=self.request.user.full_facility_import,
-                    on_my_own_device=self.request.user.full_facility_on_my_own_setup,
-                )
-            roles = set(
-                Role.objects.filter(user_id=self.request.user.id)
-                .values_list("kind", flat=True)
-                .distinct()
-            )
-            if user_kinds.ADMIN in roles:
-                url = url or get_url_by_role(
-                    user_kinds.ADMIN,
-                    full_facility_import=self.request.user.full_facility_import,
-                    on_my_own_device=self.request.user.full_facility_on_my_own_setup,
-                )
-            if user_kinds.COACH in roles or user_kinds.ASSIGNABLE_COACH in roles:
-                url = url or get_url_by_role(
-                    user_kinds.COACH,
-                    full_facility_import=self.request.user.full_facility_import,
-                    on_my_own_device=self.request.user.full_facility_on_my_own_setup,
-                )
-            url = url or get_url_by_role(
-                user_kinds.LEARNER,
-                full_facility_import=self.request.user.full_facility_import,
-                on_my_own_device=self.request.user.full_facility_on_my_own_setup,
+        user = self.request.user
+        if user.is_authenticated:
+            kinds, full_facility_import, on_my_own_device = self._user_identity()
+            url = get_url_by_kinds(
+                kinds,
+                full_facility_import=full_facility_import,
+                on_my_own_device=on_my_own_device,
             )
         else:
             url = get_url_by_role(user_kinds.ANONYMOUS)
