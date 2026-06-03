@@ -187,6 +187,68 @@ class ProgressTrackingViewSetStartSessionFreshTestCase(APITestCase):
         self.assertEqual(result["extra_fields"], {})
         self.assertEqual(result["context"]["node_id"], self.node.id)
 
+    def _create_exercise_node(self):
+        node = ContentNode.objects.create(
+            channel_id=self.channel_id,
+            content_id=uuid.uuid4().hex,
+            id=uuid.uuid4().hex,
+            kind=content_kinds.EXERCISE,
+        )
+        AssessmentMetaData.objects.create(
+            mastery_model={"type": exercises.M_OF_N, "m": 8, "n": 10},
+            contentnode=node,
+            id=uuid.uuid4().hex,
+            number_of_assessments=20,
+        )
+        return node
+
+    def _start_exercise_session(self, node):
+        return self.client.post(
+            reverse("kolibri:core:trackprogress-list"),
+            data={
+                "node_id": node.id,
+                "content_id": node.content_id,
+                "channel_id": node.channel_id,
+                "kind": node.kind,
+                "mastery_model": {"type": exercises.M_OF_N, "m": 8, "n": 10},
+            },
+            format="json",
+        )
+
+    def test_start_session_fresh_exercise_masterylog_id_is_stable(self):
+        # The mastery log id is derived from the summary log id, so a summary
+        # log built in memory must have its id calculated before the mastery
+        # log is constructed against it - otherwise the mastery log id hashes
+        # a None FK, corrupting the id morango sync dedups on.
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self._start_exercise_session(self._create_exercise_node())
+
+        self.assertEqual(response.status_code, 200)
+        masterylog = MasteryLog.objects.get()
+        self.assertEqual(
+            masterylog._morango_source_id,
+            "{}:{}".format(masterylog.summarylog_id, masterylog.mastery_level),
+        )
+
+    def test_start_session_two_fresh_exercises_succeeds(self):
+        # A None-derived mastery log id is identical for every fresh summary
+        # log, so the second exercise's insert collides with the first's.
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self._start_exercise_session(self._create_exercise_node())
+        self.assertEqual(response.status_code, 200)
+
+        response = self._start_exercise_session(self._create_exercise_node())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(MasteryLog.objects.count(), 2)
+
     def test_start_session_logged_in_lesson_succeeds(self):
         self.client.login(
             username=self.user.username,
@@ -1309,6 +1371,61 @@ class ProgressTrackingViewSetStartSessionAssessmentResumeTestCase(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["totalattempts"], 15)
         self.assertEqual(len(response.json()["pastattempts"]), 15)
+
+    def _make_filter_miss_once(self, manager):
+        """
+        Simulate a concurrent request winning the race: the view's read misses,
+        but the deterministically-id'd row exists by the time it saves. The
+        first .filter() call returns an empty queryset; later calls (the
+        post-IntegrityError re-read) behave normally.
+        """
+        real_filter = manager.filter
+        calls = []
+
+        def filter_miss_once(*args, **kwargs):
+            if not calls:
+                calls.append(True)
+                return manager.none()
+            return real_filter(*args, **kwargs)
+
+        return filter_miss_once
+
+    def test_start_assessment_session_masterylog_create_race_succeeds(self):
+        with patch.object(
+            MasteryLog.objects,
+            "filter",
+            side_effect=self._make_filter_miss_once(MasteryLog.objects),
+        ):
+            response = self._make_request({})
+
+        self.assertEqual(response.status_code, 200)
+        # The existing try was picked up rather than duplicated or 500ing.
+        self.assertEqual(MasteryLog.objects.count(), 1)
+        data = response.json()
+        self.assertEqual(data["context"]["mastery_level"], 1)
+        self.assertEqual(data["time_spent"], self.mastery_log.time_spent)
+        # The session itself was still created.
+        self.assertEqual(ContentSessionLog.objects.count(), 2)
+        self.assertEqual(
+            ContentSessionLog.objects.exclude(id=self.session_log.id).get().id,
+            data["session_id"],
+        )
+
+    def test_start_assessment_session_summarylog_create_race_succeeds(self):
+        with patch.object(
+            ContentSummaryLog.objects,
+            "filter",
+            side_effect=self._make_filter_miss_once(ContentSummaryLog.objects),
+        ):
+            response = self._make_request({})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ContentSummaryLog.objects.count(), 1)
+        self.assertEqual(MasteryLog.objects.count(), 1)
+        data = response.json()
+        # Output reflects the existing summary log, not a blank new one.
+        self.assertEqual(data["time_spent"], self.mastery_log.time_spent)
+        self.assertEqual(ContentSessionLog.objects.count(), 2)
 
     def tearDown(self):
         self.client.logout()
