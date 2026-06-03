@@ -9,6 +9,7 @@ from diskcache.fanout import FanoutCache
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db import connections
 from django.db.utils import DatabaseError
 
 import kolibri
@@ -106,6 +107,11 @@ def _migrate_databases():
     """
     for database in settings.DATABASES:
         call_command("migrate", interactive=False, database=database)
+        connection = connections[database]
+        if connection.vendor == "sqlite":
+            # SQLite recommends running optimize after schema updates
+            cursor = connection.cursor()
+            cursor.execute("PRAGMA optimize;")
 
     # load morango fixtures needed for certificate related operations
     call_command("loaddata", "scopedefinitions")

@@ -167,11 +167,20 @@ if conf.OPTIONS["Database"]["DATABASE_ENGINE"] == "sqlite":
     # Using custom SQLite backend that uses BEGIN IMMEDIATE transactions.
     # Once upgraded to Django 5.2+, revert to "django.db.backends.sqlite3" and use
     # the transaction_mode option instead.
+    # Persist SQLite connections across requests so the per-connection PRAGMAs
+    # (set via the connection_created signal) run once per connection rather than
+    # on every request. Safe for SQLite specifically: the "server" is a local
+    # file, so connections never time out server-side, and the thread-pool fd
+    # budget (FD_PER_THREAD) already reserves one connection per database per
+    # thread. Postgres deliberately keeps the default (0) below — persistent
+    # connections there risk exhausting server max_connections across the thread
+    # pool, and Django 3.2 has no CONN_HEALTH_CHECKS to recover stale ones.
     DATABASES = {
         "default": {
             "ENGINE": "kolibri.deployment.default.db.backends.sqlite3",
             "NAME": get_sqlite_database_path("default"),
             "OPTIONS": {"timeout": 100},
+            "CONN_MAX_AGE": None,
         }
     }
 
@@ -180,6 +189,7 @@ if conf.OPTIONS["Database"]["DATABASE_ENGINE"] == "sqlite":
             "ENGINE": "kolibri.deployment.default.db.backends.sqlite3",
             "NAME": get_sqlite_database_path(additional_db),
             "OPTIONS": {"timeout": 100},
+            "CONN_MAX_AGE": None,
         }
 
         if additional_db == JOB_STORAGE:
