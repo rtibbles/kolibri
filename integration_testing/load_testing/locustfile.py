@@ -24,6 +24,7 @@ from datetime import datetime
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
+from grouping import group_name
 from kolibri_client import CSRFAdapter
 from locust import between
 from locust import HttpUser
@@ -222,7 +223,7 @@ class LessonUser(HttpUser):
 
         for attempt in range(MAX_RETRIES):
             method_func = getattr(self.client, method)
-            response = method_func(path, **kwargs)
+            response = method_func(path, name=group_name(path), **kwargs)
 
             # Only retry trackprogress requests with 503 status
             if (
@@ -309,10 +310,12 @@ class LessonUser(HttpUser):
 
         # Check if we succeeded
         if not self.trackprogress_session_id:
-            # Record failure in Locust stats
+            # Record failure in Locust stats. The name must match what
+            # group_name() produces for real trackprogress URLs so this
+            # synthetic event sorts alongside them in the stats.
             self.environment.events.request.fire(
                 request_type=method.upper(),
-                name="/api/logger/trackprogress/[session_id]/ (no session)",
+                name="/api/logger/trackprogress/{id}/ (no session)",
                 response_time=0,
                 response_length=0,
                 exception=Exception("No trackprogress session established"),
