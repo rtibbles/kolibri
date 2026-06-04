@@ -104,8 +104,8 @@ def _strip_har_responses(har_path):
         if "response" in entry:
             del entry["response"]
 
-    # Write back stripped HAR
+    # Write back stripped HAR, compactly - these files get committed (via LFS)
     with open(har_path, "w") as f:
-        json.dump(har, f, indent=2)
+        json.dump(har, f, separators=(",", ":"))
 
     info("Stripped response data from HAR file")
