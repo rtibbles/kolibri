@@ -17,6 +17,7 @@ Usage:
 
 import itertools
 import json
+import logging
 import os
 import random
 import re
@@ -25,11 +26,14 @@ from datetime import datetime
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
+import requests
 from grouping import group_name
 from kolibri_client import CSRFAdapter
 from locust import between
 from locust import HttpUser
 from locust import task
+
+logger = logging.getLogger(__name__)
 
 # Load configuration from environment variables
 HAR_FILE = os.environ["KOLIBRI_HAR_FILE"]
@@ -40,10 +44,45 @@ LESSON_ID = os.environ["KOLIBRI_LESSON_ID"]
 NUM_USERS = int(os.environ.get("KOLIBRI_NUM_USERS", 50))
 KOLIBRI_VERSION = os.environ["KOLIBRI_VERSION"]
 
+# Webpack drops the PEP 440 local build-date segment (".dYYYYMMDD") that
+# setuptools-scm appends to kolibri.__version__ for untagged/dirty builds, so
+# strip it to match the bundle filenames the server serves (dev builds 404
+# every /static bundle otherwise).
+STATIC_FILENAME_VERSION = re.sub(r"\.d\d+$", "", KOLIBRI_VERSION)
+
 # Retry configuration for 503 errors on trackprogress endpoints
 # These match frontend behavior by default but can be tuned for load testing
 MAX_RETRIES = int(os.environ.get("KOLIBRI_MAX_RETRIES", 5))
 DEFAULT_RETRY_DELAY = float(os.environ.get("KOLIBRI_RETRY_DELAY", 5.0))
+
+# API endpoints that moved between Kolibri versions. We probe the new path at
+# startup and, if it exists, rewrite the HAR's old path to it at replay time; a
+# server still serving the old path 404s the probe and no rewrite happens, so
+# one HAR replays against both.
+ENDPOINT_REMAP = {
+    # facilityusername moved to the user_auth plugin (PR #14823)
+    "/api/auth/facilityusername/": "/auth/api/facilityusername/",
+}
+
+
+def _resolve_endpoint_remap():
+    active = {}
+    for old, new in ENDPOINT_REMAP.items():
+        try:
+            # Non-404 means the endpoint lives at the new path; 404 means it
+            # does not (older server), so keep the old path.
+            if requests.get(SERVER_URL + new, timeout=10).status_code != 404:
+                active[old] = new
+        except requests.RequestException:
+            pass
+    return active
+
+
+ACTIVE_ENDPOINT_REMAP = _resolve_endpoint_remap()
+
+# API paths that 404'd, reported once each so a moved/renamed endpoint surfaces
+# in the log instead of silently inflating the failure count.
+_reported_404_paths = set()
 
 
 # Load HAR file at module level (before worker processes fork)
@@ -106,7 +145,7 @@ def _load_and_parse_har(har_path):  # noqa: C901
         # Pattern matches version like: 0.18.4, 0.19.0b0.dev0+git.70.gb72619fc, etc.
         url_path = re.sub(
             r"\d+\.\d+\.\d+[a-zA-Z0-9+.]*\.(js|css)",
-            rf"{KOLIBRI_VERSION}.\1",
+            rf"{STATIC_FILENAME_VERSION}.\1",
             url_path,
         )
 
@@ -331,6 +370,20 @@ class LessonUser(HttpUser):
 
         return True
 
+    def _remap_endpoint(self, path):
+        """Rewrite a moved endpoint's old path to its current one (ACTIVE_ENDPOINT_REMAP)."""
+        for old, new in ACTIVE_ENDPOINT_REMAP.items():
+            if path.startswith(old):
+                return new + path[len(old) :]
+        return path
+
+    def _note_api_404(self, path):
+        """Log an unremapped API 404 once, so a moved endpoint is visible rather than silent."""
+        key = group_name(path)
+        if key not in _reported_404_paths:
+            _reported_404_paths.add(key)
+            logger.warning("API endpoint 404 (moved/renamed, not remapped?): %s", key)
+
     def _parameterize_url(self, path):
         """
         Replace dynamic IDs in URL path with actual values.
@@ -402,7 +455,7 @@ class LessonUser(HttpUser):
             self._swap_params(kwargs["params"])
 
         # Identify request type
-        path = req["path"]
+        path = self._remap_endpoint(req["path"])
         method = req["method"]
         is_trackprogress_post = (
             path == "/api/logger/trackprogress/" and method == "post"
@@ -426,6 +479,10 @@ class LessonUser(HttpUser):
 
         # Execute request with retry logic
         response = self._make_request_with_retry(req["method"], path, **kwargs)
+
+        # Surface API endpoints that 404 (e.g. moved without a remap entry)
+        if response.status_code == 404 and "/api/" in path:
+            self._note_api_404(path)
 
         # Extract session data from responses
         self._extract_session_data(path, req["method"], response)
