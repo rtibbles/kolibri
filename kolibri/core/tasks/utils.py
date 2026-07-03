@@ -116,6 +116,7 @@ class InfiniteLoopThread(Thread):
 
         wait = self.wait - (corrected_time if corrected_time is not None else 0)
 
+        # Only sleep if wait is positive; wait=0 means func handles its own blocking
         if wait > 0:
             # Wait on the shutdown event rather than sleeping, so that a stop()
             # request during the interval is acted on promptly instead of having

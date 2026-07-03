@@ -11,6 +11,7 @@ from django.db.models import Q
 from django.db.models.functions import Now
 
 from kolibri.core.tasks.constants import DEFAULT_QUEUE
+from kolibri.core.tasks.constants import JOB_NOTIFICATION_CHANNEL
 from kolibri.core.tasks.constants import NO_VALUE
 from kolibri.core.tasks.constants import Priority
 from kolibri.core.tasks.exceptions import JobNotFound
@@ -21,6 +22,7 @@ from kolibri.core.tasks.job import Job
 from kolibri.core.tasks.job import State
 from kolibri.core.tasks.models import Job as ORMJob
 from kolibri.core.tasks.models import Supervisor as ORMSupervisor
+from kolibri.core.tasks.notifiers import JobNotifier
 from kolibri.core.tasks.validation import validate_exception
 from kolibri.core.tasks.validation import validate_interval
 from kolibri.core.tasks.validation import validate_priority
@@ -219,12 +221,27 @@ class Storage:
         self._update_job(
             job_id, State.CANCELING, expected_supervisor_id=expected_supervisor_id
         )
+        # Wake the job checker so it picks up the cancellation promptly
+        self._notify_job_checker()
 
     def _filter_next_query(self, queryset, priority):
         now = self._now()
         return queryset.filter(
             Q(scheduled_time__lte=now), state=State.QUEUED, priority__lte=priority
         ).order_by("priority", "scheduled_time", "time_created")
+
+    def seconds_until_next_queued_job(self):
+        """
+        Seconds until the soonest QUEUED job is due, negative if already due,
+        or None if nothing is queued.
+        """
+        now = self._now()
+        next_job = (
+            ORMJob.objects.filter(state=State.QUEUED).order_by("scheduled_time").first()
+        )
+        if next_job is None:
+            return None
+        return (next_job.scheduled_time - now).total_seconds()
 
     def _postgres_next_queued_job(self, priority, supervisor_id):
         """
@@ -1003,7 +1020,26 @@ class Storage:
 
             self._run_scheduled_hooks(orm_job)
 
+        # Wake the job checker now that the job has been committed
+        self._notify_job_checker()
+
         return job.job_id
+
+    def _notify_job_checker(self):
+        """
+        Wake the job checker promptly instead of leaving it to its next poll.
+
+        For PostgreSQL, sends NOTIFY on the job database connection - if a
+        transaction is in progress, PostgreSQL defers delivery until commit.
+        The in-process event used otherwise fires immediately, so call this
+        after the transaction making the relevant change has committed.
+        """
+        job_connection = connections[ORMJob.objects.db]
+        if job_connection.vendor == "postgresql":
+            with job_connection.cursor() as cursor:
+                cursor.execute("NOTIFY {}".format(JOB_NOTIFICATION_CHANNEL))
+        else:
+            JobNotifier().notify()
 
     def _run_scheduled_hooks(self, orm_job):
         job = self._orm_to_job(orm_job)

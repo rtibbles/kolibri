@@ -1174,6 +1174,32 @@ class TestWorkerSupervisor:
                 w.storage.clear(force=True)
                 w.shutdown()
 
+    def test_loop_interval_defaults_to_heartbeat_interval(self):
+        # With no override the supervisor wakes no more often than its
+        # heartbeat - notifications carry the latency, not polling.
+        w = WorkerSupervisor(regular_workers=1, high_workers=1)
+        try:
+            assert w.loop_interval == w._heartbeat_interval
+        finally:
+            w.storage.clear(force=True)
+            w.shutdown()
+
+    def test_near_future_job_runs_before_the_idle_interval(self, worker):
+        # A job scheduled to come due well within the (long, heartbeat-length)
+        # idle interval must still run promptly: the loop looks ahead to the
+        # next scheduled job and wakes for it rather than sleeping the interval.
+        assert worker.loop_interval > 1
+        job_id = worker.storage.enqueue_in(
+            datetime.timedelta(seconds=0.3), Job(id, args=(9,)), QUEUE
+        )
+
+        deadline = time.time() + 3
+        while worker.storage.get_job(job_id).state != State.COMPLETED:
+            assert time.time() < deadline, (
+                "Scheduled job did not run before the interval"
+            )
+            time.sleep(0.05)
+
     def test_supervisor_unregisters_on_shutdown(self):
         w = WorkerSupervisor(regular_workers=1, high_workers=1)
         supervisor_id = w.supervisor_id

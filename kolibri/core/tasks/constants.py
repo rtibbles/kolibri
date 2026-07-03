@@ -4,6 +4,9 @@ DEFAULT_QUEUE = "kolibri"
 # unowned job's supervisor_id), so "not provided" needs a distinct marker.
 NO_VALUE = object()
 
+# PostgreSQL LISTEN/NOTIFY channel used to wake the task worker's job checker
+JOB_NOTIFICATION_CHANNEL = "kolibri_job_queue"
+
 
 class Priority:
     """

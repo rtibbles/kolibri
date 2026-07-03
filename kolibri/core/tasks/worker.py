@@ -9,10 +9,14 @@ from concurrent.futures import ThreadPoolExecutor
 from django.db import connection as django_connection
 
 from kolibri.core.tasks.constants import Priority
+from kolibri.core.tasks.notifiers import JobNotifier
 from kolibri.core.tasks.utils import InfiniteLoopThread
 from kolibri.utils.conf import OPTIONS
 
 logger = logging.getLogger(__name__)
+
+# Poll interval while due jobs wait for a busy worker pool to free up.
+BACKLOG_POLL_INTERVAL = 0.1
 
 
 def execute_job(
@@ -117,6 +121,9 @@ class WorkerSupervisor:
 
         self.storage = job_storage
 
+        # Notifier for event-driven job pickup, replacing fixed-interval polling.
+        self.notifier = JobNotifier()
+
         # Register this supervisor in the registry, keeping the identity
         # so that the heartbeat can re-register if a peer wrongly declares
         # this supervisor dead and removes its record.
@@ -137,6 +144,10 @@ class WorkerSupervisor:
         # before a peer declares this supervisor dead.
         self._heartbeat_interval = self.supervisor_stale_threshold / 3
         self._last_heartbeat = time.monotonic()
+
+        # Idle wake interval: wake no more often than the heartbeat (longer
+        # would miss beats) and let notifications carry pickup latency.
+        self.loop_interval = self._heartbeat_interval
         # Set during shutdown to stop claiming new jobs while the loop keeps
         # heartbeating until in-flight jobs drain.
         self._draining = threading.Event()
@@ -151,17 +162,34 @@ class WorkerSupervisor:
         Returns: the Thread object.
         """
         t = InfiniteLoopThread(
-            self._supervise, thread_name="SUPERVISOR", wait_between_runs=0.2
+            self._supervise,
+            thread_name="SUPERVISOR",
+            wait_between_runs=0,  # Blocking happens inside _supervise via notifier
         )
         t.start()
         return t
 
     def _supervise(self):
+        # Block until a job notification arrives or the wait elapses, rather
+        # than polling on a fixed interval. This also paces the loop while
+        # draining, so wait_between_runs can stay at 0.
+        self.notifier.wait_for_job(timeout=self._next_wait())
         # While draining (shutdown), stop claiming but keep heartbeating so a
         # peer does not declare us dead and requeue our still-running jobs.
         if not self._draining.is_set():
             self.check_jobs()
         self._maybe_heartbeat()
+
+    def _next_wait(self):
+        seconds = self.storage.seconds_until_next_queued_job()
+        if seconds is None:
+            # Nothing queued: sleep the idle interval.
+            return self.loop_interval
+        if seconds <= 0:
+            # Due now but the pool was busy; poll so it dispatches as slots free.
+            return BACKLOG_POLL_INTERVAL
+        # A job comes due later: wake for it, but no later than the idle interval.
+        return min(self.loop_interval, seconds)
 
     def _maybe_heartbeat(self):
         now = time.monotonic()
@@ -230,9 +258,13 @@ class WorkerSupervisor:
         self.shutdown_workers(wait=wait)
         # Drained - stop the loop and deregister.
         self.supervisor_thread.stop()
+        # Wake the blocking notifier wait so the loop sees the stop promptly.
+        self.notifier.notify()
         if wait:
             self.supervisor_thread.join()
         self.storage.unregister_supervisor(self.supervisor_id)
+        # Clean up notifier resources
+        JobNotifier.reset()
 
     def check_jobs(self):
         """
@@ -240,6 +272,7 @@ class WorkerSupervisor:
 
         Returns: None
         """
+        # Start any available jobs
         job_to_start = self.get_next_job()
         while job_to_start:
             self.start_next_job(job_to_start)
