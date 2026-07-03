@@ -15,6 +15,9 @@ from kolibri.utils.conf import OPTIONS
 
 logger = logging.getLogger(__name__)
 
+# Poll interval for isolated worker processes that get no notifications.
+STANDALONE_LOOP_INTERVAL = 0.1
+
 # Poll interval while due jobs wait for a busy worker pool to free up.
 BACKLOG_POLL_INTERVAL = 0.1
 
@@ -105,7 +108,7 @@ class WorkerSupervisor:
     it was responsible for.
     """
 
-    def __init__(self, regular_workers=2, high_workers=1):
+    def __init__(self, regular_workers=2, high_workers=1, standalone_workers=False):
         # Internally, we use concurrent.future.Future to run and track
         # job executions. We need to keep track of which future maps to which
         # job they were made from, and we use the job_future_mapping dict to do
@@ -145,9 +148,15 @@ class WorkerSupervisor:
         self._heartbeat_interval = self.supervisor_stale_threshold / 3
         self._last_heartbeat = time.monotonic()
 
-        # Idle wake interval: wake no more often than the heartbeat (longer
-        # would miss beats) and let notifications carry pickup latency.
-        self.loop_interval = self._heartbeat_interval
+        # Idle wake interval. A standalone worker process gets no cross-process
+        # notifications, so it polls tightly; otherwise wake no more often than
+        # the heartbeat (longer would miss beats) and let notifications carry
+        # pickup latency.
+        if standalone_workers and not self.notifier.supports_cross_process_notify:
+            loop_interval = STANDALONE_LOOP_INTERVAL
+        else:
+            loop_interval = self._heartbeat_interval
+        self.loop_interval = min(loop_interval, self._heartbeat_interval)
         # Set during shutdown to stop claiming new jobs while the loop keeps
         # heartbeating until in-flight jobs drain.
         self._draining = threading.Event()

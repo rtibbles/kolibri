@@ -10,11 +10,13 @@ from django.db import connections
 from kolibri.core.tasks.hooks import JobHook
 from kolibri.core.tasks.job import Job
 from kolibri.core.tasks.job import State
+from kolibri.core.tasks.main import initialize_workers
 from kolibri.core.tasks.models import Job as ORMJob
 from kolibri.core.tasks.models import Supervisor as ORMSupervisor
 from kolibri.core.tasks.storage import Storage
 from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.tasks.worker import execute_job
+from kolibri.core.tasks.worker import STANDALONE_LOOP_INTERVAL
 from kolibri.core.tasks.worker import WorkerSupervisor
 from kolibri.utils.conf import OPTIONS
 from kolibri.utils.time_utils import local_now
@@ -1180,6 +1182,24 @@ class TestWorkerSupervisor:
         w = WorkerSupervisor(regular_workers=1, high_workers=1)
         try:
             assert w.loop_interval == w._heartbeat_interval
+        finally:
+            w.storage.clear(force=True)
+            w.shutdown()
+
+    def test_standalone_workers_poll_on_tight_interval(self):
+        # SQLite notifier cannot cross processes, so an isolated services
+        # worker must poll rather than wait the full idle interval.
+        w = WorkerSupervisor(regular_workers=1, high_workers=1, standalone_workers=True)
+        try:
+            assert w.loop_interval == STANDALONE_LOOP_INTERVAL
+        finally:
+            w.storage.clear(force=True)
+            w.shutdown()
+
+    def test_standalone_flag_threads_through_initialize_workers(self):
+        w = initialize_workers(standalone_workers=True)
+        try:
+            assert w.loop_interval == STANDALONE_LOOP_INTERVAL
         finally:
             w.storage.clear(force=True)
             w.shutdown()

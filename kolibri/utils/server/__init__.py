@@ -257,15 +257,16 @@ class ZipContentServerPlugin(ServerPlugin):
 
 
 class ServicesPlugin(SimplePlugin):
-    def __init__(self, bus):
+    def __init__(self, bus, standalone_workers=False):
         self.bus = bus
+        self.standalone_workers = standalone_workers
         self.worker = None
 
     def START(self):
         from kolibri.core.tasks.main import initialize_workers
 
         # Initialize the iceqube engine to handle queued tasks
-        self.worker = initialize_workers()
+        self.worker = initialize_workers(standalone_workers=self.standalone_workers)
 
     def STOP(self):
         if self.worker is not None:
@@ -855,18 +856,21 @@ class BaseKolibriProcessBus(ProcessBus):
         _wait()
 
 
-class KolibriServicesProcessBus(BaseKolibriProcessBus):
+class _KolibriProcessBus(BaseKolibriProcessBus):
+    # Shared service-process setup (zeroconf). Does not start workers.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Setup plugin for services
-        service_plugin = ServicesPlugin(self)
-        service_plugin.subscribe()
-
         if conf.OPTIONS["Deployment"]["ZEROCONF_ENABLED"]:
-            # Setup zeroconf plugin
-            zeroconf_plugin = ZeroConfPlugin(self, self.port)
-            zeroconf_plugin.subscribe()
+            ZeroConfPlugin(self, self.port).subscribe()
+
+
+class KolibriServicesProcessBus(_KolibriProcessBus):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Isolated worker process - no in-process job enqueuers.
+        ServicesPlugin(self, standalone_workers=True).subscribe()
 
     def run(self):
         self.graceful()
@@ -875,7 +879,7 @@ class KolibriServicesProcessBus(BaseKolibriProcessBus):
         self.block()
 
 
-class KolibriProcessBus(KolibriServicesProcessBus):
+class KolibriProcessBus(_KolibriProcessBus):
     """
     This class is the state machine that manages the starting, restarting, and shutdown of
     a running Kolibri instance. It is responsible for starting any WSGI servers that respond
@@ -891,6 +895,9 @@ class KolibriProcessBus(KolibriServicesProcessBus):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Workers share this process with the HTTP servers that enqueue jobs.
+        ServicesPlugin(self, standalone_workers=False).subscribe()
 
         kolibri_server = KolibriServerPlugin(
             self,

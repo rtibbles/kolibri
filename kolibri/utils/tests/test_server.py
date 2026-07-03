@@ -93,9 +93,18 @@ class TestServerServices:
         services_plugin.START()
 
         # Do we initialize workers when services start?
-        initialize_workers.assert_called_once()
+        initialize_workers.assert_called_once_with(standalone_workers=False)
 
         mock_kolibri_broadcast.assert_not_called()
+
+    @mock.patch("kolibri.core.tasks.main.initialize_workers")
+    def test_standalone_workers_flag_passed_through(self, initialize_workers):
+        services_plugin = server.ServicesPlugin(
+            mock.MagicMock(name="bus"), standalone_workers=True
+        )
+        services_plugin.START()
+
+        initialize_workers.assert_called_once_with(standalone_workers=True)
 
     def test_services_shutdown_on_stop(self):
         # Initialize and ready services plugin for testing
@@ -128,6 +137,20 @@ class TestProcessHookWiring:
         mock_process_hook.registered_hooks = [hook]
 
         bus = server.KolibriServicesProcessBus(pid_file=str(tmp_path / "pid"))
+
+        hook.MagicBusPluginClass.assert_called_once_with(bus)
+        plugin.subscribe.assert_called_once_with()
+
+    @mock.patch("kolibri.utils.server.KolibriProcessHook")
+    def test_hooks_subscribe_once_on_full_server_bus(self, mock_process_hook, tmp_path):
+        # The base bus wires the hooks for every bus that derives from it, so the
+        # full server bus must not wire them a second time.
+        plugin = mock.MagicMock()
+        hook = mock.MagicMock()
+        hook.MagicBusPluginClass.return_value = plugin
+        mock_process_hook.registered_hooks = [hook]
+
+        bus = server.KolibriProcessBus(pid_file=str(tmp_path / "pid"))
 
         hook.MagicBusPluginClass.assert_called_once_with(bus)
         plugin.subscribe.assert_called_once_with()
