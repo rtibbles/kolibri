@@ -14,6 +14,7 @@ from mock import patch
 import kolibri
 from kolibri.utils import main
 from kolibri.utils.conf import KOLIBRI_HOME
+from kolibri.utils.migration_lock import LockNotAcquired
 from kolibri.utils.version import truncate_version
 
 # from django.conf import settings
@@ -68,6 +69,42 @@ def test_update_exits_if_running(get_version, is_initialized):
             pytest.fail("Update did not exit when Kolibri was already running")
         except SystemExit:
             pass
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("kolibri.plugins.registry.is_initialized", return_value=False)
+@patch("kolibri.utils.main.get_version", return_value="0.0.1")
+@patch("kolibri.utils.main.update")
+@patch("kolibri.utils.main.migration_lock", side_effect=LockNotAcquired())
+def test_initialize_exits_if_another_process_is_migrating(
+    migration_lock, update, get_version, is_initialized
+):
+    with patch.object(main, "logger") as logger:
+        with pytest.raises(SystemExit):
+            main.initialize()
+    update.assert_not_called()
+    logger.error.assert_called_once()
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("kolibri.plugins.registry.is_initialized", return_value=False)
+@patch("kolibri.utils.main.get_version", return_value="0.0.1")
+@patch("kolibri.utils.main.update")
+@patch("kolibri.utils.main.migration_lock")
+def test_initialize_takes_lock_when_updating(
+    migration_lock, update, get_version, is_initialized
+):
+    main.initialize()
+    migration_lock.assert_called_once()
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("kolibri.plugins.registry.is_initialized", return_value=False)
+@patch("kolibri.utils.main.migration_lock")
+def test_initialize_skips_lock_when_skip_update(migration_lock, is_initialized):
+    # unlocked, so that parallel commands still work
+    main.initialize(skip_update=True)
+    migration_lock.assert_not_called()
 
 
 @pytest.mark.django_db(transaction=True)
