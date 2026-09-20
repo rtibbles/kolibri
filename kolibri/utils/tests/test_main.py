@@ -236,3 +236,23 @@ def test_migrate_if_unmigrated(
         get_or_create_current_instance.side_effect = OperationalError("Test")
         main.initialize()
         _migrate_databases.assert_called_once()
+
+
+@pytest.mark.django_db
+@patch("kolibri.utils.main.call_command")
+@patch("kolibri.utils.main.repair_schema_drift")
+def test_migrate_databases_repairs_schema_drift(repair_schema_drift, call_command):
+    main._migrate_databases()
+    repair_schema_drift.assert_called_once_with()
+
+
+@pytest.mark.django_db
+@patch("kolibri.utils.main._upgrades_after_django_setup")
+@patch("kolibri.utils.main.check_django_stack_ready")
+@patch("kolibri.utils.main.run_plugin_updates")
+@patch("kolibri.utils.main.repair_schema_drift_quick_check")
+def test_run_updates_checks_for_schema_drift(quick_check, *mocks):
+    # a startup that migrates nothing still reaches the check, which is the only thing
+    # that will look at the schema of an installation already on this version
+    main._run_updates(False, kolibri.__version__)
+    quick_check.assert_called_once_with()
