@@ -40,7 +40,10 @@ dependencies = [
     "le-utils==0.2.18",
     "jsonfield==3.1.0",
     "morango==0.8.15",
-    "tzlocal==4.2",
+    # A floor, not a pin: we use only get_localzone_name() and the not-found
+    # exception, both of which survived the 5.0 rewrite. The static build vendors
+    # 4.2 regardless, being resolved against Python 3.6.
+    "tzlocal>=4.2",
     "pytz==2026.3.post1",
     "python-dateutil==2.9.0.post0",
     "semver==2.13.0",
