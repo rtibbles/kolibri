@@ -105,6 +105,13 @@
       margin: auto;
       opacity: 0.3;
     }
+
+    .icon > .composed-thumbnail {
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      opacity: 1;
+    }
   }
 
 </style>

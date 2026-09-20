@@ -5,14 +5,9 @@
     :rounded="rounded"
   >
     <template #icon>
-      <LearningActivityIcon
-        v-if="contentNode.is_leaf"
-        :kind="contentNode.learning_activities"
-      />
-      <KIcon
-        v-else
-        icon="topic"
-        :color="$themePalette.grey.v_700"
+      <ComposedThumbnail
+        :contentNode="contentNode"
+        :aspectRatio="DEFAULT_THUMBNAIL_ASPECT_RATIO"
       />
     </template>
 
@@ -26,27 +21,30 @@
 
 <script>
 
-  import LearningActivityIcon from 'kolibri-common/components/ResourceDisplayAndSearch/LearningActivityIcon.vue';
+  import ComposedThumbnail, {
+    DEFAULT_THUMBNAIL_ASPECT_RATIO,
+  } from 'kolibri-common/components/ComposedThumbnail';
   import useChannels from 'kolibri-common/composables/useChannels';
   import Thumbnail from './Thumbnail';
 
   /**
    * A thumbnail for a content node that shows the content node
    * thumbnail image if it's available.
-   * When an image is not available, a generic thumbnail
-   * made of a learning activity icon or a topic icon
-   * on top of gray background will be displayed.
+   * When an image is not available, a composed placeholder
+   * thumbnail generated from the node's metadata
+   * (ComposedThumbnail) will be displayed.
    */
   export default {
     name: 'ContentNodeThumbnail',
     components: {
-      LearningActivityIcon,
+      ComposedThumbnail,
       Thumbnail,
     },
     setup() {
       const { getChannelThumbnail } = useChannels();
       return {
         getChannelThumbnail,
+        DEFAULT_THUMBNAIL_ASPECT_RATIO,
       };
     },
     props: {

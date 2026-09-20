@@ -58,6 +58,7 @@
       class="thumbnail"
       :thumbnail="content.thumbnail"
       :kind="content.kind"
+      :contentNode="content"
     />
   </router-link>
 

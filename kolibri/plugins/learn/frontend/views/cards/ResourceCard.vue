@@ -10,16 +10,9 @@
     thumbnailAlign="left"
   >
     <template #thumbnailPlaceholder>
-      <LearningActivityIcon
-        v-if="contentNode.is_leaf"
-        :kind="contentNode.learning_activities"
-        class="thumbnail-icon"
-      />
-      <KIcon
-        v-else
-        icon="topic"
-        :color="$themePalette.grey.v_700"
-        class="thumbnail-icon"
+      <ComposedThumbnail
+        :contentNode="contentNode"
+        :aspectRatio="WIDE_THUMBNAIL_ASPECT_RATIO"
       />
     </template>
     <template #aboveTitle>
@@ -66,7 +59,9 @@
 
   import { computed } from 'vue';
   import commonCoreStrings from 'kolibri/uiText/commonCoreStrings';
-  import LearningActivityIcon from 'kolibri-common/components/ResourceDisplayAndSearch/LearningActivityIcon.vue';
+  import ComposedThumbnail, {
+    WIDE_THUMBNAIL_ASPECT_RATIO,
+  } from 'kolibri-common/components/ComposedThumbnail';
   import useChannels from 'kolibri-common/composables/useChannels';
   import ProgressBar from '../ProgressBar';
   import LearningActivityLabel from '../LearningActivityLabel';
@@ -74,7 +69,7 @@
   export default {
     name: 'ResourceCard',
     components: {
-      LearningActivityIcon,
+      ComposedThumbnail,
       LearningActivityLabel,
       ProgressBar,
     },
@@ -95,6 +90,7 @@
       return {
         title,
         thumbnailUrl,
+        WIDE_THUMBNAIL_ASPECT_RATIO,
       };
     },
     props: {
@@ -135,12 +131,6 @@
 
   .collection-title {
     font-size: 12px;
-  }
-
-  .thumbnail-icon {
-    width: 40%;
-    height: auto;
-    font-size: 40%;
   }
 
   // KCard's footer slot lays out content in normal flow, but the

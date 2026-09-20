@@ -5,8 +5,13 @@
     :style="thumbnailBackground"
   >
     <BookmarkIcon v-if="kind === 'bookmark'" />
+    <ComposedThumbnail
+      v-if="!thumbnail && contentNode"
+      :contentNode="contentNode"
+      :aspectRatio="DEFAULT_THUMBNAIL_ASPECT_RATIO"
+    />
     <ContentIcon
-      v-if="!thumbnail"
+      v-else-if="!thumbnail"
       :kind="kind"
       class="thumbnail-icon"
       :style="{ color: $themeTokens.annotation }"
@@ -19,12 +24,16 @@
 <script>
 
   import ContentIcon from 'kolibri-common/components/labels/ContentIcon';
+  import ComposedThumbnail, {
+    DEFAULT_THUMBNAIL_ASPECT_RATIO,
+  } from 'kolibri-common/components/ComposedThumbnail';
   import { validateContentNodeKind } from 'kolibri/utils/validators';
   import BookmarkIcon from './BookmarkIcon';
 
   export default {
     name: 'CardThumbnail',
     components: {
+      ComposedThumbnail,
       ContentIcon,
       BookmarkIcon,
     },
@@ -38,11 +47,20 @@
         required: true,
         validator: validateContentNodeKind,
       },
+      contentNode: {
+        type: Object,
+        default: null,
+      },
       isMobile: {
         type: Boolean,
         required: true,
         default: false,
       },
+    },
+    data() {
+      return {
+        DEFAULT_THUMBNAIL_ASPECT_RATIO,
+      };
     },
     computed: {
       thumbnailBackground() {

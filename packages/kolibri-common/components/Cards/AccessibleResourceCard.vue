@@ -11,9 +11,10 @@
     thumbnailScaleType="contain"
   >
     <template #thumbnailPlaceholder>
-      <div class="default-resource-icon">
-        <LearningActivityIcon :kind="contentNode.learning_activities" />
-      </div>
+      <ComposedThumbnail
+        :contentNode="contentNode"
+        :aspectRatio="WIDE_THUMBNAIL_ASPECT_RATIO"
+      />
     </template>
     <template #belowTitle>
       <div>
@@ -66,12 +67,12 @@
   import MetadataChips from 'kolibri-common/components/MetadataChips';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import { useCoachMetadataTags } from 'kolibri-common/composables/useCoachMetadataTags';
-  import LearningActivityIcon from '../ResourceDisplayAndSearch/LearningActivityIcon.vue';
+  import ComposedThumbnail, { WIDE_THUMBNAIL_ASPECT_RATIO } from '../ComposedThumbnail';
 
   export default {
     name: 'AccessibleResourceCard',
     components: {
-      LearningActivityIcon,
+      ComposedThumbnail,
       MetadataChips,
     },
     mixins: [commonCoreStrings],
@@ -82,6 +83,7 @@
       return {
         metadataTags: getResourceTags(),
         windowBreakpoint,
+        WIDE_THUMBNAIL_ASPECT_RATIO,
       };
     },
     props: {
@@ -121,16 +123,6 @@
   /deep/ .k-with-selection-controls {
     justify-content: flex-end !important;
     max-width: 580px;
-  }
-
-  .default-resource-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    max-height: 160px;
-    font-size: 48px;
   }
 
   .default-icon {
