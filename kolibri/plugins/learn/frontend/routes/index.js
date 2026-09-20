@@ -17,6 +17,7 @@ import classesRoutes from './classesRoutes';
 
 // Conditionally import QTI sandbox routes in non-production
 let qtiSandboxRoutes = [];
+let thumbnailSandboxRoutes = [];
 if (process.env.NODE_ENV !== 'production') {
   try {
     // eslint-disable-next-line import-x/no-commonjs
@@ -25,6 +26,8 @@ if (process.env.NODE_ENV !== 'production') {
   } catch (e) {
     // QTI viewer plugin may not be available
   }
+  // eslint-disable-next-line import-x/no-commonjs
+  thumbnailSandboxRoutes = require('../sandbox').sandboxRoutes;
 }
 
 const { channelsMap, fetchChannels } = useChannels();
@@ -188,6 +191,7 @@ export default [
   },
   // Add QTI sandbox routes in non-production
   ...qtiSandboxRoutes,
+  ...thumbnailSandboxRoutes,
   {
     path: '*',
     redirect: '/',
