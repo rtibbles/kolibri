@@ -2,6 +2,7 @@ import datetime
 import logging
 import operator
 import os
+from collections import defaultdict
 from functools import reduce
 from itertools import groupby
 from math import ceil
@@ -639,8 +640,10 @@ def set_channel_metadata_fields(channel_id, public=None, library=None, version=N
         calculate_published_size(channel)
         calculate_total_resource_count(channel)
         calculate_included_languages(channel)
-        calculate_ordered_categories(channel)
-        calculate_ordered_grade_levels(channel)
+        calculate_topic_metadata_aggregates(channel)
+        # The root node's aggregate is the channel-wide aggregate, so the channel
+        # fields are derived from it rather than re-scanning every node.
+        set_channel_metadata_from_root(channel)
         calculate_next_order(channel)
 
         if public is not None:
@@ -713,6 +716,127 @@ def calculate_ordered_grade_levels(channel):
         ",".join(ordered_grade_levels) if ordered_grade_levels else None
     )
     channel.save()
+
+
+def set_channel_metadata_from_root(channel):
+    """
+    Mirror the channel's root node's aggregated metadata onto the channel. The
+    root node's included_* fields (computed by calculate_topic_metadata_aggregates)
+    already are the channel-wide aggregate, so this reuses that work instead of a
+    second full scan of the channel. Must run after the topic aggregates.
+
+    The channel fields hold the same distinct set as the root; calculate_ordered_*
+    (frequency-ordered) are retained only for the pre-0.18 channel upgrade.
+    """
+    root = (
+        ContentNode.objects.filter(id=channel.root_id)
+        .values("included_categories", "included_grade_levels")
+        .first()
+    )
+    channel.included_categories = root["included_categories"] if root else None
+    channel.included_grade_levels = root["included_grade_levels"] if root else None
+    channel.save()
+
+
+TOPIC_AGGREGATE_FIELDS = ("categories", "grade_levels", "learning_activities")
+
+
+def _split_label_field(value):
+    return [label for label in (value or "").split(",") if label]
+
+
+def _extend_unique(target, values):
+    """Append values to `target` in order, skipping any already present."""
+    for value in values:
+        if value not in target:
+            target.append(value)
+
+
+def _merge_aggregate(target, contribution):
+    for field in TOPIC_AGGREGATE_FIELDS:
+        _extend_unique(target[field], contribution[field])
+
+
+def _store_topic_aggregates(channel, results, included_fields):
+    # Clear every topic, then write the computed aggregates - cheaper and simpler
+    # than an exclude(id__in=...) over a large id set, and idempotent.
+    ContentNode.objects.filter(channel_id=channel.id, kind=content_kinds.TOPIC).update(
+        **{field: None for field in included_fields}
+    )
+    result_ids = list(results.keys())
+    for start in range(0, len(result_ids), CHUNKSIZE):
+        topics = list(
+            ContentNode.objects.filter(id__in=result_ids[start : start + CHUNKSIZE])
+        )
+        for topic in topics:
+            values = results[topic.id]
+            for field, included_field in zip(TOPIC_AGGREGATE_FIELDS, included_fields):
+                ordered = values[field]
+                setattr(topic, included_field, ",".join(ordered) if ordered else None)
+        ContentNode.objects.bulk_update(topics, included_fields, batch_size=CHUNKSIZE)
+
+
+def calculate_topic_metadata_aggregates(channel):
+    """
+    Roll the metadata label fields of every available node up onto each of its
+    ancestor topics, deduplicated, into the derived included_* fields. A topic's
+    aggregate is the distinct union of its descendants' values followed by its own
+    authored values, in the tree's natural (lft) order. One pass covers all three
+    fields; the authored fields themselves are never modified.
+
+    Topics with no contributing content have their included_* fields cleared, so
+    re-annotation after content removal is idempotent.
+
+    Like the other tree annotations (e.g. recurse_annotation_up_tree), this walks
+    the tree one level at a time, deepest first, merging each node's values into
+    its parent - so a topic is finalised only once all its descendants have
+    contributed, and the whole channel is never held in memory at once. The label
+    space is small and bounded, so the per-topic accumulators stay tiny. The
+    split-and-dedupe of the comma-joined fields is done in Python because it is
+    not portably expressible in SQL (the same reason calculate_ordered_categories
+    runs in Python).
+
+    Assumes availability has already been propagated up the tree (i.e. this runs
+    after recurse_annotation_up_tree, or on an already-annotated channel).
+    """
+    included_fields = ["included_" + field for field in TOPIC_AGGREGATE_FIELDS]
+
+    max_level = ContentNode.objects.filter(
+        channel_id=channel.id, available=True
+    ).aggregate(max_level=Max("level"))["max_level"]
+
+    # Pending per-topic aggregates: topic id -> {field: [ordered unique values]}.
+    # An entry accumulates a topic's descendants' values as their levels are
+    # processed, then is finalised (own values appended) and popped at its level.
+    pending = defaultdict(lambda: {field: [] for field in TOPIC_AGGREGATE_FIELDS})
+    results = {}
+
+    # Deepest level first, down to and including the root (level 0): each node is
+    # finalised at its own level, then merged into its parent (roots have none).
+    for level in range(max_level or 0, -1, -1):
+        nodes = (
+            ContentNode.objects.filter(
+                channel_id=channel.id, available=True, level=level
+            )
+            .values("id", "parent_id", "kind", *TOPIC_AGGREGATE_FIELDS)
+            .order_by("lft")
+            .iterator()
+        )
+        for node in nodes:
+            is_topic = node["kind"] == content_kinds.TOPIC
+            # A topic starts from its descendants (already merged in); a leaf from
+            # nothing. Both then take the node's own authored values.
+            contribution = (pending.pop(node["id"], None) if is_topic else None) or {
+                field: [] for field in TOPIC_AGGREGATE_FIELDS
+            }
+            for field in TOPIC_AGGREGATE_FIELDS:
+                _extend_unique(contribution[field], _split_label_field(node[field]))
+            if is_topic and any(contribution.values()):
+                results[node["id"]] = contribution
+            if node["parent_id"] is not None:
+                _merge_aggregate(pending[node["parent_id"]], contribution)
+
+    _store_topic_aggregates(channel, results, included_fields)
 
 
 def calculate_included_languages(channel):

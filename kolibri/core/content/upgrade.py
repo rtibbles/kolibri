@@ -28,6 +28,7 @@ from kolibri.core.content.utils.annotation import available_children_rollup
 from kolibri.core.content.utils.annotation import calculate_included_languages
 from kolibri.core.content.utils.annotation import calculate_ordered_categories
 from kolibri.core.content.utils.annotation import calculate_ordered_grade_levels
+from kolibri.core.content.utils.annotation import calculate_topic_metadata_aggregates
 from kolibri.core.content.utils.annotation import has_available_children
 from kolibri.core.content.utils.annotation import set_channel_ancestors
 from kolibri.core.content.utils.annotation import set_content_visibility_from_disk
@@ -290,6 +291,16 @@ def populate_channel_library_field():
     ChannelMetadata.objects.filter(public=True, library__isnull=True).update(
         library=library_constants.KOLIBRI
     )
+
+
+@version_upgrade(old_version="<0.20.0")
+def aggregate_topic_metadata():
+    """
+    One-time pass to populate the derived included_* metadata label fields on
+    topics of channels that were imported before this feature existed.
+    """
+    for channel in ChannelMetadata.objects.all():
+        calculate_topic_metadata_aggregates(channel)
 
 
 # Cap each backfill UPDATE so a channel library with millions of file rows does

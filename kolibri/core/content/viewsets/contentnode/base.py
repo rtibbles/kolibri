@@ -120,6 +120,9 @@ class BaseContentNodeSerializer(KolibriModelSerializer):
     learner_needs = SplitTextField()
     learning_activities = SplitTextField()
     resource_types = SplitTextField()
+    included_categories = SplitTextField()
+    included_grade_levels = SplitTextField()
+    included_learning_activities = SplitTextField()
 
     class Meta:
         model = models.ContentNode
@@ -138,6 +141,9 @@ class BaseContentNodeSerializer(KolibriModelSerializer):
             "files",
             "grade_levels",
             "id",
+            "included_categories",
+            "included_grade_levels",
+            "included_learning_activities",
             "is_leaf",
             "kind",
             "lang",

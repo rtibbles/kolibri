@@ -216,6 +216,14 @@ class ContentNode(base_models.ContentNode):
         max_length=50, blank=True, null=True, choices=modalities.choices
     )
 
+    # Derived metadata label fields, aggregated from available descendants at
+    # annotation time for topics only. Ordered by descendant frequency, most
+    # frequent first. Kept separate from the authored fields (categories etc.)
+    # so search/filter facets are unaffected.
+    included_categories = models.TextField(blank=True, null=True)
+    included_grade_levels = models.TextField(blank=True, null=True)
+    included_learning_activities = models.TextField(blank=True, null=True)
+
     objects = ContentNodeManager()
 
     class Meta:

@@ -14,6 +14,7 @@ from kolibri.core.content.models import ChannelMetadata
 from kolibri.core.content.models import ContentNode
 from kolibri.core.content.models import File
 from kolibri.core.content.models import LocalFile
+from kolibri.core.content.upgrade import aggregate_topic_metadata
 from kolibri.core.content.upgrade import file_included_presets_annotation
 from kolibri.core.content.upgrade import fix_multiple_trees_with_tree_id1
 from kolibri.core.content.upgrade import migrate_file_size_to_bigint
@@ -469,3 +470,33 @@ class MigrateFileSizeToBigintTestCase(TransactionTestCase):
         self._drop_file_size_col_if_present()
         # Should not raise even when column is absent.
         migrate_file_size_to_bigint()
+
+
+class AggregateTopicMetadataUpgradeTestCase(TransactionTestCase):
+    def setUp(self):
+        self.root = ContentNode.objects.create(
+            title="root",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=uuid.uuid4().hex,
+            kind=content_kinds.TOPIC,
+            available=True,
+        )
+        self.channel = ChannelMetadata.objects.create(
+            id=self.root.channel_id, name="channel", root=self.root
+        )
+        ContentNode.objects.create(
+            title="leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.root.channel_id,
+            parent=self.root,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=True,
+        )
+
+    def test_upgrade_aggregates_existing_channels(self):
+        aggregate_topic_metadata()
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.included_categories, "math")

@@ -362,6 +362,21 @@ class ContentNodeAPIBase:
             "categories": (
                 expected.categories.split(",") if expected.categories else []
             ),
+            "included_categories": (
+                expected.included_categories.split(",")
+                if expected.included_categories
+                else []
+            ),
+            "included_grade_levels": (
+                expected.included_grade_levels.split(",")
+                if expected.included_grade_levels
+                else []
+            ),
+            "included_learning_activities": (
+                expected.included_learning_activities.split(",")
+                if expected.included_learning_activities
+                else []
+            ),
             "kind": expected.kind,
             "lang": self.map_language(expected.lang),
             "license_description": expected.license_description,
@@ -692,6 +707,27 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
             reverse("kolibri:core:contentnode-list"), data={"related": c1_id}
         )
         self.assertEqual(response.data[0]["title"], "c2")
+
+    def test_contentnode_include_fields_retrieve(self):
+        root = content.ContentNode.objects.get(title="root")
+        content.ContentNode.objects.filter(id=root.id).update(
+            included_categories="math,science",
+            included_grade_levels="1,2",
+            included_learning_activities="watch",
+        )
+        response = self.client.get(
+            reverse("kolibri:core:contentnode-detail", kwargs={"pk": root.id})
+        )
+        self.assertEqual(response.data["included_categories"], ["math", "science"])
+        self.assertEqual(response.data["included_grade_levels"], ["1", "2"])
+        self.assertEqual(response.data["included_learning_activities"], ["watch"])
+
+    def test_contentnode_include_fields_null(self):
+        c1_id = content.ContentNode.objects.get(title="c1").id
+        response = self.client.get(
+            reverse("kolibri:core:contentnode-detail", kwargs={"pk": c1_id})
+        )
+        self.assertEqual(response.data["included_categories"], [])
 
     @mock.patch(
         "kolibri.core.content.viewsets.contentnode.granular.get_channel_stats_from_studio"

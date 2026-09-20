@@ -25,6 +25,7 @@ from kolibri.core.content.utils.annotation import calculate_included_languages
 from kolibri.core.content.utils.annotation import calculate_ordered_categories
 from kolibri.core.content.utils.annotation import calculate_ordered_grade_levels
 from kolibri.core.content.utils.annotation import calculate_published_size
+from kolibri.core.content.utils.annotation import calculate_topic_metadata_aggregates
 from kolibri.core.content.utils.annotation import calculate_total_resource_count
 from kolibri.core.content.utils.annotation import mark_local_files_as_available
 from kolibri.core.content.utils.annotation import mark_local_files_as_unavailable
@@ -1180,6 +1181,171 @@ class SetChannelMetadataFieldsTestCase(TestCase):
         node3.save()
         calculate_ordered_grade_levels(self.channel)
         self.assertEqual(self.channel.included_grade_levels, "2,1,3")
+
+    def test_calculate_topic_metadata_aggregates_simple_tree(self):
+        ContentNode.objects.filter(id=self.node.id).update(kind=content_kinds.TOPIC)
+        topic = ContentNode.objects.create(
+            title="topic",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.TOPIC,
+            available=True,
+        )
+        ContentNode.objects.create(
+            title="leaf1",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=topic,
+            kind=content_kinds.VIDEO,
+            categories="math,science",
+            grade_levels="1",
+            learning_activities="watch",
+            available=True,
+        )
+        ContentNode.objects.create(
+            title="leaf2",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=topic,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            grade_levels="1,2",
+            learning_activities="watch,read",
+            available=True,
+        )
+
+        calculate_topic_metadata_aggregates(self.channel)
+
+        topic.refresh_from_db()
+        self.assertEqual(topic.included_categories, "math,science")
+        self.assertEqual(topic.included_grade_levels, "1,2")
+        self.assertEqual(topic.included_learning_activities, "watch,read")
+        # Aggregates propagate to ancestors too
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.included_categories, "math,science")
+
+    def test_calculate_topic_metadata_aggregates_deduplicates_descendants(self):
+        ContentNode.objects.filter(id=self.node.id).update(kind=content_kinds.TOPIC)
+        for categories in ("science", "math,science", "science,history"):
+            ContentNode.objects.create(
+                title="leaf-%s" % categories,
+                id=uuid.uuid4().hex,
+                content_id=uuid.uuid4().hex,
+                channel_id=self.node.channel_id,
+                parent=self.node,
+                kind=content_kinds.VIDEO,
+                categories=categories,
+                available=True,
+            )
+
+        calculate_topic_metadata_aggregates(self.channel)
+
+        self.node.refresh_from_db()
+        # Overlapping descendant values collapse to a distinct set.
+        self.assertEqual(
+            set(self.node.included_categories.split(",")),
+            {"science", "math", "history"},
+        )
+
+    def test_calculate_topic_metadata_aggregates_ignores_unavailable(self):
+        ContentNode.objects.filter(id=self.node.id).update(kind=content_kinds.TOPIC)
+        ContentNode.objects.create(
+            title="unavailable leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=False,
+        )
+
+        calculate_topic_metadata_aggregates(self.channel)
+
+        self.node.refresh_from_db()
+        self.assertIsNone(self.node.included_categories)
+
+    def test_calculate_topic_metadata_aggregates_idempotent_after_removal(self):
+        ContentNode.objects.filter(id=self.node.id).update(kind=content_kinds.TOPIC)
+        leaf = ContentNode.objects.create(
+            title="leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=True,
+        )
+        calculate_topic_metadata_aggregates(self.channel)
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.included_categories, "math")
+
+        # Content becomes unavailable; re-annotation clears stale aggregates
+        leaf.available = False
+        leaf.save()
+        calculate_topic_metadata_aggregates(self.channel)
+        self.node.refresh_from_db()
+        self.assertIsNone(self.node.included_categories)
+
+    def test_calculate_topic_metadata_aggregates_leaves_untouched(self):
+        leaf = ContentNode.objects.create(
+            title="leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=True,
+        )
+        calculate_topic_metadata_aggregates(self.channel)
+        leaf.refresh_from_db()
+        self.assertIsNone(leaf.included_categories)
+
+    def test_calculate_topic_metadata_aggregates_does_not_modify_authored_fields(self):
+        ContentNode.objects.filter(id=self.node.id).update(
+            kind=content_kinds.TOPIC, categories="art"
+        )
+        ContentNode.objects.create(
+            title="leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=True,
+        )
+        calculate_topic_metadata_aggregates(self.channel)
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.categories, "art")
+        self.assertEqual(self.node.included_categories, "math,art")
+
+    def test_set_channel_metadata_fields_runs_topic_aggregates(self):
+        ContentNode.objects.filter(id=self.node.id).update(kind=content_kinds.TOPIC)
+        ContentNode.objects.create(
+            title="leaf",
+            id=uuid.uuid4().hex,
+            content_id=uuid.uuid4().hex,
+            channel_id=self.node.channel_id,
+            parent=self.node,
+            kind=content_kinds.VIDEO,
+            categories="math",
+            available=True,
+        )
+        set_channel_metadata_fields(self.channel.id)
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.included_categories, "math")
+        # The channel field is derived from its root node's aggregate.
+        self.channel.refresh_from_db()
+        self.assertEqual(
+            self.channel.included_categories, self.node.included_categories
+        )
 
     def test_calculate_included_languages_frequency(self):
         # Create additional languages
