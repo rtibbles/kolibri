@@ -91,7 +91,9 @@ jobs:
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system --group base --group test
+          # base group is gone; install the runtime deps (minus cryptography,
+          # which comes from cext.txt below) from [project] dependencies.
+          uv pip install --system --group test -r <(uv run --script build_tools/static_dependencies.py --requirements)
           uv pip install --system -r requirements/cext.txt
           make set-no-uv-python-version-for-tests
           # Create a kolibri CLI wrapper since pip install -e . can't work on 3.6

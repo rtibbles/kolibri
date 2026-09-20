@@ -8,6 +8,9 @@ on:
       tar-file-name:
         description: "TAR file name"
         value: ${{ jobs.build_whl.outputs.tar-file-name }}
+      dynamic-whl-file-name:
+        description: "Dynamic (dependency-declaring) WHL file name"
+        value: ${{ jobs.build_whl.outputs.dynamic-whl-file-name }}
 permissions:
   contents: read
 env:
@@ -20,6 +23,7 @@ jobs:
     outputs:
       whl-file-name: ${{ steps.get-whl-filename.outputs.whl-file-name }}
       tar-file-name: ${{ steps.get-tar-filename.outputs.tar-file-name }}
+      dynamic-whl-file-name: ${{ steps.get-dynamic-whl-filename.outputs.dynamic-whl-file-name }}
     steps:
       - name: Install Ubuntu dependencies
         run: |
@@ -66,7 +70,9 @@ jobs:
           path: .cext_cache
           key: cext-${{ hashFiles('requirements/cext.txt', 'requirements/cext_noarch.txt') }}
       - name: Build Kolibri
-        run: make dist
+        # Builds both the static wheel (dist/) and the dynamic wheel
+        # (dist/dynamic/) in one invocation, sharing the expensive prep steps.
+        run: make dist-all
       - name: Get WHL filename
         id: get-whl-filename
         run: echo "whl-file-name=$(basename dist/*.whl)" >> "$GITHUB_OUTPUT"
@@ -74,6 +80,9 @@ jobs:
         with:
           name: ${{ steps.get-whl-filename.outputs.whl-file-name }}
           path: dist/${{ steps.get-whl-filename.outputs.whl-file-name }}
+          # Upload the raw wheel, not wrapped in a zip (the wheel is already an
+          # archive). With archive: false the filename becomes the artifact name.
+          archive: false
       - name: Get TAR filename
         id: get-tar-filename
         run: echo "tar-file-name=$(basename dist/*.tar.gz)" >> "$GITHUB_OUTPUT"
@@ -81,3 +90,16 @@ jobs:
         with:
           name: ${{ steps.get-tar-filename.outputs.tar-file-name }}
           path: dist/${{ steps.get-tar-filename.outputs.tar-file-name }}
+          archive: false
+      # The dynamic wheel shares the static wheel's filename, so it is uploaded
+      # as a separate artifact, distinguished by its build tag. Nothing releases
+      # or publishes it yet -- it is smoke tested (pr_build_kolibri.yml) and
+      # available from the workflow run for downstream teams to opt into.
+      - name: Get dynamic WHL filename
+        id: get-dynamic-whl-filename
+        run: echo "dynamic-whl-file-name=$(basename dist/dynamic/*.whl)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.get-dynamic-whl-filename.outputs.dynamic-whl-file-name }}
+          path: dist/dynamic/${{ steps.get-dynamic-whl-filename.outputs.dynamic-whl-file-name }}
+          archive: false

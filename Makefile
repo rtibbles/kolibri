@@ -11,7 +11,7 @@ export SETUPTOOLS_SCM_PRETEND_METADATA_FOR_KOLIBRI := {dirty=false}
 export SETUPTOOLS_SCM_IGNORE_VCS_ROOTS := $(CURDIR)
 
 # List most target names as 'PHONY' to prevent Make from thinking it will be creating a file of the same name
-.PHONY: help clean clean-assets clean-build clean-pyc clean-docs lint test test-all assets coverage docs release staticdeps staticdeps-cext strip-staticdeps writeversion setrequirements buildconfig pex i18n-extract-frontend i18n-extract-backend i18n-transfer-context i18n-extract i18n-django-compilemessages i18n-upload i18n-pretranslate i18n-pretranslate-approve-all i18n-download i18n-regenerate-fonts i18n-stats i18n-install-font i18n-download-translations i18n-download-glossary i18n-upload-glossary docker-demoserver docker-devserver docker-envlist
+.PHONY: help clean clean-assets clean-build clean-pyc clean-docs lint test test-all assets coverage docs release dist dist-dynamic dist-all dist-prep dist-static staticdeps staticdeps-cext strip-staticdeps writeversion setrequirements buildconfig pex i18n-extract-frontend i18n-extract-backend i18n-transfer-context i18n-extract i18n-django-compilemessages i18n-upload i18n-pretranslate i18n-pretranslate-approve-all i18n-download i18n-regenerate-fonts i18n-stats i18n-install-font i18n-download-translations i18n-download-glossary i18n-upload-glossary docker-demoserver docker-devserver docker-envlist
 
 
 help:
@@ -22,7 +22,9 @@ help:
 	@echo "Building"
 	@echo "--------"
 	@echo ""
-	@echo "dist: create distributed source packages in dist/"
+	@echo "dist: create distributed source packages in dist/ (static build with dependencies bundled into kolibri/dist)"
+	@echo "dist-dynamic: create a wheel in dist/dynamic/ that declares its dependencies rather than bundling them"
+	@echo "dist-all: create both wheels, sharing the build steps they have in common"
 	@echo "pex: builds a portable .pex file for each .whl in dist/"
 	@echo "assets: builds javascript assets"
 	@echo "staticdeps: downloads/updates all static Python dependencies bundled into the dist"
@@ -178,9 +180,10 @@ clean-staticdeps:
 	git checkout -- kolibri/dist # restore __init__.py
 
 staticdeps: clean-staticdeps
-	# Resolve the bundled runtime dependencies from the `base` group in
-	# pyproject.toml, pinned to Python 3.6 compatible versions.
-	uv pip install --python-version 3.6 --target kolibri/dist --group base
+	# Vendor the runtime dependencies (from [project] dependencies, excluding
+	# cryptography, which is vendored per-arch by staticdeps-cext) into
+	# kolibri/dist, pinned to Python 3.6 compatible versions.
+	uv pip install --python-version 3.6 --target kolibri/dist -r <(uv run --script build_tools/static_dependencies.py --requirements)
 	# requirements.txt only carries any EXTRA_REQUIREMENTS injected by
 	# setrequirements (empty by default).
 	uv pip install --python-version 3.6 --target kolibri/dist -r "requirements.txt"
@@ -230,9 +233,51 @@ buildconfig:
 	git checkout -- kolibri/utils/build_config # restore __init__.py
 	python build_tools/customize_build.py
 
-dist: setrequirements writeversion staticdeps staticdeps-cext strip-staticdeps buildconfig i18n-extract-frontend assets i18n-django-compilemessages preseeddb
-	uv build
+# Expensive build steps shared by the dynamic and static dist builds. Kept as a
+# separate target so `make dist-all` runs them once for both wheels.
+dist-prep: setrequirements writeversion buildconfig i18n-extract-frontend assets i18n-django-compilemessages preseeddb
+
+# The static wheel itself, assuming dist-prep has already run: vendor the
+# dependencies into kolibri/dist, then strip them from the wheel metadata so the
+# wheel declares none. Shared by `dist` and `dist-all` so the release wheel is
+# built the same way however it is invoked. pyproject.toml is restored on the
+# failure path too -- left cleared, it would silently empty the dependencies for
+# any later uv command in the tree.
+dist-static: staticdeps staticdeps-cext strip-staticdeps
+	uv run --script build_tools/static_dependencies.py --clear
+	uv build || { git checkout -- pyproject.toml; exit 1; }
+	git checkout -- pyproject.toml # restore the populated [project] dependencies
+
+# Dynamic (default) wheel: dependencies are declared in the wheel metadata and
+# resolved from PyPI at install time. Built straight from pyproject.toml, with
+# kolibri/dist empty so nothing is bundled. Output goes to dist/dynamic so it
+# does not collide with the identically-named static wheel.
+dist-dynamic: clean-staticdeps dist-prep
+	uv build --wheel --out-dir dist/dynamic
+	ls -l dist/dynamic
+
+# Static (portable) wheel: dependencies are vendored into kolibri/dist (the
+# runtime deps via staticdeps, cryptography per-arch via staticdeps-cext) and
+# stripped from the wheel metadata.
+dist: dist-prep
+	$(MAKE) dist-static
 	ls -l dist
+
+# Build both wheels in one invocation, sharing dist-prep. Used by CI. The dynamic
+# wheel is built first, while kolibri/dist is still empty, and the static wheel
+# is then vendored and built via a sub-make.
+dist-all: clean-staticdeps dist-prep
+	# Start from an empty dist/dynamic so the build tag below is applied to a
+	# freshly built wheel rather than to one left over from an earlier build.
+	rm -rf dist/dynamic
+	uv build --wheel --out-dir dist/dynamic
+	# The dynamic wheel is identically versioned to the static one, so give it a
+	# build tag to make its filename distinct -- the artifacts are uploaded
+	# unzipped, so the filename is the artifact name. A build tag keeps the wheel
+	# pip-installable.
+	for whl in dist/dynamic/*.whl; do mv "$$whl" "$${whl%-py3-none-any.whl}-1-py3-none-any.whl"; done
+	$(MAKE) dist-static
+	ls -l dist dist/dynamic
 
 pex:
 	ls dist/*.whl | while read whlfile; do version=$$(uv run --script ./build_tools/read_kolibri_version.py $$whlfile); uvx --from "pex==2.1.153" pex $$whlfile --disable-cache -o dist/kolibri-`echo $$version | sed 's/+/_/g'`.pex -m kolibri --python-shebang=/usr/bin/python3; done
