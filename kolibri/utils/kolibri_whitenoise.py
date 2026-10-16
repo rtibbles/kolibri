@@ -1,6 +1,8 @@
 import os
 import re
+import secrets
 import stat
+from collections import namedtuple
 from collections import OrderedDict
 from gzip import GzipFile
 from http import HTTPStatus
@@ -119,6 +121,125 @@ class SlicedFile(BufferedIOBase):
         self.fileobj.close()
 
 
+# Multipart range amplification class: cf. Rack GHSA-x8cg-fq8g-mxfx.
+MULTIPART_MAX_RANGES = 100
+MAX_RANGES_HEADER = "X-Accept-Ranges-Max"
+
+
+def parse_byte_ranges(range_header, size):
+    units, _, range_spec = range_header.strip().partition("=")
+    if units != "bytes":
+        raise ValueError()
+    ranges = []
+    for spec in range_spec.split(","):
+        spec = spec.strip()
+        if not spec:
+            continue
+        start_str, sep, end_str = spec.partition("-")
+        if not sep:
+            raise ValueError()
+        if not start_str:
+            length = int(end_str)
+            if length <= 0:
+                continue
+            start = max(size - length, 0)
+            end = size - 1
+        else:
+            start = int(start_str)
+            end = min(int(end_str), size - 1) if end_str else size - 1
+        if start < size and start <= end:
+            ranges.append((start, end))
+    return ranges
+
+
+def coalesce_ranges(ranges):
+    merged = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1] + 1:
+            prev_start, prev_end = merged[-1]
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+_BytesSegment = namedtuple("_BytesSegment", ["data"])
+_FileSegment = namedtuple("_FileSegment", ["start", "end"])
+
+
+class MultiRangeFile(BufferedIOBase):
+    def __init__(self, fileobj, ranges, boundary, content_type, size):
+        self.fileobj = fileobj
+        self._segments = []
+        for start, end in ranges:
+            preamble = f"--{boundary}\r\nContent-Type: {content_type}\r\nContent-Range: bytes {start}-{end}/{size}\r\n\r\n"
+            self._segments.append(_BytesSegment(preamble.encode("latin-1")))
+            self._segments.append(_FileSegment(start, end))
+            self._segments.append(_BytesSegment(b"\r\n"))
+        self._segments.append(_BytesSegment(f"--{boundary}--\r\n".encode("latin-1")))
+        self.content_length = sum(
+            len(seg.data) if isinstance(seg, _BytesSegment) else seg.end - seg.start + 1
+            for seg in self._segments
+        )
+        self._index = 0
+        self._offset = 0
+        self._file_started = False
+        self._file_remaining = 0
+
+    def _advance(self):
+        self._index += 1
+        self._offset = 0
+        self._file_started = False
+        self._file_remaining = 0
+
+    def _read_bytes_segment(self, data, want):
+        take = min(want, len(data) - self._offset)
+        chunk = data[self._offset : self._offset + take]
+        self._offset += take
+        if self._offset >= len(data):
+            self._advance()
+        return chunk
+
+    def _read_file_segment(self, start, end, want):
+        if not self._file_started:
+            self.fileobj.seek(start)
+            self._file_remaining = end - start + 1
+            self._file_started = True
+        chunk = (
+            self.fileobj.read(min(want, self._file_remaining))
+            if self._file_remaining
+            else b""
+        )
+        self._file_remaining -= len(chunk)
+        if self._file_remaining <= 0 or not chunk:
+            self._advance()
+        return chunk
+
+    def _read_all(self):
+        parts = []
+        chunk = self.read(65536)
+        while chunk:
+            parts.append(chunk)
+            chunk = self.read(65536)
+        return b"".join(parts)
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            return self._read_all()
+        out = bytearray()
+        while len(out) < size and self._index < len(self._segments):
+            seg = self._segments[self._index]
+            want = size - len(out)
+            if isinstance(seg, _BytesSegment):
+                out += self._read_bytes_segment(seg.data, want)
+            else:
+                out += self._read_file_segment(seg.start, seg.end, want)
+        return bytes(out)
+
+    def close(self):
+        self.fileobj.close()
+
+
 COMPRESSED_FILE_FOR_REGULAR_PATH = ".compressed_file_for_regular_path"
 
 
@@ -138,6 +259,8 @@ class TruncatableFileEntry(FileEntry):
 
 
 class EndRangeStaticFile(StaticFile):
+    multipart_ranges = True
+
     def get_response(self, method, request_headers):
         """
         Vendored from Whitenoise to handle serving truncated compressed files
@@ -172,21 +295,62 @@ class EndRangeStaticFile(StaticFile):
                 pass
         return Response(HTTPStatus.OK, headers, file_handle)
 
+    @staticmethod
+    def _declared_size(base_headers):
+        for key, value in base_headers:
+            if key == "Content-Length":
+                return int(value)
+        return None
+
     def get_range_response(self, range_header, base_headers, file_handle):
-        headers = []
-        for item in base_headers:
-            if item[0] == "Content-Length":
-                size = int(item[1])
-            else:
-                headers.append(item)
+        units, _, range_spec = range_header.strip().partition("=")
+        if units != "bytes":
+            raise ValueError()
+        if len([s for s in range_spec.split(",") if s.strip()]) > 1:
+            return self.get_multipart_range_response(
+                range_header, base_headers, file_handle
+            )
+        size = self._declared_size(base_headers)
+        headers = [item for item in base_headers if item[0] != "Content-Length"]
         start, end = self.get_byte_range(range_header, size)
         if start >= end:
             return self.get_range_not_satisfiable_response(file_handle, size)
         if file_handle is not None:
             file_handle = SlicedFile(file_handle, start, end)
+        if self.multipart_ranges:
+            headers.append((MAX_RANGES_HEADER, str(MULTIPART_MAX_RANGES)))
         headers.append(("Content-Range", f"bytes {start}-{end}/{size}"))
         headers.append(("Content-Length", str(end - start + 1)))
         return Response(HTTPStatus.PARTIAL_CONTENT, headers, file_handle)
+
+    def get_multipart_range_response(self, range_header, base_headers, file_handle):
+        if not self.multipart_ranges:
+            raise ValueError()
+        size = self._declared_size(base_headers)
+        content_type = next(
+            (v for k, v in base_headers if k == "Content-Type"),
+            "application/octet-stream",
+        )
+        headers = [
+            (k, v)
+            for k, v in base_headers
+            if k not in ("Content-Length", "Content-Type")
+        ]
+        _, _, range_spec = range_header.strip().partition("=")
+        if len([s for s in range_spec.split(",") if s.strip()]) > MULTIPART_MAX_RANGES:
+            return self.get_range_not_satisfiable_response(file_handle, size)
+        ranges = coalesce_ranges(parse_byte_ranges(range_header, size))
+        if not ranges:
+            return self.get_range_not_satisfiable_response(file_handle, size)
+        boundary = secrets.token_hex(16)
+        body = MultiRangeFile(file_handle, ranges, boundary, content_type, size)
+        content_length = body.content_length
+        if file_handle is None:
+            body = None
+        headers.append((MAX_RANGES_HEADER, str(MULTIPART_MAX_RANGES)))
+        headers.append(("Content-Type", f"multipart/byteranges; boundary={boundary}"))
+        headers.append(("Content-Length", str(content_length)))
+        return Response(HTTPStatus.PARTIAL_CONTENT, headers, body)
 
     @staticmethod
     def get_alternatives(base_headers, files):
@@ -250,6 +414,8 @@ class EndRangeStaticFile(StaticFile):
 
 
 class StreamingStaticFile(EndRangeStaticFile):
+    multipart_ranges = False
+
     def __init__(self, path, headers, remote_url, encodings=None, stat_cache=None):
         self.path = path
         self.remote_url = remote_url
