@@ -1,0 +1,177 @@
+import io
+import struct
+
+import pytest
+
+from kolibri.plugins.zim_viewer.test.fixtures import build_minimal_zim
+from kolibri.plugins.zim_viewer.test.fixtures import build_zim_with_redirect
+from kolibri.plugins.zim_viewer.zim_format import CorruptZimError
+from kolibri.plugins.zim_viewer.zim_format import HEADER_FORMAT
+from kolibri.plugins.zim_viewer.zim_format import HEADER_SIZE
+from kolibri.plugins.zim_viewer.zim_format import NotZimError
+from kolibri.plugins.zim_viewer.zim_format import ZimReader
+
+
+def open_minimal():
+    return ZimReader(io.BytesIO(build_minimal_zim()))
+
+
+def test_header_magic_and_counts():
+    reader = open_minimal()
+    header = reader.header
+    assert header.article_count == 1
+    assert header.cluster_count == 1
+    assert header.main_page == 0
+
+
+def test_header_offsets_match_layout():
+    reader = open_minimal()
+    header = reader.header
+    assert header.mime_list_pos == 80
+    assert header.url_ptr_pos > header.mime_list_pos
+    assert header.cluster_ptr_pos > header.url_ptr_pos
+
+
+def test_rejects_non_zim_file():
+    with pytest.raises(NotZimError):
+        ZimReader(io.BytesIO(b"NOT A ZIM FILE" + b"\x00" * 100))
+
+
+def test_mime_list_returns_single_text_html():
+    reader = open_minimal()
+    assert reader.mime_list() == ["text/html"]
+
+
+def test_directory_entry_for_index_path():
+    reader = open_minimal()
+    entry = reader.find_entry("C/Index")
+    assert entry is not None
+    assert entry.namespace == "C"
+    assert entry.cluster_number == 0
+    assert entry.blob_number == 0
+    assert entry.url == "Index"
+    assert entry.mimetype == "text/html"
+    assert entry.is_redirect is False
+
+
+def test_find_entry_missing_returns_none():
+    reader = open_minimal()
+    assert reader.find_entry("C/Missing") is None
+
+
+def test_find_entry_needs_a_namespace():
+    reader = open_minimal()
+    assert reader.find_entry("Index") is None
+
+
+def test_rejects_an_old_namespace_zim():
+    data = bytearray(build_minimal_zim())
+    struct.pack_into("<H", data, 6, 0)
+    with pytest.raises(NotZimError):
+        ZimReader(io.BytesIO(bytes(data)))
+
+
+def test_follow_redirect_resolves_to_target_article():
+    reader = ZimReader(io.BytesIO(build_zim_with_redirect()))
+    redirect_entry = reader.find_entry("C/Redirect")
+    assert redirect_entry.is_redirect is True
+    resolved = reader.follow_redirect(redirect_entry)
+    assert resolved.url == "Index"
+    assert resolved.is_redirect is False
+
+
+def test_follow_redirect_returns_non_redirect_unchanged():
+    reader = ZimReader(io.BytesIO(build_zim_with_redirect()))
+    article_entry = reader.find_entry("C/Index")
+    assert reader.follow_redirect(article_entry) is article_entry
+
+
+def test_follow_redirect_caps_chain_depth():
+    reader = ZimReader(io.BytesIO(build_zim_with_redirect()))
+    original_cap = reader.MAX_REDIRECT_DEPTH
+    try:
+        reader.MAX_REDIRECT_DEPTH = 0
+        redirect_entry = reader.find_entry("C/Redirect")
+        with pytest.raises(CorruptZimError):
+            reader.follow_redirect(redirect_entry)
+    finally:
+        reader.MAX_REDIRECT_DEPTH = original_cap
+
+
+def test_mime_list_without_terminator_raises_corrupt():
+    header = struct.pack(
+        HEADER_FORMAT,
+        0x044D495A,
+        6,
+        1,
+        b"\x00" * 16,
+        1,
+        1,
+        HEADER_SIZE,
+        HEADER_SIZE,
+        HEADER_SIZE,
+        HEADER_SIZE,
+        0,
+        0,
+        HEADER_SIZE,
+    )
+    data = header + b"\x01" * 64
+    reader = ZimReader(io.BytesIO(data))
+    with pytest.raises(CorruptZimError):
+        reader.mime_list()
+
+
+def test_mime_list_that_is_not_utf8_raises_corrupt():
+    data = bytearray(build_minimal_zim())
+    data[HEADER_SIZE] = 0xFF
+    reader = ZimReader(io.BytesIO(bytes(data)))
+    with pytest.raises(CorruptZimError):
+        reader.mime_list()
+
+
+def test_iter_entries_skips_an_entry_with_a_non_ascii_namespace():
+    data = bytearray(build_minimal_zim())
+    reader = ZimReader(io.BytesIO(bytes(data)))
+    entry_offset = reader._read_url_ptr(0)
+    data[entry_offset + 3] = 0xC3
+    reader = ZimReader(io.BytesIO(bytes(data)))
+    assert list(reader.iter_entries({"text/html"})) == []
+
+
+def test_find_entry_on_truncated_body_raises_corrupt():
+    data = build_minimal_zim()[: HEADER_SIZE + 5]
+    reader = ZimReader(io.BytesIO(data))
+    with pytest.raises(CorruptZimError):
+        reader.find_entry("C/Index")
+
+
+def test_iter_entries_yields_matching_articles():
+    reader = open_minimal()
+    assert list(reader.iter_entries({"text/html"})) == [
+        ("C/Index", "Index", "text/html")
+    ]
+
+
+def test_iter_entries_skips_redirects():
+    reader = ZimReader(io.BytesIO(build_zim_with_redirect()))
+    assert [path for path, _t, _m in reader.iter_entries({"text/html"})] == ["C/Index"]
+
+
+def test_iter_entries_skips_unrequested_mimetypes():
+    reader = open_minimal()
+    assert list(reader.iter_entries({"application/pdf"})) == []
+
+
+def test_iter_entries_skips_malformed_entries():
+    data = build_minimal_zim()[: HEADER_SIZE + 5]
+    reader = ZimReader(io.BytesIO(data))
+    assert list(reader.iter_entries({"text/html"})) == []
+
+
+def test_iter_entries_warns_once_when_the_url_pointer_list_is_unreadable(caplog):
+    data = bytearray(build_minimal_zim())
+    struct.pack_into("<I", data, 24, 1000)
+    struct.pack_into("<Q", data, 32, len(data))
+    reader = ZimReader(io.BytesIO(bytes(data)))
+    assert list(reader.iter_entries({"text/html"})) == []
+    assert len(caplog.records) == 1
