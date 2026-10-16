@@ -24,6 +24,7 @@
         @addProgress="addProgress"
         @updateContentState="updateContentState"
         @navigateTo="navigateTo"
+        @nowShowing="nowShowing"
         @error="onError"
         @finished="onFinished"
       />
@@ -104,6 +105,7 @@
   import ContentNodeResource from 'kolibri-common/apiResources/ContentNodeResource';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import router from 'kolibri/router';
+  import { virtualNodeId } from 'kolibri/utils/virtualNodeId';
   import Modalities from 'kolibri-constants/Modalities';
   import useUser from 'kolibri/composables/useUser';
   import useSnackbar from 'kolibri/composables/useSnackbar';
@@ -324,6 +326,15 @@
           .catch(error => {
             this.handleApiError({ error });
           });
+      },
+      nowShowing(path) {
+        const syntheticId = virtualNodeId(this.content.root_id || this.content.id, path);
+        if (syntheticId === this.$route.params.id) {
+          return;
+        }
+        this.$emit('navigateInPlace', syntheticId);
+        const route = this.genContentLinkKeepCurrentBackLink(syntheticId, true);
+        return this.content.virtual ? router.push(route) : router.replace(route);
       },
       onFinished() {
         if (this.errored) {
