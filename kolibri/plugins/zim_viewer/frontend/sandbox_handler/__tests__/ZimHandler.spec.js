@@ -1,11 +1,16 @@
 import { events } from 'kolibri-sandbox/base';
 import ZimHandler from '../ZimHandler';
 import { EntryKinds, loadArticleIntoIframe } from '../articleLoader';
+import { attachNavigationInterceptor } from '../navigationInterceptor';
 import { ZimReader } from '../reader';
 
 jest.mock('../articleLoader', () => ({
   EntryKinds: jest.requireActual('../articleLoader').EntryKinds,
   loadArticleIntoIframe: jest.fn(),
+}));
+jest.mock('../navigationInterceptor', () => ({
+  attachNavigationInterceptor: jest.fn(() => jest.fn()),
+  scrollToFragment: jest.fn(),
 }));
 jest.mock('../reader', () => ({ ZimReader: jest.fn() }));
 
@@ -186,6 +191,8 @@ describe('ZimHandler', () => {
 
     it('keeps the article it was opened from working under it, for a host that only closes it', async () => {
       const { handler, iframe } = makeHandler();
+      const detach = jest.fn();
+      attachNavigationInterceptor.mockReturnValueOnce(detach);
       loadArticleIntoIframe.mockResolvedValueOnce(html('C/Index', ['blob:a1']));
       await settle(iframe, handler._loadAndAttach('C/Index'));
       loadArticleIntoIframe.mockResolvedValueOnce({
@@ -197,6 +204,7 @@ describe('ZimHandler', () => {
 
       await settle(iframe, handler._loadAndAttach('C/Doc.pdf'));
 
+      expect(detach).not.toHaveBeenCalled();
       expect(revoke).not.toHaveBeenCalled();
       expect(handler._objectUrls).toEqual(['blob:a1']);
       expect(handler._currentPath).toBe('C/Doc.pdf');
